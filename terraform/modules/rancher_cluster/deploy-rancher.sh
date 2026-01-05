@@ -34,6 +34,64 @@ fi
 kubectl cluster-info
 echo ""
 
+# Wait for cluster to be fully ready before installing Helm charts
+echo "Checking cluster readiness before installing Helm charts..."
+CLUSTER_READY=false
+READY_RETRY=0
+READY_MAX_RETRIES=60  # 5 minutes max (60 * 5 seconds)
+
+while [ "$CLUSTER_READY" = false ] && [ $READY_RETRY -lt $READY_MAX_RETRIES ]; do
+  READY_RETRY=$((READY_RETRY + 1))
+  
+  # Check API server is responsive
+  if ! kubectl get nodes &>/dev/null; then
+    echo "  Attempt $READY_RETRY/$READY_MAX_RETRIES - API server not ready, waiting..."
+    sleep 5
+    continue
+  fi
+  
+  # Check that we have at least one node in Ready state
+  READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+  if [ "$READY_NODES" -eq 0 ]; then
+    echo "  Attempt $READY_RETRY/$READY_MAX_RETRIES - No nodes in Ready state, waiting..."
+    sleep 5
+    continue
+  fi
+  
+  # Check that core system pods are running (at least kube-system namespace exists and has pods)
+  SYSTEM_PODS=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | wc -l || echo "0")
+  if [ "$SYSTEM_PODS" -eq 0 ]; then
+    echo "  Attempt $READY_RETRY/$READY_MAX_RETRIES - System pods not ready, waiting..."
+    sleep 5
+    continue
+  fi
+  
+  # Check that CoreDNS is running (critical for cluster operations)
+  if ! kubectl get pods -n kube-system -l k8s-app=kube-dns --no-headers 2>/dev/null | grep -q "Running"; then
+    echo "  Attempt $READY_RETRY/$READY_MAX_RETRIES - CoreDNS not ready, waiting..."
+    sleep 5
+    continue
+  fi
+  
+  # All checks passed
+  echo "✓ Cluster is ready ($READY_NODES node(s) ready, $SYSTEM_PODS system pod(s))"
+  CLUSTER_READY=true
+done
+
+if [ "$CLUSTER_READY" = false ]; then
+  echo "ERROR: Cluster not ready after $READY_MAX_RETRIES attempts (5 minutes)"
+  echo "Current cluster status:"
+  kubectl get nodes
+  kubectl get pods -n kube-system
+  exit 1
+fi
+
+# Add a short delay to ensure cluster is stable before proceeding
+echo "Waiting 10 seconds for cluster to stabilize..."
+sleep 10
+echo "✓ Cluster is stable, proceeding with Helm installations"
+echo ""
+
 # Add helm repos
 echo "Adding Helm repositories..."
 helm repo add jetstack https://charts.jetstack.io --force-update || true
