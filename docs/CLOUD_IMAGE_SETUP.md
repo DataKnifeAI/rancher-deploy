@@ -221,8 +221,8 @@ clusters = {
     dns_servers    = ["8.8.8.8", "8.8.4.4"]
     storage        = "local-lvm"
   }
-  nprd-apps = {
-    name           = "nprd-apps"
+  apps-cluster = {
+    name           = "apps-cluster"
     node_count     = 2
     cpu_cores      = 4
     memory_mb      = 8192

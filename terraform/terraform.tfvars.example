@@ -54,7 +54,7 @@ clusters = {
     node_count     = 3
     cpu_cores      = 4               # 2-4 minimum for Rancher
     memory_mb      = 8192            # 4GB minimum, 8GB recommended
-    disk_size_gb   = 100             # Expand as needed for workloads
+    disk_size_gb   = 50               # Optimized: 50GB sufficient (can expand later if needed)
     domain         = "example.com"  # DNS domain for VMs
     ip_subnet      = "192.168.1"    # Base subnet
     ip_start_octet = 100             # VMs will be .100, .101, .102
@@ -66,17 +66,23 @@ clusters = {
 
   nprd-apps = {
     name           = "nprd-apps"
-    node_count     = 3
-    cpu_cores      = 4    # Can be 2-8 depending on workload
-    memory_mb      = 8192 # 4GB minimum
-    disk_size_gb   = 100  # Expand as needed
+    node_count     = 3              # Server nodes (control plane + etcd)
+    worker_count   = 0              # Worker nodes (set to 0 to disable, or 2-4 for hybrid setup)
+    cpu_cores      = 4               # Server CPU cores (can be 2-8 depending on workload)
+    memory_mb      = 8192           # Server memory (4GB minimum, 8GB recommended)
+    disk_size_gb   = 50              # Optimized: 50GB sufficient for control plane + etcd
+    # Worker node resources (optional - defaults to server values if not specified)
+    worker_cpu_cores    = 0         # Worker CPU cores (0 = use server value, or specify 2-8)
+    worker_memory_mb    = 0         # Worker memory (0 = use server value, or specify 4096-16384)
+    worker_disk_size_gb = 40        # Optimized: 40GB sufficient for typical workloads (0 = use server value)
     domain         = "example.com"
-    ip_subnet      = "192.168.1" # Same subnet
-    ip_start_octet = 110          # VMs will be .110, .111, .112
+    ip_subnet      = "192.168.1"   # Same subnet
+    ip_start_octet = 110            # Server VMs: .110, .111, .112
+                                    # Worker VMs: .113, .114, .115, .116 (if worker_count > 0)
     gateway        = "192.168.1.1"
     dns_servers    = ["192.168.1.1", "1.1.1.1"]
     storage        = "local-vm-zfs" # VM storage (cloud image downloaded to 'local' then imported)
-    vlan_id        = 1               # VLAN ID (1 for no VLAN, or your VLAN number)
+    vlan_id        = 1              # VLAN ID (1 for no VLAN, or your VLAN number)
   }
 }
 
@@ -152,6 +158,40 @@ ssh_private_key = "~/.ssh/id_rsa"
 # 2. Register all nodes with Rancher Manager automatically
 # No manual Rancher UI steps required!
 register_downstream_cluster = true
+
+# ============================================================================
+# TRUENAS / DEMOCRATIC CSI CONFIGURATION
+# ============================================================================
+# Configuration for democratic-csi storage driver with TrueNAS
+# These values are used to generate Helm values for democratic-csi installation
+
+# TrueNAS hostname or IP address
+truenas_host = "tn.dataknife.net"
+
+# TrueNAS API key (obtain from TrueNAS UI: System → API Keys → Add)
+# Format: token-id-token-secret (e.g., 1-xxxxxxxxxxxxx)
+truenas_api_key = "your-truenas-api-key-here"
+
+# TrueNAS dataset path for NFS storage
+truenas_dataset = "/mnt/SAS/RKE2"
+
+# TrueNAS username (for reference/documentation)
+truenas_user = "rke2"
+
+# TrueNAS API protocol (https recommended)
+truenas_protocol = "https"
+
+# TrueNAS API port (443 for HTTPS, 80 for HTTP)
+truenas_port = 443
+
+# Allow insecure TLS (set to true if using self-signed certificate)
+truenas_allow_insecure = false
+
+# Storage class name for democratic-csi
+csi_storage_class_name = "truenas-nfs"
+
+# Make this storage class the default (only one default allowed per cluster)
+csi_storage_class_default = true
 
 # ============================================================================
 # NOTES FOR PRODUCTION

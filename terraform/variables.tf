@@ -34,18 +34,22 @@ variable "proxmox_node" {
 variable "clusters" {
   description = "Configuration for Rancher clusters"
   type = map(object({
-    name           = string
-    node_count     = number
-    cpu_cores      = number
-    memory_mb      = number
-    disk_size_gb   = number
-    domain         = string
-    ip_subnet      = string
-    ip_start_octet = number # Starting IP octet (e.g., 100 for 192.168.1.100)
-    gateway        = string
-    dns_servers    = list(string)
-    storage        = string
-    vlan_id        = number # VLAN ID for network interface
+    name                = string
+    node_count          = number      # Server nodes (control plane + etcd)
+    worker_count        = number      # Worker nodes (optional, default: 0)
+    cpu_cores           = number      # Server CPU cores
+    memory_mb           = number      # Server memory
+    disk_size_gb        = number      # Server disk
+    worker_cpu_cores    = number      # Worker CPU cores (optional, defaults to server value)
+    worker_memory_mb    = number      # Worker memory (optional, defaults to server value)
+    worker_disk_size_gb = number      # Worker disk (optional, defaults to server value)
+    domain              = string
+    ip_subnet           = string
+    ip_start_octet      = number      # Starting IP octet (e.g., 100 for 192.168.1.100)
+    gateway             = string
+    dns_servers         = list(string)
+    storage             = string
+    vlan_id             = number      # VLAN ID for network interface
   }))
 }
 
@@ -165,4 +169,63 @@ variable "downstream_cluster_id" {
   description = "DEPRECATED: Rancher cluster ID is now automatically fetched from Rancher API. This variable is kept for backward compatibility but is no longer used."
   type        = string
   default     = ""  # Now fetched dynamically from Rancher API
+}
+
+# ============================================================================
+# TRUENAS / DEMOCRATIC CSI CONFIGURATION
+# ============================================================================
+
+variable "truenas_host" {
+  description = "TrueNAS hostname or IP address"
+  type        = string
+  default     = ""
+}
+
+variable "truenas_api_key" {
+  description = "TrueNAS API key for democratic-csi (obtain from TrueNAS: System → API Keys)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "truenas_dataset" {
+  description = "TrueNAS dataset path for NFS storage (e.g., /mnt/SAS/RKE2)"
+  type        = string
+  default     = ""
+}
+
+variable "truenas_user" {
+  description = "TrueNAS username for API access"
+  type        = string
+  default     = ""
+}
+
+variable "truenas_protocol" {
+  description = "TrueNAS API protocol (https or http)"
+  type        = string
+  default     = "https"
+}
+
+variable "truenas_port" {
+  description = "TrueNAS API port"
+  type        = number
+  default     = 443
+}
+
+variable "truenas_allow_insecure" {
+  description = "Allow insecure TLS connections to TrueNAS (for self-signed certs)"
+  type        = bool
+  default     = false
+}
+
+variable "csi_storage_class_name" {
+  description = "Name for the democratic-csi storage class"
+  type        = string
+  default     = "truenas-nfs"
+}
+
+variable "csi_storage_class_default" {
+  description = "Make the CSI storage class the default storage class"
+  type        = bool
+  default     = true
 }

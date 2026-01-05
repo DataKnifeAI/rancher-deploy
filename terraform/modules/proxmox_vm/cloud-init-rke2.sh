@@ -96,6 +96,28 @@ if [ $NETWORK_ATTEMPTS -ge 5 ]; then
   log "⚠ Network verification failed after 5 attempts, proceeding anyway"
 fi
 
+# ============ INSTALL PROXMOX GUEST AGENT ============
+# Install qemu-guest-agent for Proxmox integration
+# This enables VM status reporting, graceful shutdowns, and IP address detection
+log "Installing Proxmox guest agent (qemu-guest-agent)..."
+if ! command -v qemu-guest-agent >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq >/dev/null 2>&1
+    apt-get install -y -qq qemu-guest-agent >/dev/null 2>&1
+    systemctl enable qemu-guest-agent >/dev/null 2>&1
+    systemctl start qemu-guest-agent >/dev/null 2>&1
+    log "✓ Proxmox guest agent installed and started"
+  else
+    log "⚠ Could not install qemu-guest-agent (apt-get not available)"
+  fi
+else
+  log "✓ Proxmox guest agent already installed"
+  # Ensure it's running
+  systemctl enable qemu-guest-agent >/dev/null 2>&1
+  systemctl start qemu-guest-agent >/dev/null 2>&1 || true
+fi
+
 # ============ CONFIGURE NODE DNS ============
 # Configure /etc/resolv.conf directly and disable systemd-resolved
 # This ensures all pods (including CoreDNS) inherit proper DNS configuration
@@ -374,8 +396,20 @@ else
 log "Installing RKE2 agent v${RKE2_VERSION} (server: ${SERVER_IP})..."
 
 # Create environment file for rke2-agent service BEFORE installation
+# Systemd service reads from: /usr/local/lib/systemd/system/rke2-agent.env
+# Also create in /etc/rancher/rke2 for RKE2 to read
 mkdir -p /etc/rancher/rke2
-cat > /etc/rancher/rke2/rke2.env <<EOF
+mkdir -p /usr/local/lib/systemd/system
+
+# Create systemd environment file (systemd reads this)
+cat > /usr/local/lib/systemd/system/rke2-agent.env <<EOF
+RKE2_URL=https://${SERVER_IP}:6443
+RKE2_TOKEN=${SERVER_TOKEN}
+EOF
+log "✓ RKE2 agent systemd environment file created"
+
+# Also create in /etc/rancher/rke2 (for RKE2 binary to read)
+cat > /etc/rancher/rke2/rke2-agent.env <<EOF
 RKE2_URL="https://${SERVER_IP}:6443"
 RKE2_TOKEN="${SERVER_TOKEN}"
 RKE2_AGENT_TAINTS=""

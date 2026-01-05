@@ -57,3 +57,7 @@ kubeconfig*
 # Misc
 .cache
 temp/
+
+# Helm values with secrets
+helm-values/*-dataknife.yaml
+!helm-values/*-dataknife.yaml.example

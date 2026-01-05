@@ -217,6 +217,14 @@ resource "proxmox_virtual_environment_vm" "vm" {
     vlan_id = var.vlan_id > 0 ? var.vlan_id : null
   }
 
+  # Enable Proxmox guest agent for better VM management
+  # This allows Proxmox to get VM status, IP addresses, and perform graceful shutdowns
+  agent {
+    enabled = true
+    trim     = true  # Enable fstrim for disk space recovery
+    type     = "virtio"
+  }
+
   initialization {
     type = "nocloud"
 
@@ -238,11 +246,13 @@ resource "proxmox_virtual_environment_vm" "vm" {
     }
   }
 
-  # Prevent modification of import_from on existing VMs
+  # Prevent modification of import_from and disk size on existing VMs
   # Once a VM is created from an image, we can't change that import path
+  # Disk size changes (shrinking) are not supported by Proxmox, so ignore them
   lifecycle {
     ignore_changes = [
-      initialization
+      initialization,
+      disk  # Ignore disk size changes to prevent shrinking attempts
     ]
   }
 
