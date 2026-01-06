@@ -195,6 +195,7 @@ Complete documentation is available in the [docs/](docs/) folder. See [docs/READ
 
 **Storage:**
 - **[docs/TRUENAS_STORAGE_SETUP.md](docs/TRUENAS_STORAGE_SETUP.md)** - Complete TrueNAS storage setup (automated via Terraform)
+- **[docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md](docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - Detailed democratic-csi with TrueNAS configuration guide
 
 **Configuration:**
 - **[docs/RANCHER_DOWNSTREAM_MANAGEMENT.md](docs/RANCHER_DOWNSTREAM_MANAGEMENT.md)** - Automatic cluster registration

@@ -96,20 +96,44 @@ RKE2 Cluster
 4. **Configure Values:**
 
 ```yaml
-# Basic Configuration
-driver:
-  name: truenas-nfs  # or truenas-iscsi for iSCSI
+# CSI Driver Configuration (required by chart)
+csiDriver:
+  name: truenas-nfs  # Must be unique per cluster
   enabled: true
+  attachRequired: true
+  podInfoOnMount: true
 
-# TrueNAS Configuration
-config:
-  truenas:
-    host: "truenas.example.com"  # Your TrueNAS hostname/IP
-    apiKey: "your-api-key-here"  # From Step 1.3
-    protocol: "https"  # or "http"
-    port: 443
-    allowInsecure: false  # Set to true if using self-signed cert
-    dataset: "/mnt/pool/k8s-storage"  # Your dataset path
+# Driver Configuration
+driver:
+  config:
+    driver: freenas-api-nfs  # Use freenas-api-nfs for TrueNAS API-based NFS
+    # HTTP connection to TrueNAS API
+    httpConnection:
+      protocol: "https"  # or "http"
+      host: "truenas.example.com"  # Your TrueNAS hostname/IP
+      port: 443  # or 80 for HTTP
+      apiKey: "your-api-key-here"  # From Step 1.3
+      allowInsecure: false  # Set to true if using self-signed cert
+    # ZFS dataset configuration
+    zfs:
+      datasetParentName: "pool/k8s-storage"  # ZFS dataset name (without /mnt/ prefix)
+      detachedSnapshotsDatasetParentName: "pool/k8s-storage-snapshots"
+      datasetEnableQuotas: true
+      datasetEnableReservation: false
+      datasetPermissionsMode: "0777"
+      datasetPermissionsUser: 0
+      datasetPermissionsGroup: 0
+    # NFS share configuration
+    # IMPORTANT: Use shareHost (not server) for freenas-api-nfs driver
+    nfs:
+      shareHost: "truenas.example.com"  # NFS server hostname/IP
+      shareAlldirs: false
+      shareAllowedHosts: []
+      shareAllowedNetworks: []
+      shareMaprootUser: root
+      shareMaprootGroup: root
+      shareMapallUser: ""
+      shareMapallGroup: ""
     
 # Storage Classes
 storageClasses:
@@ -117,9 +141,12 @@ storageClasses:
     default: true
     reclaimPolicy: Delete
     volumeBindingMode: Immediate
+    allowVolumeExpansion: true
     parameters:
       fsType: "nfs"
-      parentDataset: "/mnt/pool/k8s-storage"
+      parentDataset: "pool/k8s-storage"  # ZFS dataset name (without /mnt/ prefix)
+      nfsServer: "truenas.example.com"  # NFS server for volume context
+      nfsVersion: "4"  # Recommended NFS version
 ```
 
 5. **Click Install**
@@ -140,8 +167,9 @@ kubectl create namespace democratic-csi
 # Install democratic-csi
 helm install democratic-csi democratic-csi/democratic-csi \
   --namespace democratic-csi \
-  --set driver.name=truenas-nfs \
-  --set driver.enabled=true \
+  --set csiDriver.name=truenas-nfs \
+  --set csiDriver.enabled=true \
+  --set driver.config.driver=truenas-nfs \
   --set config.truenas.host=truenas.example.com \
   --set config.truenas.apiKey=your-api-key \
   --set config.truenas.protocol=https \
@@ -430,7 +458,9 @@ Update democratic-csi values:
 
 ```yaml
 driver:
-  logLevel: debug
+  config:
+    driver: freenas-api-nfs
+    logLevel: debug
 ```
 
 Or via Helm:
@@ -438,7 +468,7 @@ Or via Helm:
 ```bash
 helm upgrade democratic-csi democratic-csi/democratic-csi \
   --namespace democratic-csi \
-  --set driver.logLevel=debug
+  --set driver.config.logLevel=debug
 ```
 
 ## Step 8: Production Considerations
@@ -529,23 +559,42 @@ helm upgrade democratic-csi democratic-csi/democratic-csi \
 
 ```yaml
 # democratic-csi Helm values
-driver:
-  name: truenas-nfs
+# CSI Driver Configuration (required by chart)
+csiDriver:
+  name: truenas-nfs  # Must be unique per cluster
   enabled: true
-  logLevel: info
+  attachRequired: true
+  podInfoOnMount: true
 
-config:
-  truenas:
-    host: "truenas.example.com"
-    apiKey: "your-api-key-here"
-    protocol: "https"
-    port: 443
-    allowInsecure: false
-    dataset: "/mnt/pool/k8s-storage"
-    # Optional: NFS-specific settings
+# Driver Configuration
+driver:
+  config:
+    driver: freenas-api-nfs  # Use freenas-api-nfs for TrueNAS API-based NFS
+    httpConnection:
+      protocol: "https"
+      host: "truenas.example.com"
+      port: 443
+      apiKey: "your-api-key-here"
+      allowInsecure: false
+    zfs:
+      datasetParentName: "pool/k8s-storage"  # ZFS dataset name (without /mnt/ prefix)
+      detachedSnapshotsDatasetParentName: "pool/k8s-storage-snapshots"
+      datasetEnableQuotas: true
+      datasetEnableReservation: false
+      datasetPermissionsMode: "0777"
+      datasetPermissionsUser: 0
+      datasetPermissionsGroup: 0
+    # NFS share configuration
+    # IMPORTANT: Use shareHost (not server) for freenas-api-nfs driver
     nfs:
-      server: "truenas.example.com"
-      share: "/mnt/pool/k8s-storage"
+      shareHost: "truenas.example.com"  # NFS server hostname/IP
+      shareAlldirs: false
+      shareAllowedHosts: []
+      shareAllowedNetworks: []
+      shareMaprootUser: root
+      shareMaprootGroup: root
+      shareMapallUser: ""
+      shareMapallGroup: ""
 
 # Storage Classes
 storageClasses:
