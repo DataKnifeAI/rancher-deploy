@@ -70,6 +70,11 @@ else
     CSI_STORAGE_CLASS_DEFAULT_YAML="false"
 fi
 
+# Convert mountpoint path to ZFS dataset name (remove /mnt/ prefix)
+# e.g., /mnt/SAS/RKE2 -> SAS/RKE2
+TRUENAS_DATASET_NAME=$(echo "$TRUENAS_DATASET" | sed 's|^/mnt/||')
+TRUENAS_DATASET_SNAPSHOTS="${TRUENAS_DATASET_NAME}-snapshots"
+
 # Generate Helm values file
 cat > "$VALUES_FILE" <<EOF
 # Democratic CSI Helm Values for TrueNAS
@@ -102,14 +107,22 @@ driver:
       apiKey: "${TRUENAS_API_KEY}"
       allowInsecure: ${TRUENAS_ALLOW_INSECURE_YAML}
     # ZFS dataset configuration
-    # Note: detachedSnapshotsDatasetParentName must be a completely separate path, not a subdirectory
+    # Note: datasetParentName should be the ZFS dataset name (e.g., "SAS/RKE2"), not the mountpoint
+    # The mountpoint path (/mnt/SAS/RKE2) is used for NFS share configuration
     zfs:
-      datasetParentName: "${TRUENAS_DATASET}"
-      detachedSnapshotsDatasetParentName: "${TRUENAS_DATASET}-snapshots"
+      datasetParentName: "${TRUENAS_DATASET_NAME}"
+      detachedSnapshotsDatasetParentName: "${TRUENAS_DATASET_SNAPSHOTS}"
     # NFS share configuration
+    # Note: shareHost is used by freenas-api-nfs driver to set server in volume context
     nfs:
-      server: "${TRUENAS_HOST}"
-      share: "${TRUENAS_DATASET}"
+      shareHost: "${TRUENAS_HOST}"
+      shareAlldirs: false
+      shareAllowedHosts: []
+      shareAllowedNetworks: []
+      shareMaprootUser: root
+      shareMaprootGroup: root
+      shareMapallUser: ""
+      shareMapallGroup: ""
 
 # Storage Classes Configuration
 storageClasses:
@@ -121,7 +134,8 @@ storageClasses:
     allowVolumeExpansion: true
     parameters:
       fsType: "nfs"
-      parentDataset: "${TRUENAS_DATASET}"
+      parentDataset: "${TRUENAS_DATASET_NAME}"
+      nfsServer: "${TRUENAS_HOST}"
       # NFS version 4 recommended
       nfsVersion: "4"
 
