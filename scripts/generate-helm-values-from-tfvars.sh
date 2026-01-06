@@ -83,33 +83,30 @@ cat > "$VALUES_FILE" <<EOF
 #
 # Usage: helm install democratic-csi democratic-csi/democratic-csi -f democratic-csi-truenas.yaml
 
-driver:
-  name: truenas-nfs
+# CSI Driver Configuration (required by chart)
+csiDriver:
+  name: ${CSI_STORAGE_CLASS_NAME}
   enabled: true
-  logLevel: info
+  attachRequired: true
+  podInfoOnMount: true
 
-# TrueNAS Configuration
-config:
-  truenas:
-    # TrueNAS hostname
-    host: "${TRUENAS_HOST}"
-    
-    # API key from TrueNAS (System → API Keys)
-    apiKey: "${TRUENAS_API_KEY}"
-    
-    # Protocol: https (recommended) or http
-    protocol: "${TRUENAS_PROTOCOL}"
-    
-    # Port: 443 for HTTPS
-    port: ${TRUENAS_PORT}
-    
-    # Set to true if using self-signed certificate
-    allowInsecure: ${TRUENAS_ALLOW_INSECURE_YAML}
-    
-    # Dataset path on TrueNAS
-    dataset: "${TRUENAS_DATASET}"
-    
-    # NFS configuration
+# Driver Configuration
+driver:
+  config:
+    driver: freenas-api-nfs
+    # HTTP connection to TrueNAS API
+    httpConnection:
+      protocol: "${TRUENAS_PROTOCOL}"
+      host: "${TRUENAS_HOST}"
+      port: ${TRUENAS_PORT}
+      apiKey: "${TRUENAS_API_KEY}"
+      allowInsecure: ${TRUENAS_ALLOW_INSECURE_YAML}
+    # ZFS dataset configuration
+    # Note: detachedSnapshotsDatasetParentName must be a completely separate path, not a subdirectory
+    zfs:
+      datasetParentName: "${TRUENAS_DATASET}"
+      detachedSnapshotsDatasetParentName: "${TRUENAS_DATASET}-snapshots"
+    # NFS share configuration
     nfs:
       server: "${TRUENAS_HOST}"
       share: "${TRUENAS_DATASET}"
@@ -129,7 +126,11 @@ storageClasses:
       nfsVersion: "4"
 
 # Controller Configuration
+# Note: Using "next" tag for TrueNAS 25+ compatibility (fixes SCALE detection issue)
 controller:
+  driver:
+    image:
+      tag: next
   replicas: 1
   resources:
     requests:
