@@ -400,6 +400,7 @@ module "nprd_apps_workers" {
 
   depends_on = [
     module.nprd_apps_primary,
+    module.nprd_apps_additional,  # CRITICAL: Workers must wait for all control nodes to be ready
     data.local_file.nprd_apps_token
   ]
 }

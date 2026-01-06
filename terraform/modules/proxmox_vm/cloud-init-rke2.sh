@@ -395,50 +395,86 @@ else
 # ============ RKE2 AGENT NODE ============
 log "Installing RKE2 agent v${RKE2_VERSION} (server: ${SERVER_IP})..."
 
-# Create environment file for rke2-agent service BEFORE installation
-# Systemd service reads from: /usr/local/lib/systemd/system/rke2-agent.env
-# Also create in /etc/rancher/rke2 for RKE2 to read
+# Validate required variables
+if [ -z "${SERVER_IP}" ] || [ "${SERVER_IP}" = "" ]; then
+  log "✗ ERROR: SERVER_IP is required for RKE2 agent installation"
+  exit 1
+fi
+
+if [ -z "${SERVER_TOKEN}" ] || [ "${SERVER_TOKEN}" = "" ]; then
+  log "✗ ERROR: SERVER_TOKEN is required for RKE2 agent installation"
+  log "ℹ Token should be fetched from primary server and passed via rke2_server_token variable"
+  exit 1
+fi
+
+# Create directories
 mkdir -p /etc/rancher/rke2
 mkdir -p /usr/local/lib/systemd/system
 
-# Create systemd environment file (systemd reads this)
-cat > /usr/local/lib/systemd/system/rke2-agent.env <<EOF
-RKE2_URL=https://${SERVER_IP}:6443
-RKE2_TOKEN=${SERVER_TOKEN}
+# CRITICAL: Agent nodes must use config.yaml with server: https://<primary>:9345
+# (the registration/bootstrap API port), NOT environment variables pointing to 6443
+# This matches how additional control nodes connect to the cluster
+log "Creating RKE2 agent config.yaml (using registration port 9345)..."
+cat > /etc/rancher/rke2/config.yaml <<EOF
+# RKE2 agent node - join cluster via server registration API
+server: https://${SERVER_IP}:9345
+token: ${SERVER_TOKEN}
 EOF
-log "✓ RKE2 agent systemd environment file created"
+log "✓ RKE2 agent config.yaml created at /etc/rancher/rke2/config.yaml"
 
-# Also create in /etc/rancher/rke2 (for RKE2 binary to read)
-cat > /etc/rancher/rke2/rke2-agent.env <<EOF
-RKE2_URL="https://${SERVER_IP}:6443"
-RKE2_TOKEN="${SERVER_TOKEN}"
-RKE2_AGENT_TAINTS=""
-EOF
-log "✓ RKE2 agent environment file created"
-
-export RKE2_URL="https://${SERVER_IP}:6443"
+# Export environment variables for installer (RKE2 installer may read these, but config.yaml takes precedence)
+export RKE2_URL="https://${SERVER_IP}:9345"
 export RKE2_TOKEN="${SERVER_TOKEN}"
 export INSTALL_RKE2_VERSION="${RKE2_VERSION}"
 
+# Run RKE2 installer
 if ! "$INSTALLER"; then
   log "✗ RKE2 installation failed"
   exit 1
 fi
 
-log "RKE2 agent installation complete. Service will start automatically."
+log "RKE2 agent installation complete."
+
+# Verify config.yaml exists and has correct content
+if [ ! -f /etc/rancher/rke2/config.yaml ]; then
+  log "✗ ERROR: config.yaml not found after installation"
+  exit 1
+fi
+
+if ! grep -q "server: https://${SERVER_IP}:9345" /etc/rancher/rke2/config.yaml; then
+  log "✗ ERROR: config.yaml missing correct server URL"
+  log "Config file contents:"
+  cat /etc/rancher/rke2/config.yaml
+  exit 1
+fi
+
+if ! grep -q "token: ${SERVER_TOKEN}" /etc/rancher/rke2/config.yaml; then
+  log "✗ ERROR: config.yaml missing token"
+  log "Config file contents:"
+  cat /etc/rancher/rke2/config.yaml
+  exit 1
+fi
+
+log "✓ RKE2 agent config.yaml verified"
+
 log "ⓘ Note: RKE2 agent may take several minutes to join the cluster"
 log "ⓘ You can check status later with: systemctl status rke2-agent"
 
 # Verify systemd unit exists, then enable and start if needed
 if [ -f /usr/local/lib/systemd/system/rke2-agent.service ]; then
+  # Reload systemd to pick up the environment file
+  systemctl daemon-reload
+  
   if ! systemctl is-active --quiet rke2-agent; then
     log "Enabling and starting RKE2 agent service..."
-    systemctl daemon-reload
     systemctl enable rke2-agent
-    systemctl start rke2-agent
-    log "✓ RKE2 agent service enabled and started"
+    # Start service in background to avoid blocking - service will retry on its own
+    timeout 30 systemctl start rke2-agent || log "⚠ Service start timed out or failed, but service is enabled and will retry"
+    log "✓ RKE2 agent service enabled and start command issued"
   else
-    log "✓ RKE2 agent service is already running"
+    log "RKE2 agent service is already running, restarting to pick up environment changes..."
+    timeout 30 systemctl restart rke2-agent || log "⚠ Service restart timed out or failed, but restart was attempted"
+    log "✓ RKE2 agent service restart command issued"
   fi
 else
   log "⚠ RKE2 agent unit file not found, service will start manually"

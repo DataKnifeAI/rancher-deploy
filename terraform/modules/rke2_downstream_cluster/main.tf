@@ -39,6 +39,19 @@ variable "dns_servers" {
   default     = "192.168.1.1 1.1.1.1"
 }
 
+variable "primary_server_ip" {
+  description = "Primary RKE2 server IP (for worker node token fix)"
+  type        = string
+  default     = ""
+}
+
+variable "primary_server_token" {
+  description = "Primary RKE2 server token (for worker node token fix)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # NOTE: RKE2 is installed via cloud-init during VM provisioning
 # This module handles verification and kubeconfig retrieval for downstream clusters
 
@@ -52,6 +65,53 @@ resource "null_resource" "cleanup_known_hosts" {
       echo "✓ Cleaned up SSH known_hosts for downstream agent cluster"
     EOT
   }
+}
+
+# Fix missing token on worker nodes (runs before wait check)
+# This fixes an issue where worker nodes may have been provisioned before the token was available
+resource "null_resource" "fix_worker_node_tokens" {
+  count = var.primary_server_ip != "" && var.primary_server_token != "" ? length(var.agent_ips) : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      NODE_IP="${var.agent_ips[count.index]}"
+      PRIMARY_IP="${var.primary_server_ip}"
+      TOKEN="${var.primary_server_token}"
+      SSH_KEY="${var.ssh_private_key_path}"
+      SSH_USER="${var.ssh_user}"
+      
+      # Check if this is a worker node (rke2-agent) and if token is missing
+      if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$NODE_IP" \
+        'systemctl list-units --type=service --state=active | grep -q rke2-agent.service' 2>/dev/null; then
+        
+        # Check if token is missing from systemd env file
+        TOKEN_MISSING=$(ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$NODE_IP" \
+          'sudo test -f /usr/local/lib/systemd/system/rke2-agent.env && ! grep -q "RKE2_TOKEN=" /usr/local/lib/systemd/system/rke2-agent.env || ! grep -q "$TOKEN" /usr/local/lib/systemd/system/rke2-agent.env; echo $?' 2>/dev/null || echo "1")
+        
+        if [ "$TOKEN_MISSING" = "0" ] || [ "$TOKEN_MISSING" = "1" ]; then
+          echo "Fixing missing token on worker node $NODE_IP..."
+          
+          # Create/update systemd environment file
+          ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$NODE_IP" \
+            "sudo bash -c 'cat > /usr/local/lib/systemd/system/rke2-agent.env <<EOF
+RKE2_URL=https://$PRIMARY_IP:6443
+RKE2_TOKEN=$TOKEN
+EOF
+'"
+          
+          # Reload systemd and restart service
+          ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$NODE_IP" \
+            'sudo systemctl daemon-reload && sudo systemctl restart rke2-agent' 2>/dev/null || true
+          
+          echo "✓ Token fixed on worker node $NODE_IP"
+        else
+          echo "✓ Token already present on worker node $NODE_IP"
+        fi
+      fi
+    EOT
+  }
+
+  depends_on = [null_resource.cleanup_known_hosts]
 }
 
 # Wait for all nodes to be ready (RKE2 agent or server service running)
