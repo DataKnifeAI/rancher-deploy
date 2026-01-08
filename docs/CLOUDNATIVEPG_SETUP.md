@@ -107,9 +107,10 @@ spec:
   imageName: ghcr.io/cloudnative-pg/postgresql:16.2
   
   # Storage configuration (uses TrueNAS NFS)
+  # IMPORTANT: Always specify storageClass explicitly
   storage:
     size: 10Gi
-    storageClass: truenas-nfs
+    storageClass: truenas-nfs  # Required: TrueNAS NFS storage class
 ```
 
 ### Complete Cluster Example
@@ -260,7 +261,12 @@ spec:
 - **Primary instance**: Requires ReadWriteOnce (RWO) storage
 - **Replicas**: Each replica needs its own PVC
 - **Recommended size**: Minimum 10Gi per instance
-- **Storage class**: `truenas-nfs` (default)
+- **Storage class**: `truenas-nfs` (always specify explicitly)
+
+⚠️ **Important**: Always explicitly specify `storageClass: truenas-nfs` in your cluster manifests, even though it's set as the default storage class on both clusters. This ensures:
+- Consistent behavior across clusters
+- Clear intent in your manifests
+- Works even if default storage class changes
 
 ### Check Persistent Volumes
 
