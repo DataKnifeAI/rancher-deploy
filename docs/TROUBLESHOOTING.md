@@ -924,6 +924,249 @@ clusters = {
 
 See [DNS_CONFIGURATION_GUIDE.md](DNS_CONFIGURATION_GUIDE.md) for complete DNS troubleshooting.
 
+## Storage/PVC Mount Issues
+
+### Issue: PVCs stuck in ContainerCreating, mount failures
+
+**Symptoms:**
+- PVCs are `Bound` but pods remain in `ContainerCreating`
+- CSI node pod logs show `mount.nfs: Connection refused`
+- CSI node pod logs show `mount.nfs: rpc.statd is not running`
+- Pod events show `MountVolume.MountDevice failed`
+
+**Root Causes & Solutions:**
+
+#### 1. NFS Service Not Bound to Correct IP Address
+
+**Symptom:**
+```
+mount.nfs: Connection refused
+executing mount command: mount -t nfs -o defaults 192.168.x.x:/mnt/path ...
+```
+
+**Root Cause:**
+TrueNAS NFS service may only be bound to specific IP addresses. If CSI tries to mount from a different IP, it will fail with "Connection refused".
+
+**Solution:**
+1. **Verify NFS service binding on TrueNAS:**
+   - TrueNAS Web UI → Services → NFS → Edit
+   - Check "Bind IP Addresses" configuration
+   - Ensure NFS service is bound to the IP address configured in CSI
+
+2. **Test NFS connectivity manually before configuring CSI:**
+   ```bash
+   # From a cluster node, test both IPs:
+   export KUBECONFIG=~/.kube/nprd-apps.yaml
+   WORKER_IP=$(kubectl get nodes -o wide | grep worker | head -1 | awk '{print $6}')
+   
+   # Test port accessibility
+   ssh ubuntu@$WORKER_IP "timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.9.10/2049' && echo 'Port 2049 accessible' || echo 'Port 2049 NOT accessible'"
+   
+   # Test manual mount with default options
+   ssh ubuntu@$WORKER_IP "sudo mkdir -p /tmp/test-nfs && sudo mount -t nfs 192.168.9.10:/mnt/SAS/RKE2 /tmp/test-nfs 2>&1 && echo 'Mount successful!' && ls -la /tmp/test-nfs | head -5 && sudo umount /tmp/test-nfs && sudo rmdir /tmp/test-nfs || echo 'Mount failed'"
+   ```
+
+3. **Update Terraform configuration with correct IP:**
+   ```hcl
+   # terraform/terraform.tfvars
+   truenas_host = "192.168.9.10"  # Use IP that NFS service is bound to
+   ```
+
+4. **Regenerate Helm values and upgrade CSI:**
+   ```bash
+   cd /home/lee/git/rancher-deploy
+   ./scripts/generate-helm-values-from-tfvars.sh
+   
+   # Upgrade both clusters
+   export KUBECONFIG=~/.kube/nprd-apps.yaml
+   helm upgrade democratic-csi democratic-csi/democratic-csi \
+     --namespace democratic-csi \
+     -f helm-values/democratic-csi-truenas.yaml \
+     --wait --timeout 5m
+   
+   export KUBECONFIG=~/.kube/prd-apps.yaml
+   helm upgrade democratic-csi democratic-csi/democratic-csi \
+     --namespace democratic-csi \
+     -f helm-values/democratic-csi-truenas.yaml \
+     --wait --timeout 5m
+   ```
+
+5. **Recreate storage class with correct IP:**
+   ```bash
+   # Storage classes cannot be updated, must delete and recreate
+   export KUBECONFIG=~/.kube/nprd-apps.yaml
+   kubectl patch storageclass truenas-nfs -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+   kubectl delete storageclass truenas-nfs
+   
+   # Helm upgrade will recreate storage class with correct IP
+   helm upgrade democratic-csi democratic-csi/democratic-csi \
+     --namespace democratic-csi \
+     -f helm-values/democratic-csi-truenas.yaml --wait
+   ```
+
+**Prevention:**
+- Always verify NFS service binding on TrueNAS before configuring CSI
+- Test manual NFS mounts from cluster nodes to verify connectivity
+- Confirm which IP addresses the NFS service is bound to
+
+#### 2. Default Mount Options Work Fine (No Override Needed)
+
+**Symptom:**
+```
+mount.nfs: rpc.statd is not running but is required for remote locking.
+mount.nfs: Either use '-o nolock' to keep locks local, or start statd.
+```
+
+**Root Cause:**
+Attempting to add `nolock` mount option override when default mount options work fine. The `rpc.statd` warning may appear but doesn't necessarily prevent mounts from working.
+
+**Solution:**
+- **Use default mount options** - Democratic CSI with default NFS mount options works correctly
+- No need to override with `nolock` or `vers=4` in most cases
+- If manual mount works with default options, CSI will also work with defaults
+
+**Configuration:**
+```yaml
+# helm-values/democratic-csi-truenas.yaml
+storageClasses:
+  - name: truenas-nfs
+    default: true
+    parameters:
+      fsType: "nfs"
+      nfsServer: "192.168.9.10"
+      nfsVersion: "4"
+    # Using default mount options (no override)
+    # mountOptions: []  # Optional - leave empty or omit
+```
+
+**Note:** If you need custom mount options, they must be an array format:
+```yaml
+mountOptions:
+  - noatime
+  - nfsvers=4
+```
+
+#### 3. Storage Class Parameters Cannot Be Updated
+
+**Symptom:**
+```
+Error: UPGRADE FAILED: cannot patch "truenas-nfs" with kind StorageClass: 
+StorageClass.storage.k8s.io "truenas-nfs" is invalid: parameters: 
+Forbidden: updates to parameters are forbidden.
+```
+
+**Root Cause:**
+Kubernetes storage class parameters are immutable - they cannot be changed after creation.
+
+**Solution:**
+1. **Delete existing storage class:**
+   ```bash
+   export KUBECONFIG=~/.kube/nprd-apps.yaml
+   kubectl patch storageclass truenas-nfs -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+   kubectl delete storageclass truenas-nfs
+   ```
+
+2. **Upgrade Helm to recreate with new parameters:**
+   ```bash
+   helm upgrade democratic-csi democratic-csi/democratic-csi \
+     --namespace democratic-csi \
+     -f helm-values/democratic-csi-truenas.yaml --wait
+   ```
+
+3. **Verify new storage class:**
+   ```bash
+   kubectl get storageclass truenas-nfs -o yaml | grep -A 10 "parameters:"
+   ```
+
+**Prevention:**
+- Test configuration thoroughly before deploying to production
+- Use separate storage class names for testing vs production
+- Verify TrueNAS IP address before initial deployment
+
+#### 4. Verifying PVC Mount Success
+
+**Test Steps:**
+```bash
+# 1. Create test PVC and pod
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: truenas-nfs
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pvc-pod
+spec:
+  containers:
+  - name: test-container
+    image: busybox:latest
+    command: ['sh', '-c', 'echo "PVC test successful" > /mnt/pvc/test.txt && cat /mnt/pvc/test.txt && sleep 3600']
+    volumeMounts:
+    - name: pvc-volume
+      mountPath: /mnt/pvc
+  volumes:
+  - name: pvc-volume
+    persistentVolumeClaim:
+      claimName: test-pvc
+EOF
+
+# 2. Check PVC and pod status
+kubectl get pvc test-pvc
+kubectl get pod test-pvc-pod
+
+# 3. Verify storage access
+kubectl exec test-pvc-pod -- cat /mnt/pvc/test.txt
+
+# 4. Check CSI node pod logs for mount issues
+NODE_POD=$(kubectl get pods -n democratic-csi -o wide | grep worker | head -1 | awk '{print $1}')
+kubectl logs -n democratic-csi $NODE_POD -c csi-driver --tail=50 | grep -E "(mount|error|Error)"
+```
+
+**Expected Results:**
+- PVC status: `Bound`
+- Pod status: `Running` (1/1 Ready)
+- Storage access: File can be read/written
+- CSI logs: No mount errors
+
+### Issue: CSI Node Pods Not Scheduling on Server Nodes
+
+**Symptom:**
+- CSI node pods only on worker nodes
+- PVCs fail to mount when pods scheduled on server nodes
+
+**Root Cause:**
+RKE2 server nodes have taints that prevent normal pods from scheduling:
+- `node-role.kubernetes.io/control-plane:NoSchedule`
+- `node-role.kubernetes.io/etcd:NoExecute`
+- `CriticalAddonsOnly`
+
+**Solution:**
+Add tolerations to CSI node daemonset (already included in Helm values):
+```yaml
+# helm-values/democratic-csi-truenas.yaml
+node:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/etcd
+      operator: Exists
+      effect: NoExecute
+    - key: CriticalAddonsOnly
+      operator: Exists
+```
+
+This ensures CSI node pods can run on server nodes to handle volume mounts for pods scheduled there.
+
 ## Related Documentation
 
 - [DNS_CONFIGURATION_GUIDE.md](DNS_CONFIGURATION_GUIDE.md) - Complete DNS configuration and troubleshooting

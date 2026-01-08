@@ -51,6 +51,9 @@ RKE2 Cluster
 
 1. **Enable NFS Service:**
    - Services → NFS → Enable
+   - **Important:** Check "Bind IP Addresses" configuration
+   - Ensure NFS service is bound to the IP address you'll use in CSI configuration
+   - If using multiple IPs, bind to all required IPs or use `0.0.0.0` for all interfaces
 
 2. **Create NFS Share:**
    - Sharing → Unix Shares (NFS) → Add
@@ -63,6 +66,25 @@ RKE2 Cluster
    - Maproot Group: `wheel`
    - Save
 
+3. **Verify NFS Service Binding:**
+   - **Critical:** Test NFS connectivity from a cluster node before configuring CSI
+   ```bash
+   # From a cluster node, test NFS port accessibility:
+   timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.9.10/2049' && echo 'Port 2049 accessible' || echo 'Port 2049 NOT accessible'
+   
+   # Test manual mount with default options:
+   sudo mkdir -p /tmp/test-nfs
+   sudo mount -t nfs 192.168.9.10:/mnt/pool/k8s-storage /tmp/test-nfs
+   ls -la /tmp/test-nfs
+   sudo umount /tmp/test-nfs
+   sudo rmdir /tmp/test-nfs
+   ```
+   
+   **If mount fails with "Connection refused":**
+   - NFS service may not be bound to that IP address
+   - Check TrueNAS NFS service configuration
+   - Update bind IP addresses or use correct IP in CSI configuration
+
 ### 1.3 Create Service Account (for TrueNAS API)
 
 1. **Create API Key:**
@@ -72,6 +94,8 @@ RKE2 Cluster
 
 2. **Note TrueNAS Details:**
    - TrueNAS Hostname/IP: `truenas.example.com` (or IP)
+   - **Important:** Use the IP address that NFS service is bound to (not just any IP)
+   - Verify NFS service binding: Services → NFS → Edit → Check "Bind IP Addresses"
    - API Port: `443` (HTTPS) or `80` (HTTP)
    - Dataset Path: `/mnt/<pool>/k8s-storage`
 
@@ -605,9 +629,14 @@ storageClasses:
     allowVolumeExpansion: true
     parameters:
       fsType: "nfs"
-      parentDataset: "/mnt/pool/k8s-storage"
-      # Optional: NFS version
+      parentDataset: "pool/k8s-storage"  # ZFS dataset name (without /mnt/ prefix)
+      nfsServer: "192.168.9.10"  # Must match IP that NFS service is bound to
       nfsVersion: "4"
+    # Using default mount options (no override needed in most cases)
+    # If custom mount options needed, use array format:
+    # mountOptions:
+    #   - noatime
+    #   - nfsvers=4
       
   - name: truenas-nfs-fast
     default: false
@@ -640,12 +669,40 @@ node:
       memory: 256Mi
 ```
 
+## Troubleshooting
+
+### PVC Mount Failures
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#storagepvc-mount-issues) for detailed troubleshooting of:
+- NFS service binding issues (Connection refused)
+- Mount option configuration
+- Storage class parameter updates
+- CSI node pod scheduling
+
+### Key Learnings
+
+1. **Always verify NFS service binding** - TrueNAS NFS service may only be bound to specific IP addresses. Test manual mounts before configuring CSI.
+
+2. **Default mount options work fine** - No need to override with `nolock` or custom mount flags unless specifically required. If manual mount works with defaults, CSI will also work.
+
+3. **Storage class parameters are immutable** - Cannot update storage class parameters after creation. Must delete and recreate storage class to change parameters.
+
+4. **Test connectivity first** - Always test NFS connectivity from cluster nodes before deploying CSI:
+   ```bash
+   # Test port accessibility
+   timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.9.10/2049'
+   
+   # Test manual mount
+   sudo mount -t nfs 192.168.9.10:/mnt/pool/k8s-storage /tmp/test
+   ```
+
 ## Additional Resources
 
 - **Democratic CSI Documentation:** https://github.com/democratic-csi/democratic-csi
 - **TrueNAS Documentation:** https://www.truenas.com/docs/
 - **Rancher Storage Documentation:** https://rancher.com/docs/rancher/v2.7/en/storage/
 - **Kubernetes CSI Documentation:** https://kubernetes-csi.github.io/docs/
+- **Troubleshooting Guide:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ## Troubleshooting Checklist
 

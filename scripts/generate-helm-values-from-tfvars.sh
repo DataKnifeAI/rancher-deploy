@@ -123,8 +123,8 @@ driver:
       shareMaprootGroup: root
       shareMapallUser: ""
       shareMapallGroup: ""
-
 # Storage Classes Configuration
+# Mount options must be an array (as per democratic CSI examples)
 storageClasses:
   # Default NFS storage class
   - name: ${CSI_STORAGE_CLASS_NAME}
@@ -138,6 +138,7 @@ storageClasses:
       nfsServer: "${TRUENAS_HOST}"
       # NFS version 4 recommended
       nfsVersion: "4"
+    # Using default mount options (no override)
 
 # Controller Configuration
 # Note: Using "next" tag for TrueNAS 25+ compatibility (fixes SCALE detection issue)
@@ -153,8 +154,19 @@ controller:
     limits:
       cpu: 500m
       memory: 512Mi
+  # Tolerations for RKE2 server nodes (control-plane and etcd taints)
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/etcd
+      operator: Exists
+      effect: NoExecute
+    - key: CriticalAddonsOnly
+      operator: Exists
 
 # Node Configuration
+# Node daemonset MUST run on all nodes (servers and workers) to handle volume mounts
 node:
   resources:
     requests:
@@ -163,6 +175,17 @@ node:
     limits:
       cpu: 200m
       memory: 256Mi
+  # Tolerations for RKE2 server nodes (control-plane and etcd taints)
+  # Required: CSI node pods must run on server nodes to mount volumes on pods scheduled there
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/etcd
+      operator: Exists
+      effect: NoExecute
+    - key: CriticalAddonsOnly
+      operator: Exists
 
 # RBAC
 rbac:
