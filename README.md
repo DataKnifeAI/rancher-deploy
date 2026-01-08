@@ -9,7 +9,7 @@ Deploy a complete Rancher management cluster and non-production apps cluster on 
 - ✅ **Modern Provider**: bpg/proxmox v0.90 (1.7K+ GitHub stars, 130+ contributors)
 - ✅ **RKE2 Kubernetes**: Automated RKE2 installation and cluster bootstrapping
 - ✅ **Rancher Deployment**: Helm-based Rancher installation with cert-manager
-- ✅ **High Availability**: 3-node manager + hybrid apps cluster (3 servers + workers) with HA Rancher
+- ✅ **High Availability**: 3-node manager + hybrid apps clusters (3 servers + workers each) with HA Rancher
 - ✅ **Cloud-Init Integration**: Automated networking, DNS, hostnames
 - ✅ **Proxmox Guest Agent**: Automatic installation for better VM management
 - ✅ **TrueNAS Storage**: Automated democratic-csi deployment with TrueNAS NFS
@@ -18,17 +18,26 @@ Deploy a complete Rancher management cluster and non-production apps cluster on 
 
 ## What's Deployed
 
-- **Rancher Manager**: 3 VMs (401-403) with RKE2 + Rancher control plane
-- **Apps Cluster**: Hybrid architecture
-  - 3 Server nodes (404-406) - Control plane + etcd
-  - 3 Worker nodes (407-409) - Application workloads (configurable)
+- **Rancher Manager**: 3 VMs (401-403) with RKE2 + Rancher control plane - 80GB disk each
+  - VM ID range: 40x (401-403)
+  - IP range: 192.168.14.100-102
+- **NPRD Apps Cluster**: Hybrid architecture for non-production workloads
+  - 3 Server nodes (410-412) - Control plane + etcd - 80GB disk each
+  - 3 Worker nodes (413-415) - Application workloads - 80GB disk each
+  - VM ID range: 41x (410-415)
+  - IP range: 192.168.14.110-115 (servers: .110-112, workers: .113-115)
+- **PRD Apps Cluster**: Hybrid architecture for production workloads
+  - 3 Server nodes (420-422) - Control plane + etcd - 80GB disk each
+  - 3 Worker nodes (423-425) - Application workloads - 80GB disk each
+  - VM ID range: 42x (420-425)
+  - IP range: 192.168.14.120-125 (servers: .120-122, workers: .123-125)
 - **Storage**: 
-  - VM storage: Dedicated volumes (local-vm-zfs)
-  - Persistent storage: TrueNAS NFS via democratic-csi (automated)
-- **Network**: Static IPs, DNS configured via cloud-init
+  - VM storage: Dedicated volumes (local-vm-zfs) on pve1 (all VMs deploy on pve1)
+  - Persistent storage: TrueNAS NFS via democratic-csi (automated on both apps clusters)
+- **Network**: Static IPs, DNS configured via cloud-init (192.168.1.1 upstream resolver)
 - **Kubernetes**: RKE2 clusters automatically bootstrapped and configured
 - **Rancher**: Helm-deployed with cert-manager, Ingress, and bootstrap password
-- **Storage Class**: TrueNAS NFS storage class (automatically created if configured)
+- **Storage Class**: TrueNAS NFS storage class (automatically created on both apps clusters if configured)
 
 ## Requirements
 
@@ -54,7 +63,7 @@ Your workstation/CI runner executing Terraform must have:
 Your Proxmox VE cluster must have:
 
 - **Proxmox VE 8.0+** with API token access
-- **Resources**: 24 vCPU cores, 48GB RAM, 600GB storage minimum
+- **Resources**: 30 vCPU cores, 60GB RAM, 900GB storage minimum (for manager + 2 apps clusters)
 - **Storage**: SSD/NVMe datastore (`local-vm-zfs` or similar) with qcow2 support
 - **Networking**: VLAN 14 support, DHCP/static IP capability, internet access
 - **DNS**: Access to 192.168.1.1 (local) or 1.1.1.1 (fallback)
@@ -167,12 +176,17 @@ export KUBECONFIG=~/.kube/rancher-manager.yaml
 kubectl get nodes
 kubectl get pods -n kube-system
 
-# Check apps cluster
+# Check nprd-apps cluster
 export KUBECONFIG=~/.kube/nprd-apps.yaml
 kubectl get nodes
 kubectl get pods -n kube-system
 
-# Check storage class (if TrueNAS configured)
+# Check prd-apps cluster
+export KUBECONFIG=~/.kube/prd-apps.yaml
+kubectl get nodes
+kubectl get pods -n kube-system
+
+# Check storage class (if TrueNAS configured - available on both apps clusters)
 kubectl get storageclass
 
 # Access Rancher
@@ -262,8 +276,8 @@ Each VM is automatically configured with:
 
 ### Storage Integration
 
-- **TrueNAS Integration**: If configured in `terraform.tfvars`, democratic-csi is automatically deployed
-- **Storage Class**: Created automatically at the end of Terraform plan
+- **TrueNAS Integration**: If configured in `terraform.tfvars`, democratic-csi is automatically deployed to both nprd-apps and prd-apps clusters
+- **Storage Class**: Created automatically on both apps clusters at the end of Terraform plan
 - **Secrets Management**: TrueNAS API keys stored in `terraform.tfvars` (gitignored)
 - **Helm Values**: Auto-generated from Terraform variables
 
