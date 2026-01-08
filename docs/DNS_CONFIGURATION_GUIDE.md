@@ -87,14 +87,14 @@ CoreDNS pods automatically inherit `/etc/resolv.conf` from the node:
 
 | Record Type | Hostname | Type | IPs | Purpose |
 |---|---|---|---|---|
-| **A Record** | `manager.dataknife.net` | Round-robin | `192.168.14.100`, `192.168.14.101`, `192.168.14.102` | Kubernetes API load balancing |
+| **A Record** | `manager.dataknife.net` | Round-robin | `192.168.1.100`, `192.168.1.101`, `192.168.1.102` | Kubernetes API load balancing |
 | **CNAME** | `rancher.dataknife.net` | CNAME | `manager.dataknife.net` | Rancher UI access |
 
 **Example DNS Configuration**:
 ```
-manager.dataknife.net    A    192.168.14.100
-manager.dataknife.net    A    192.168.14.101
-manager.dataknife.net    A    192.168.14.102
+manager.dataknife.net    A    192.168.1.100
+manager.dataknife.net    A    192.168.1.101
+manager.dataknife.net    A    192.168.1.102
 rancher.dataknife.net    CNAME manager.dataknife.net
 ```
 
@@ -104,13 +104,13 @@ rancher.dataknife.net    CNAME manager.dataknife.net
 
 | Record Type | Hostname | Type | IPs | Purpose |
 |---|---|---|---|---|
-| **A Record** | `nprd-apps.dataknife.net` | Round-robin | `192.168.14.110`, `192.168.14.111`, `192.168.14.112` | Apps cluster API access |
+| **A Record** | `nprd-apps.dataknife.net` | Round-robin | `192.168.1.110`, `192.168.1.111`, `192.168.1.112` | Apps cluster API access |
 
 **Example DNS Configuration**:
 ```
-nprd-apps.dataknife.net  A    192.168.14.110
-nprd-apps.dataknife.net  A    192.168.14.111
-nprd-apps.dataknife.net  A    192.168.14.112
+nprd-apps.dataknife.net  A    192.168.1.110
+nprd-apps.dataknife.net  A    192.168.1.111
+nprd-apps.dataknife.net  A    192.168.1.112
 ```
 
 ## Verification
@@ -119,7 +119,7 @@ nprd-apps.dataknife.net  A    192.168.14.112
 
 ```bash
 # SSH to any cluster node
-ssh ubuntu@192.168.14.100
+ssh ubuntu@192.168.1.100
 
 # Check /etc/resolv.conf
 cat /etc/resolv.conf
@@ -136,7 +136,7 @@ systemctl status systemd-resolved
 
 ```bash
 # From manager cluster node
-ssh ubuntu@192.168.14.100
+ssh ubuntu@192.168.1.100
 sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml \
   exec -n kube-system <coredns-pod> -- cat /etc/resolv.conf
 
@@ -147,7 +147,7 @@ sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml 
 
 ```bash
 # Test from node
-ssh ubuntu@192.168.14.100
+ssh ubuntu@192.168.1.100
 nslookup rancher.dataknife.net
 # Should resolve to manager cluster IPs
 

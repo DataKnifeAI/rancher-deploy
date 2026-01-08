@@ -631,7 +631,7 @@ kubectl logs -n cattle-system -l app=rancher-system-agent -f --all-containers
 Place custom agent config at `/var/lib/rancher/agent` before registration:
 
 ```bash
-ssh ubuntu@192.168.14.110
+ssh ubuntu@192.168.1.110
 sudo mkdir -p /var/lib/rancher/agent
 
 # Create custom agent config
@@ -742,7 +742,7 @@ kubectl get machines -A
 ```bash
 # Retrieve token from Rancher UI
 # SSH to apps node
-ssh ubuntu@192.168.14.110
+ssh ubuntu@192.168.1.110
 
 # Run registration
 curl -kfL "https://rancher.dataknife.net/system-agent-install.sh?token=TOKEN&ca_checksum=CHECKSUM" | sudo sh

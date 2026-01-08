@@ -776,14 +776,14 @@ When using RBD-backed storage in Proxmox.
 
 1. **Verify manifest was applied successfully:**
    ```bash
-   ssh ubuntu@192.168.14.110
+   ssh ubuntu@192.168.1.110
    sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml \
      get pods -n cattle-system
    ```
 
 2. **Check pod logs for error details:**
    ```bash
-   ssh ubuntu@192.168.14.110
+   ssh ubuntu@192.168.1.110
    sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml \
      logs -n cattle-system cattle-cluster-agent-<pod-hash> --tail=50
    ```
@@ -823,7 +823,7 @@ When using RBD-backed storage in Proxmox.
 
 3. **Check Rancher API is accessible from cluster nodes:**
    ```bash
-   ssh ubuntu@192.168.14.110
+   ssh ubuntu@192.168.1.110
    curl -sk https://rancher.example.com/health
    nslookup rancher.example.com
    ```

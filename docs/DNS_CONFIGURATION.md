@@ -14,13 +14,13 @@ The Rancher deployment requires DNS records pointing to the manager cluster node
 
 | Record Type | Hostname | Type | IPs | Purpose |
 |---|---|---|---|---|
-| **A Record** | `manager.example.com` | Round-robin | `192.168.14.100`, `192.168.14.101`, `192.168.14.102` | Kubernetes API load balancing across 3 manager nodes |
+| **A Record** | `manager.example.com` | Round-robin | `192.168.1.100`, `192.168.1.101`, `192.168.1.102` | Kubernetes API load balancing across 3 manager nodes |
 
 **Example (DNS provider format)**:
 ```
-manager.example.com    A    192.168.14.100
-manager.example.com    A    192.168.14.101
-manager.example.com    A    192.168.14.102
+manager.example.com    A    192.168.1.100
+manager.example.com    A    192.168.1.101
+manager.example.com    A    192.168.1.102
 ```
 
 ### 2. Rancher Management UI
@@ -44,14 +44,14 @@ rancher.example.com    CNAME    manager.example.com
 
 | Record Type | Hostname | Type | IPs | Purpose |
 |---|---|---|---|---|
-| **A Record** | `nprd-apps.example.com` | Round-robin | `192.168.14.110`, `192.168.14.111`, `192.168.14.112` | NPRD apps cluster API and ingress load balancing (server nodes) |
+| **A Record** | `nprd-apps.example.com` | Round-robin | `192.168.1.110`, `192.168.1.111`, `192.168.1.112` | NPRD apps cluster API and ingress load balancing (server nodes) |
 | **CNAME Record** | `nprd.example.com` | CNAME | `nprd-apps.example.com` | Alias for NPRD cluster access |
 
 **Example (DNS provider format)**:
 ```
-nprd-apps.example.com  A    192.168.14.110
-nprd-apps.example.com  A    192.168.14.111
-nprd-apps.example.com  A    192.168.14.112
+nprd-apps.example.com  A    192.168.1.110
+nprd-apps.example.com  A    192.168.1.111
+nprd-apps.example.com  A    192.168.1.112
 nprd.example.com       CNAME nprd-apps.example.com
 ```
 
@@ -61,14 +61,14 @@ nprd.example.com       CNAME nprd-apps.example.com
 
 | Record Type | Hostname | Type | IPs | Purpose |
 |---|---|---|---|---|
-| **A Record** | `prd-apps.example.com` | Round-robin | `192.168.14.120`, `192.168.14.121`, `192.168.14.122` | PRD apps cluster API and ingress load balancing (server nodes) |
+| **A Record** | `prd-apps.example.com` | Round-robin | `192.168.1.120`, `192.168.1.121`, `192.168.1.122` | PRD apps cluster API and ingress load balancing (server nodes) |
 | **CNAME Record** | `prd.example.com` | CNAME | `prd-apps.example.com` | Alias for PRD cluster access |
 
 **Example (DNS provider format)**:
 ```
-prd-apps.example.com   A    192.168.14.120
-prd-apps.example.com   A    192.168.14.121
-prd-apps.example.com   A    192.168.14.122
+prd-apps.example.com   A    192.168.1.120
+prd-apps.example.com   A    192.168.1.121
+prd-apps.example.com   A    192.168.1.122
 prd.example.com        CNAME prd-apps.example.com
 ```
 
@@ -81,26 +81,26 @@ Host: rancher.example.com
 ├─ CNAME → manager.example.com
 │
 ├─ manager.example.com (A records - round-robin)
-│  ├─ 192.168.14.100 (rancher-manager-1)
-│  ├─ 192.168.14.101 (rancher-manager-2)
-│  └─ 192.168.14.102 (rancher-manager-3)
+│  ├─ 192.168.1.100 (rancher-manager-1)
+│  ├─ 192.168.1.101 (rancher-manager-2)
+│  └─ 192.168.1.102 (rancher-manager-3)
 │
 ├─ nprd.example.com (CNAME)
 │  └─ CNAME → nprd-apps.example.com
 │
 ├─ nprd-apps.example.com (A records - round-robin, server nodes only)
-│  ├─ 192.168.14.110 (nprd-apps-1)
-│  ├─ 192.168.14.111 (nprd-apps-2)
-│  └─ 192.168.14.112 (nprd-apps-3)
+│  ├─ 192.168.1.110 (nprd-apps-1)
+│  ├─ 192.168.1.111 (nprd-apps-2)
+│  └─ 192.168.1.112 (nprd-apps-3)
 │  Note: Worker nodes (.113-.115) don't need DNS records
 │
 ├─ prd.example.com (CNAME)
 │  └─ CNAME → prd-apps.example.com
 │
 └─ prd-apps.example.com (A records - round-robin, server nodes only)
-   ├─ 192.168.14.120 (prd-apps-1)
-   ├─ 192.168.14.121 (prd-apps-2)
-   └─ 192.168.14.122 (prd-apps-3)
+   ├─ 192.168.1.120 (prd-apps-1)
+   ├─ 192.168.1.121 (prd-apps-2)
+   └─ 192.168.1.122 (prd-apps-3)
    Note: Worker nodes (.123-.125) don't need DNS records
 ```
 
@@ -111,7 +111,7 @@ Host: rancher.example.com
 ```bash
 # Manager cluster DNS
 nslookup manager.example.com
-# Should return: 192.168.14.100, 192.168.14.101, 192.168.14.102
+# Should return: 192.168.1.100, 192.168.1.101, 192.168.1.102
 
 # Rancher UI DNS
 nslookup rancher.example.com
@@ -119,7 +119,7 @@ nslookup rancher.example.com
 
 # NPRD Apps cluster DNS
 nslookup nprd-apps.example.com
-# Should return: 192.168.14.110, 192.168.14.111, 192.168.14.112
+# Should return: 192.168.1.110, 192.168.1.111, 192.168.1.112
 
 # NPRD cluster alias
 nslookup nprd.example.com
@@ -127,7 +127,7 @@ nslookup nprd.example.com
 
 # PRD Apps cluster DNS
 nslookup prd-apps.example.com
-# Should return: 192.168.14.120, 192.168.14.121, 192.168.14.122
+# Should return: 192.168.1.120, 192.168.1.121, 192.168.1.122
 
 # PRD cluster alias
 nslookup prd.example.com
@@ -206,7 +206,7 @@ Target: manager.example.com
 
 3. **Test Direct IP Access**:
    ```bash
-   curl -k https://192.168.14.100
+   curl -k https://192.168.1.100
    # If this works but DNS doesn't, DNS issue
    # If this fails, Rancher/Ingress issue
    ```
@@ -227,14 +227,14 @@ Target: manager.example.com
 
 The deployment uses:
 - **VLAN**: 14 (unified segment for all cluster nodes)
-- **Subnet**: 192.168.14.0/24
-- **Gateway**: 192.168.14.1
+- **Subnet**: 192.168.1.0/24
+- **Gateway**: 192.168.1.1
 - **DNS**: 192.168.1.1 (upstream resolver)
-- **Manager IPs**: 192.168.14.100-102
-- **NPRD Apps Server IPs**: 192.168.14.110-112
-- **NPRD Apps Worker IPs**: 192.168.14.113-115
-- **PRD Apps Server IPs**: 192.168.14.120-122
-- **PRD Apps Worker IPs**: 192.168.14.123-125
+- **Manager IPs**: 192.168.1.100-102
+- **NPRD Apps Server IPs**: 192.168.1.110-112
+- **NPRD Apps Worker IPs**: 192.168.1.113-115
+- **PRD Apps Server IPs**: 192.168.1.120-122
+- **PRD Apps Worker IPs**: 192.168.1.123-125
 
 All DNS records reference the static IPs configured via cloud-init during VM provisioning.
 

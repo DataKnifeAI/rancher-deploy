@@ -20,17 +20,17 @@ Deploy a complete Rancher management cluster and non-production apps cluster on 
 
 - **Rancher Manager**: 3 VMs (401-403) with RKE2 + Rancher control plane - 80GB disk each
   - VM ID range: 40x (401-403)
-  - IP range: 192.168.14.100-102
+  - IP range: 192.168.1.100-102
 - **NPRD Apps Cluster**: Hybrid architecture for non-production workloads
   - 3 Server nodes (410-412) - Control plane + etcd - 80GB disk each
   - 3 Worker nodes (413-415) - Application workloads - 80GB disk each
   - VM ID range: 41x (410-415)
-  - IP range: 192.168.14.110-115 (servers: .110-112, workers: .113-115)
+  - IP range: 192.168.1.110-115 (servers: .110-112, workers: .113-115)
 - **PRD Apps Cluster**: Hybrid architecture for production workloads
   - 3 Server nodes (420-422) - Control plane + etcd - 80GB disk each
   - 3 Worker nodes (423-425) - Application workloads - 80GB disk each
   - VM ID range: 42x (420-425)
-  - IP range: 192.168.14.120-125 (servers: .120-122, workers: .123-125)
+  - IP range: 192.168.1.120-125 (servers: .120-122, workers: .123-125)
 - **Storage**: 
   - VM storage: Dedicated volumes (local-vm-zfs) on pve1 (all VMs deploy on pve1)
   - Persistent storage: TrueNAS NFS via democratic-csi (automated on both apps clusters)
