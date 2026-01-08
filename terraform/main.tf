@@ -353,9 +353,8 @@ module "nprd_apps_workers" {
       hostname   = "nprd-apps-worker-${i}"
       ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + var.clusters["nprd-apps"].node_count + i - 1}/24"
       node_index = var.clusters["nprd-apps"].node_count + i - 1
-      # Distribute workers across Proxmox nodes: first 2 on pve1, rest on pve2
-      # Cloud image is now downloaded to all nodes, so workers can be on any node
-      proxmox_node = i <= 2 ? "pve1" : var.proxmox_node
+      # All VMs deploy on pve1
+      proxmox_node = var.proxmox_node
     }
   } : {}
 
@@ -508,18 +507,262 @@ module "rke2_apps" {
 }
 
 # ============================================================================
-# CREATE DOWNSTREAM CLUSTER OBJECT IN RANCHER
-# Creates the cluster in Rancher to generate the cluster ID
+# PRD APPS CLUSTER - FETCH TOKEN FROM PRIMARY
+# Fetches RKE2 token from prd-apps primary node and stores locally
 # ============================================================================
 
-resource "null_resource" "create_downstream_cluster" {
+locals {
+  prd_apps_primary_ip = split("/", module.prd_apps_primary.ip_address)[0]
+  prd_apps_token_file = "${abspath("${path.root}/../config")}/.prd-apps-token"
+}
+
+resource "null_resource" "fetch_prd_apps_token" {
+  provisioner "local-exec" {
+    command = "bash ${path.module}/fetch-token.sh ${var.ssh_private_key} ${local.prd_apps_primary_ip} ${local.prd_apps_token_file}"
+  }
+
+  depends_on = [
+    module.prd_apps_primary
+  ]
+}
+
+# Read the prd-apps token back from file (optional - may not exist during destroy)
+data "local_file" "prd_apps_token" {
+  count    = 1
+  filename = local.prd_apps_token_file
+  depends_on = [
+    null_resource.fetch_prd_apps_token
+  ]
+}
+
+# ============================================================================
+# PRD APPS CLUSTER - PRIMARY NODE (prd-apps-1)
+# Only builds after manager cluster is ready
+# ============================================================================
+
+module "prd_apps_primary" {
+  source = "./modules/proxmox_vm"
+
+  vm_name               = "prd-apps-1"
+  vm_id                 = var.vm_id_start_prd_apps
+  proxmox_node          = var.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[var.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[var.proxmox_node].file_name
+  datastore_id          = var.clusters["prd-apps"].storage
+
+  cpu_cores    = var.clusters["prd-apps"].cpu_cores
+  memory_mb    = var.clusters["prd-apps"].memory_mb
+  disk_size_gb = var.clusters["prd-apps"].disk_size_gb
+
+  hostname    = "prd-apps-1"
+  ip_address  = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet}/24"
+  gateway     = var.clusters["prd-apps"].gateway
+  dns_servers = var.clusters["prd-apps"].dns_servers
+  domain      = var.clusters["prd-apps"].domain
+  vlan_id     = var.clusters["prd-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  # RKE2 configuration - prd-apps primary server
+  rke2_enabled       = true
+  rke2_version       = "v1.34.3+rke2r1"
+  is_rke2_server     = true
+  rke2_is_primary    = true
+  rke2_server_token  = ""
+  cluster_hostname   = var.prd_apps_cluster_hostname
+  cluster_primary_ip = var.prd_apps_cluster_primary_ip
+  cluster_aliases    = var.prd_apps_cluster_aliases
+  rke2_server_ip     = ""
+
+  # Rancher registration - system-agent installation
+  register_with_rancher      = true # Enable system-agent for automatic Rancher registration
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip # IP of Rancher ingress
+  rancher_registration_token = ""                     # Will be obtained from Rancher API
+  rancher_ca_checksum        = ""                     # Will be obtained from Rancher API
+
+  # CRITICAL: Only build after manager cluster AND Rancher are fully ready
+  depends_on = [
+    module.rke2_manager,
+    module.rancher_deployment,
+    proxmox_virtual_environment_download_file.ubuntu_cloud_image
+  ]
+}
+
+# ============================================================================
+# PRD APPS CLUSTER - SECONDARY NODES (prd-apps-2, prd-apps-3)
+# Only builds after prd-apps primary is ready
+# ============================================================================
+
+module "prd_apps_additional" {
+  source = "./modules/proxmox_vm"
+
+  for_each = {
+    for i in range(1, var.clusters["prd-apps"].node_count) :
+    "prd-apps-${i + 1}" => {
+      vm_id      = var.vm_id_start_prd_apps + i
+      hostname   = "prd-apps-${i + 1}"
+      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + i}/24"
+      node_index = i
+    }
+  }
+
+  vm_name               = each.value.hostname
+  vm_id                 = each.value.vm_id
+  proxmox_node          = var.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[var.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[var.proxmox_node].file_name
+  datastore_id          = var.clusters["prd-apps"].storage
+
+  cpu_cores    = var.clusters["prd-apps"].cpu_cores
+  memory_mb    = var.clusters["prd-apps"].memory_mb
+  disk_size_gb = var.clusters["prd-apps"].disk_size_gb
+
+  hostname    = each.value.hostname
+  ip_address  = each.value.ip_address
+  gateway     = var.clusters["prd-apps"].gateway
+  dns_servers = var.clusters["prd-apps"].dns_servers
+  domain      = var.clusters["prd-apps"].domain
+  vlan_id     = var.clusters["prd-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  # RKE2 configuration - prd-apps secondary servers
+  rke2_enabled       = true
+  rke2_version       = "v1.34.3+rke2r1"
+  is_rke2_server     = true
+  rke2_is_primary    = false
+  rke2_server_token  = try(trimspace(data.local_file.prd_apps_token[0].content), "") # Token fetched locally from prd-apps primary
+  rke2_server_ip     = local.prd_apps_primary_ip
+  cluster_hostname   = var.prd_apps_cluster_hostname
+  cluster_primary_ip = var.prd_apps_cluster_primary_ip
+  cluster_aliases    = var.prd_apps_cluster_aliases
+
+  # Rancher registration - system-agent installation
+  register_with_rancher      = true # Enable system-agent for automatic Rancher registration
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip # IP of Rancher ingress
+  rancher_registration_token = ""                     # Will be obtained from Rancher API
+  rancher_ca_checksum        = ""                     # Will be obtained from Rancher API
+
+  depends_on = [
+    module.prd_apps_primary,
+    data.local_file.prd_apps_token
+  ]
+}
+
+# ============================================================================
+# PRD APPS CLUSTER - WORKER NODES (RKE2 Agent Mode)
+# Dedicated worker nodes for application workloads
+# Only created if worker_count > 0
+# ============================================================================
+
+module "prd_apps_workers" {
+  source = "./modules/proxmox_vm"
+
+  for_each = var.clusters["prd-apps"].worker_count > 0 ? {
+    for i in range(1, var.clusters["prd-apps"].worker_count + 1) :
+    "prd-apps-worker-${i}" => {
+      vm_id      = var.vm_id_start_prd_apps + var.clusters["prd-apps"].node_count + i - 1
+      hostname   = "prd-apps-worker-${i}"
+      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + var.clusters["prd-apps"].node_count + i - 1}/24"
+      node_index = var.clusters["prd-apps"].node_count + i - 1
+      # All VMs deploy on pve1
+      proxmox_node = var.proxmox_node
+    }
+  } : {}
+
+  vm_name               = each.value.hostname
+  vm_id                 = each.value.vm_id
+  proxmox_node          = each.value.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].file_name
+  datastore_id          = var.clusters["prd-apps"].storage
+
+  # Use worker-specific resources if provided, otherwise use server defaults
+  cpu_cores    = var.clusters["prd-apps"].worker_cpu_cores > 0 ? var.clusters["prd-apps"].worker_cpu_cores : var.clusters["prd-apps"].cpu_cores
+  memory_mb    = var.clusters["prd-apps"].worker_memory_mb > 0 ? var.clusters["prd-apps"].worker_memory_mb : var.clusters["prd-apps"].memory_mb
+  disk_size_gb = var.clusters["prd-apps"].worker_disk_size_gb > 0 ? var.clusters["prd-apps"].worker_disk_size_gb : var.clusters["prd-apps"].disk_size_gb
+
+  hostname    = each.value.hostname
+  ip_address  = each.value.ip_address
+  gateway     = var.clusters["prd-apps"].gateway
+  dns_servers = var.clusters["prd-apps"].dns_servers
+  domain      = var.clusters["prd-apps"].domain
+  vlan_id     = var.clusters["prd-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  # RKE2 configuration - worker nodes (agent mode, NOT server mode)
+  rke2_enabled       = true
+  rke2_version       = "v1.34.3+rke2r1"
+  is_rke2_server     = false # Worker nodes run in agent mode
+  rke2_is_primary    = false
+  rke2_server_token  = try(trimspace(data.local_file.prd_apps_token[0].content), "") # Token from prd-apps primary
+  rke2_server_ip     = local.prd_apps_primary_ip                                     # Connect to primary server
+  cluster_hostname   = var.prd_apps_cluster_hostname
+  cluster_primary_ip = var.prd_apps_cluster_primary_ip
+  cluster_aliases    = var.prd_apps_cluster_aliases
+
+  # Rancher registration - system-agent installation
+  register_with_rancher      = true # Enable system-agent for automatic Rancher registration
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip # IP of Rancher ingress
+  rancher_registration_token = ""                     # Will be obtained from Rancher API
+  rancher_ca_checksum        = ""                     # Will be obtained from Rancher API
+
+  depends_on = [
+    module.prd_apps_primary,
+    module.prd_apps_additional,  # CRITICAL: Workers must wait for all control nodes to be ready
+    data.local_file.prd_apps_token
+  ]
+}
+
+# ============================================================================
+# PRD APPS CLUSTER - VERIFICATION
+# Waits for all prd-apps nodes to be ready
+# Only starts after Rancher is deployed on manager cluster
+# ============================================================================
+
+module "rke2_prd_apps" {
+  source = "./modules/rke2_downstream_cluster"
+
+  cluster_name     = "prd-apps"
+  cluster_hostname = var.prd_apps_cluster_hostname # Use FQDN instead of IP
+  agent_ips = concat(
+    # Server nodes (control plane)
+    [split("/", module.prd_apps_primary.ip_address)[0]],
+    [for node in module.prd_apps_additional : split("/", node.ip_address)[0]],
+    # Worker nodes (if any)
+    var.clusters["prd-apps"].worker_count > 0 ? [
+      for node in module.prd_apps_workers : split("/", node.ip_address)[0]
+    ] : []
+  )
+  ssh_private_key_path = var.ssh_private_key
+  ssh_user             = "ubuntu"
+  dns_servers          = join(" ", var.clusters["prd-apps"].dns_servers)
+
+  depends_on = [
+    module.prd_apps_primary,
+    module.prd_apps_additional,
+    module.prd_apps_workers, # Always include (empty if worker_count = 0)
+    module.rancher_deployment # Wait for Rancher to be deployed first
+  ]
+}
+
+# ============================================================================
+# CREATE DOWNSTREAM CLUSTER OBJECTS IN RANCHER
+# Creates the clusters in Rancher to generate the cluster IDs
+# ============================================================================
+
+resource "null_resource" "create_nprd_apps_cluster" {
   count = var.register_downstream_cluster ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
       set -e
       
-      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating downstream cluster object in Rancher..."
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating nprd-apps cluster object in Rancher..."
       
       # Read API token from file
       API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
@@ -533,17 +776,61 @@ resource "null_resource" "create_downstream_cluster" {
       EXISTING=$(curl -sk \
         -H "Authorization: Bearer $${API_TOKEN}" \
         "https://${var.rancher_hostname}/v3/clusters" \
-        | grep -o '"name":"${local.downstream_cluster_name}"' || echo "")
+        | grep -o '"name":"nprd-apps"' || echo "")
       
       if [ -n "$${EXISTING}" ]; then
-        echo "  ✓ Cluster '${local.downstream_cluster_name}' already exists in Rancher"
+        echo "  ✓ Cluster 'nprd-apps' already exists in Rancher"
       else
-        echo "  Creating cluster '${local.downstream_cluster_name}'..."
+        echo "  Creating cluster 'nprd-apps'..."
         curl -sk \
           -X POST \
           -H "Authorization: Bearer $${API_TOKEN}" \
           -H "Content-Type: application/json" \
-          -d '{"name":"${local.downstream_cluster_name}","description":"Non-production applications cluster"}' \
+          -d '{"name":"nprd-apps","description":"Non-production applications cluster"}' \
+          "https://${var.rancher_hostname}/v3/clusters" > /dev/null
+        echo "  ✓ Cluster created successfully"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    module.rancher_deployment,
+    null_resource.fetch_manager_token
+  ]
+}
+
+resource "null_resource" "create_prd_apps_cluster" {
+  count = var.register_downstream_cluster ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating prd-apps cluster object in Rancher..."
+      
+      # Read API token from file
+      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      
+      if [ -z "$${API_TOKEN}" ]; then
+        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        exit 1
+      fi
+      
+      # Check if cluster already exists
+      EXISTING=$(curl -sk \
+        -H "Authorization: Bearer $${API_TOKEN}" \
+        "https://${var.rancher_hostname}/v3/clusters" \
+        | grep -o '"name":"prd-apps"' || echo "")
+      
+      if [ -n "$${EXISTING}" ]; then
+        echo "  ✓ Cluster 'prd-apps' already exists in Rancher"
+      else
+        echo "  Creating cluster 'prd-apps'..."
+        curl -sk \
+          -X POST \
+          -H "Authorization: Bearer $${API_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d '{"name":"prd-apps","description":"Production applications cluster"}' \
           "https://${var.rancher_hostname}/v3/clusters" > /dev/null
         echo "  ✓ Cluster created successfully"
       fi
@@ -557,22 +844,23 @@ resource "null_resource" "create_downstream_cluster" {
 }
 
 # ============================================================================
-# FETCH DOWNSTREAM CLUSTER ID FROM RANCHER API
-# Extracts the cluster ID after cluster object is created
+# FETCH DOWNSTREAM CLUSTER IDS FROM RANCHER API
+# Extracts the cluster IDs after cluster objects are created
 # ============================================================================
 
 locals {
-  cluster_id_file = "${abspath("${path.root}/../config")}/.downstream-cluster-id"
+  nprd_apps_cluster_id_file = "${abspath("${path.root}/../config")}/.nprd-apps-cluster-id"
+  prd_apps_cluster_id_file  = "${abspath("${path.root}/../config")}/.prd-apps-cluster-id"
 }
 
-resource "null_resource" "fetch_downstream_cluster_id" {
+resource "null_resource" "fetch_nprd_apps_cluster_id" {
   count = var.register_downstream_cluster ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
       set -e
       
-      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching downstream cluster ID from Rancher API..."
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching nprd-apps cluster ID from Rancher API..."
       
       # Read API token from file
       API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
@@ -582,41 +870,95 @@ resource "null_resource" "fetch_downstream_cluster_id" {
         exit 1
       fi
       
-      # Query Rancher API for the downstream cluster specifically (using jq for reliable JSON parsing)
+      # Query Rancher API for the nprd-apps cluster (using jq for reliable JSON parsing)
       CLUSTER_ID=$(curl -sk \
         -H "Authorization: Bearer $${API_TOKEN}" \
         "https://${var.rancher_hostname}/v3/clusters" \
-        | jq -r '.data[] | select(.name=="${local.downstream_cluster_name}") | .id' 2>/dev/null || echo "")
+        | jq -r '.data[] | select(.name=="nprd-apps") | .id' 2>/dev/null || echo "")
       
       if [ -z "$${CLUSTER_ID}" ]; then
-        echo "ERROR: Could not fetch downstream cluster ID from Rancher API"
-        echo "Ensure cluster '${local.downstream_cluster_name}' exists in Rancher Manager and API token is valid"
+        echo "ERROR: Could not fetch nprd-apps cluster ID from Rancher API"
+        echo "Ensure cluster 'nprd-apps' exists in Rancher Manager and API token is valid"
         exit 1
       fi
       
-      echo "  ✓ Found downstream cluster ID: $${CLUSTER_ID}"
-      echo "$${CLUSTER_ID}" > "${abspath("${path.root}/../config")}/.downstream-cluster-id"
+      echo "  ✓ Found nprd-apps cluster ID: $${CLUSTER_ID}"
+      echo "$${CLUSTER_ID}" > "${abspath("${path.root}/../config")}/.nprd-apps-cluster-id"
     EOT
   }
 
   provisioner "local-exec" {
     when       = destroy
     on_failure = continue
-    command    = "rm -f \"${abspath("${path.root}/../config")}/.downstream-cluster-id\""
+    command    = "rm -f \"${abspath("${path.root}/../config")}/.nprd-apps-cluster-id\""
   }
 
   depends_on = [
-    null_resource.create_downstream_cluster
+    null_resource.create_nprd_apps_cluster
   ]
 }
 
-# Read the cluster ID from file
-data "local_file" "downstream_cluster_id" {
-  count    = var.register_downstream_cluster ? 1 : 0
-  filename = local.cluster_id_file
+resource "null_resource" "fetch_prd_apps_cluster_id" {
+  count = var.register_downstream_cluster ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching prd-apps cluster ID from Rancher API..."
+      
+      # Read API token from file
+      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      
+      if [ -z "$${API_TOKEN}" ]; then
+        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        exit 1
+      fi
+      
+      # Query Rancher API for the prd-apps cluster (using jq for reliable JSON parsing)
+      CLUSTER_ID=$(curl -sk \
+        -H "Authorization: Bearer $${API_TOKEN}" \
+        "https://${var.rancher_hostname}/v3/clusters" \
+        | jq -r '.data[] | select(.name=="prd-apps") | .id' 2>/dev/null || echo "")
+      
+      if [ -z "$${CLUSTER_ID}" ]; then
+        echo "ERROR: Could not fetch prd-apps cluster ID from Rancher API"
+        echo "Ensure cluster 'prd-apps' exists in Rancher Manager and API token is valid"
+        exit 1
+      fi
+      
+      echo "  ✓ Found prd-apps cluster ID: $${CLUSTER_ID}"
+      echo "$${CLUSTER_ID}" > "${abspath("${path.root}/../config")}/.prd-apps-cluster-id"
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = "rm -f \"${abspath("${path.root}/../config")}/.prd-apps-cluster-id\""
+  }
 
   depends_on = [
-    null_resource.fetch_downstream_cluster_id
+    null_resource.create_prd_apps_cluster
+  ]
+}
+
+# Read the cluster IDs from files
+data "local_file" "nprd_apps_cluster_id" {
+  count    = var.register_downstream_cluster ? 1 : 0
+  filename = local.nprd_apps_cluster_id_file
+
+  depends_on = [
+    null_resource.fetch_nprd_apps_cluster_id
+  ]
+}
+
+data "local_file" "prd_apps_cluster_id" {
+  count    = var.register_downstream_cluster ? 1 : 0
+  filename = local.prd_apps_cluster_id_file
+
+  depends_on = [
+    null_resource.fetch_prd_apps_cluster_id
   ]
 }
 
@@ -625,14 +967,14 @@ data "local_file" "downstream_cluster_id" {
 # Applies cluster registration manifest to all nodes
 # ============================================================================
 
-module "rancher_downstream_registration" {
+module "rancher_downstream_registration_nprd_apps" {
   count = var.register_downstream_cluster ? 1 : 0
 
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
   rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
-  cluster_id           = trimspace(data.local_file.downstream_cluster_id[0].content)
+  cluster_id           = trimspace(data.local_file.nprd_apps_cluster_id[0].content)
   ssh_private_key_path = var.ssh_private_key
   ssh_user             = "ubuntu"
   kubeconfig_path      = "~/.kube/nprd-apps.yaml"
@@ -641,9 +983,9 @@ module "rancher_downstream_registration" {
   # Includes both server nodes and worker nodes (if any)
   cluster_nodes = merge(
     {
-      "nprd-apps-1" = "192.168.14.110"
-      "nprd-apps-2" = "192.168.14.111"
-      "nprd-apps-3" = "192.168.14.112"
+      "nprd-apps-1" = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet}"
+      "nprd-apps-2" = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + 1}"
+      "nprd-apps-3" = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + 2}"
     },
     var.clusters["nprd-apps"].worker_count > 0 ? {
       for i in range(1, var.clusters["nprd-apps"].worker_count + 1) :
@@ -653,6 +995,38 @@ module "rancher_downstream_registration" {
 
   depends_on = [
     module.rke2_apps,
+    module.rancher_deployment
+  ]
+}
+
+module "rancher_downstream_registration_prd_apps" {
+  count = var.register_downstream_cluster ? 1 : 0
+
+  source = "./modules/rancher_downstream_registration"
+
+  rancher_url          = "https://${var.rancher_hostname}"
+  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  cluster_id           = trimspace(data.local_file.prd_apps_cluster_id[0].content)
+  ssh_private_key_path = var.ssh_private_key
+  ssh_user             = "ubuntu"
+  kubeconfig_path      = "~/.kube/prd-apps.yaml"
+
+  # Map of node names to IPs for PRD apps cluster
+  # Includes both server nodes and worker nodes (if any)
+  cluster_nodes = merge(
+    {
+      "prd-apps-1" = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet}"
+      "prd-apps-2" = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + 1}"
+      "prd-apps-3" = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + 2}"
+    },
+    var.clusters["prd-apps"].worker_count > 0 ? {
+      for i in range(1, var.clusters["prd-apps"].worker_count + 1) :
+      "prd-apps-worker-${i}" => "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + var.clusters["prd-apps"].node_count + i - 1}"
+    } : {}
+  )
+
+  depends_on = [
+    module.rke2_prd_apps,
     module.rancher_deployment
   ]
 }
@@ -713,15 +1087,22 @@ resource "null_resource" "merge_kubeconfigs" {
       
       mkdir -p ~/.kube
       MANAGER_CONFIG="$HOME/.kube/rancher-manager.yaml"
-      APPS_CONFIG="$HOME/.kube/nprd-apps.yaml"
+      NPRD_APPS_CONFIG="$HOME/.kube/nprd-apps.yaml"
+      PRD_APPS_CONFIG="$HOME/.kube/prd-apps.yaml"
       
       # Merge manager and apps kubeconfigs into default config
       # Create unique users for each cluster to avoid credential conflicts
-      if [ -f "$${MANAGER_CONFIG}" ] && [ -f "$${APPS_CONFIG}" ]; then
-        echo "Merging manager and apps kubeconfigs..."
+      CONFIGS_TO_MERGE=""
+      [ -f "$${MANAGER_CONFIG}" ] && CONFIGS_TO_MERGE="$${CONFIGS_TO_MERGE}:$${MANAGER_CONFIG}"
+      [ -f "$${NPRD_APPS_CONFIG}" ] && CONFIGS_TO_MERGE="$${CONFIGS_TO_MERGE}:$${NPRD_APPS_CONFIG}"
+      [ -f "$${PRD_APPS_CONFIG}" ] && CONFIGS_TO_MERGE="$${CONFIGS_TO_MERGE}:$${PRD_APPS_CONFIG}"
+      
+      if [ -n "$${CONFIGS_TO_MERGE}" ]; then
+        echo "Merging kubeconfigs..."
+        CONFIGS_TO_MERGE=$${CONFIGS_TO_MERGE#:}  # Remove leading colon
         
         # First merge configs (this will create a single "default" user)
-        KUBECONFIG="$${MANAGER_CONFIG}:$${APPS_CONFIG}" kubectl config view --flatten > $HOME/.kube/config.tmp
+        KUBECONFIG="$${CONFIGS_TO_MERGE}" kubectl config view --flatten > $HOME/.kube/config.tmp
         mv $HOME/.kube/config.tmp $HOME/.kube/config
         chmod 600 $HOME/.kube/config
         
@@ -737,13 +1118,25 @@ resource "null_resource" "merge_kubeconfigs" {
           jq -r '.users[0].user."client-key-data"' 2>/dev/null | \
           base64 -d > "$${TEMP_DIR}/manager-key.pem" 2>/dev/null || true
         
-        # Extract apps user certs (use --raw to get actual data, not masked)
-        kubectl config view --kubeconfig="$${APPS_CONFIG}" --raw -o json 2>/dev/null | \
-          jq -r '.users[0].user."client-certificate-data"' 2>/dev/null | \
-          base64 -d > "$${TEMP_DIR}/apps-cert.pem" 2>/dev/null || true
-        kubectl config view --kubeconfig="$${APPS_CONFIG}" --raw -o json 2>/dev/null | \
-          jq -r '.users[0].user."client-key-data"' 2>/dev/null | \
-          base64 -d > "$${TEMP_DIR}/apps-key.pem" 2>/dev/null || true
+        # Extract nprd-apps user certs (use --raw to get actual data, not masked)
+        if [ -f "$${NPRD_APPS_CONFIG}" ]; then
+          kubectl config view --kubeconfig="$${NPRD_APPS_CONFIG}" --raw -o json 2>/dev/null | \
+            jq -r '.users[0].user."client-certificate-data"' 2>/dev/null | \
+            base64 -d > "$${TEMP_DIR}/nprd-apps-cert.pem" 2>/dev/null || true
+          kubectl config view --kubeconfig="$${NPRD_APPS_CONFIG}" --raw -o json 2>/dev/null | \
+            jq -r '.users[0].user."client-key-data"' 2>/dev/null | \
+            base64 -d > "$${TEMP_DIR}/nprd-apps-key.pem" 2>/dev/null || true
+        fi
+        
+        # Extract prd-apps user certs (use --raw to get actual data, not masked)
+        if [ -f "$${PRD_APPS_CONFIG}" ]; then
+          kubectl config view --kubeconfig="$${PRD_APPS_CONFIG}" --raw -o json 2>/dev/null | \
+            jq -r '.users[0].user."client-certificate-data"' 2>/dev/null | \
+            base64 -d > "$${TEMP_DIR}/prd-apps-cert.pem" 2>/dev/null || true
+          kubectl config view --kubeconfig="$${PRD_APPS_CONFIG}" --raw -o json 2>/dev/null | \
+            jq -r '.users[0].user."client-key-data"' 2>/dev/null | \
+            base64 -d > "$${TEMP_DIR}/prd-apps-key.pem" 2>/dev/null || true
+        fi
         
         # Create unique users for each cluster
         if [ -s "$${TEMP_DIR}/manager-cert.pem" ] && [ -s "$${TEMP_DIR}/manager-key.pem" ]; then
@@ -754,28 +1147,31 @@ resource "null_resource" "merge_kubeconfigs" {
           kubectl config set-context rancher-manager --cluster=rancher-manager --user=manager-user 2>/dev/null || true
         fi
         
-        if [ -s "$${TEMP_DIR}/apps-cert.pem" ] && [ -s "$${TEMP_DIR}/apps-key.pem" ]; then
-          kubectl config set-credentials apps-user \
-            --client-certificate="$${TEMP_DIR}/apps-cert.pem" \
-            --client-key="$${TEMP_DIR}/apps-key.pem" \
+        if [ -s "$${TEMP_DIR}/nprd-apps-cert.pem" ] && [ -s "$${TEMP_DIR}/nprd-apps-key.pem" ]; then
+          kubectl config set-credentials nprd-apps-user \
+            --client-certificate="$${TEMP_DIR}/nprd-apps-cert.pem" \
+            --client-key="$${TEMP_DIR}/nprd-apps-key.pem" \
             --embed-certs=true 2>/dev/null || true
-          kubectl config set-context nprd-apps --cluster=nprd-apps --user=apps-user 2>/dev/null || true
+          kubectl config set-context nprd-apps --cluster=nprd-apps --user=nprd-apps-user 2>/dev/null || true
+        fi
+        
+        if [ -s "$${TEMP_DIR}/prd-apps-cert.pem" ] && [ -s "$${TEMP_DIR}/prd-apps-key.pem" ]; then
+          kubectl config set-credentials prd-apps-user \
+            --client-certificate="$${TEMP_DIR}/prd-apps-cert.pem" \
+            --client-key="$${TEMP_DIR}/prd-apps-key.pem" \
+            --embed-certs=true 2>/dev/null || true
+          kubectl config set-context prd-apps --cluster=prd-apps --user=prd-apps-user 2>/dev/null || true
         fi
         
         # Cleanup temp directory
         rm -rf "$${TEMP_DIR}"
         
-        echo "✓ Merged both kubeconfigs to $HOME/.kube/config with unique users"
-      elif [ -f "$${MANAGER_CONFIG}" ]; then
-        echo "Merging manager kubeconfig (apps not yet available)..."
-        KUBECONFIG="$HOME/.kube/config:$${MANAGER_CONFIG}" kubectl config view --flatten > $HOME/.kube/config.tmp
-        mv $HOME/.kube/config.tmp $HOME/.kube/config
-        chmod 600 $HOME/.kube/config
-        echo "✓ Merged manager kubeconfig to $HOME/.kube/config"
+        echo "✓ Merged kubeconfigs to $HOME/.kube/config with unique users"
       else
         echo "⚠ No kubeconfig files found to merge"
         echo "  Manager config: $${MANAGER_CONFIG} ($([ -f "$${MANAGER_CONFIG}" ] && echo 'exists' || echo 'missing'))"
-        echo "  Apps config: $${APPS_CONFIG} ($([ -f "$${APPS_CONFIG}" ] && echo 'exists' || echo 'missing'))"
+        echo "  NPRD Apps config: $${NPRD_APPS_CONFIG} ($([ -f "$${NPRD_APPS_CONFIG}" ] && echo 'exists' || echo 'missing'))"
+        echo "  PRD Apps config: $${PRD_APPS_CONFIG} ($([ -f "$${PRD_APPS_CONFIG}" ] && echo 'exists' || echo 'missing'))"
       fi
       
       # Verify and set context names correctly after merge
@@ -784,7 +1180,8 @@ resource "null_resource" "merge_kubeconfigs" {
       
       # Check if contexts exist with expected names
       MANAGER_EXISTS=$(kubectl config get-contexts rancher-manager 2>/dev/null | grep -q rancher-manager && echo "yes" || echo "no")
-      APPS_EXISTS=$(kubectl config get-contexts nprd-apps 2>/dev/null | grep -q nprd-apps && echo "yes" || echo "no")
+      NPRD_APPS_EXISTS=$(kubectl config get-contexts nprd-apps 2>/dev/null | grep -q nprd-apps && echo "yes" || echo "no")
+      PRD_APPS_EXISTS=$(kubectl config get-contexts prd-apps 2>/dev/null | grep -q prd-apps && echo "yes" || echo "no")
       
       # If manager context doesn't exist, find and rename it
       if [ "$${MANAGER_EXISTS}" = "no" ]; then
@@ -795,12 +1192,21 @@ resource "null_resource" "merge_kubeconfigs" {
         fi
       fi
       
-      # If apps context doesn't exist, find and rename it
-      if [ "$${APPS_EXISTS}" = "no" ] && [ -f "$HOME/.kube/nprd-apps.yaml" ]; then
-        APPS_CONTEXT=$(kubectl config view -o jsonpath='{.contexts[?(@.context.cluster=="nprd-apps")].name}' 2>/dev/null || kubectl config view -o jsonpath='{.contexts[1].name}' 2>/dev/null || echo "")
-        if [ -n "$${APPS_CONTEXT}" ] && [ "$${APPS_CONTEXT}" != "nprd-apps" ] && [ "$${APPS_CONTEXT}" != "rancher-manager" ]; then
-          echo "Renaming apps context: $${APPS_CONTEXT} -> nprd-apps"
-          kubectl config rename-context "$${APPS_CONTEXT}" "nprd-apps" 2>/dev/null || true
+      # If nprd-apps context doesn't exist, find and rename it
+      if [ "$${NPRD_APPS_EXISTS}" = "no" ] && [ -f "$HOME/.kube/nprd-apps.yaml" ]; then
+        NPRD_APPS_CONTEXT=$(kubectl config view -o jsonpath='{.contexts[?(@.context.cluster=="nprd-apps")].name}' 2>/dev/null || kubectl config view -o jsonpath='{.contexts[1].name}' 2>/dev/null || echo "")
+        if [ -n "$${NPRD_APPS_CONTEXT}" ] && [ "$${NPRD_APPS_CONTEXT}" != "nprd-apps" ] && [ "$${NPRD_APPS_CONTEXT}" != "rancher-manager" ]; then
+          echo "Renaming nprd-apps context: $${NPRD_APPS_CONTEXT} -> nprd-apps"
+          kubectl config rename-context "$${NPRD_APPS_CONTEXT}" "nprd-apps" 2>/dev/null || true
+        fi
+      fi
+      
+      # If prd-apps context doesn't exist, find and rename it
+      if [ "$${PRD_APPS_EXISTS}" = "no" ] && [ -f "$HOME/.kube/prd-apps.yaml" ]; then
+        PRD_APPS_CONTEXT=$(kubectl config view -o jsonpath='{.contexts[?(@.context.cluster=="prd-apps")].name}' 2>/dev/null || kubectl config view -o jsonpath='{.contexts[2].name}' 2>/dev/null || echo "")
+        if [ -n "$${PRD_APPS_CONTEXT}" ] && [ "$${PRD_APPS_CONTEXT}" != "prd-apps" ] && [ "$${PRD_APPS_CONTEXT}" != "rancher-manager" ] && [ "$${PRD_APPS_CONTEXT}" != "nprd-apps" ]; then
+          echo "Renaming prd-apps context: $${PRD_APPS_CONTEXT} -> prd-apps"
+          kubectl config rename-context "$${PRD_APPS_CONTEXT}" "prd-apps" 2>/dev/null || true
         fi
       fi
       
@@ -809,7 +1215,10 @@ resource "null_resource" "merge_kubeconfigs" {
         echo "✓ Manager cluster: rancher-manager"
       fi
       if kubectl config get-clusters nprd-apps &>/dev/null 2>&1; then
-        echo "✓ Apps cluster: nprd-apps"
+        echo "✓ NPRD Apps cluster: nprd-apps"
+      fi
+      if kubectl config get-clusters prd-apps &>/dev/null 2>&1; then
+        echo "✓ PRD Apps cluster: prd-apps"
       fi
       
       # Set current context to manager if available
@@ -825,11 +1234,13 @@ resource "null_resource" "merge_kubeconfigs" {
       echo "To switch clusters:"
       echo "  kubectl config use-context rancher-manager"
       echo "  kubectl config use-context nprd-apps"
+      echo "  kubectl config use-context prd-apps"
       echo ""
       echo "Or use kubectx (if installed):"
       echo "  kubectx                    # List contexts"
       echo "  kubectx rancher-manager    # Switch to manager"
-      echo "  kubectx nprd-apps          # Switch to apps"
+      echo "  kubectx nprd-apps          # Switch to nprd-apps"
+      echo "  kubectx prd-apps           # Switch to prd-apps"
     EOT
   }
 
@@ -842,7 +1253,8 @@ resource "null_resource" "merge_kubeconfigs" {
       echo "=========================================="
       
       MANAGER_CONFIG="$HOME/.kube/rancher-manager.yaml"
-      APPS_CONFIG="$HOME/.kube/nprd-apps.yaml"
+      NPRD_APPS_CONFIG="$HOME/.kube/nprd-apps.yaml"
+      PRD_APPS_CONFIG="$HOME/.kube/prd-apps.yaml"
       
       # Remove contexts and users from merged config
       if [ -f "$HOME/.kube/config" ]; then
@@ -854,11 +1266,16 @@ resource "null_resource" "merge_kubeconfigs" {
         
         # Remove nprd-apps context and user
         kubectl config delete-context nprd-apps 2>/dev/null || true
-        kubectl config unset users.apps-user 2>/dev/null || true
+        kubectl config unset users.nprd-apps-user 2>/dev/null || true
+        
+        # Remove prd-apps context and user
+        kubectl config delete-context prd-apps 2>/dev/null || true
+        kubectl config unset users.prd-apps-user 2>/dev/null || true
         
         # Remove clusters if they exist
         kubectl config delete-cluster rancher-manager 2>/dev/null || true
         kubectl config delete-cluster nprd-apps 2>/dev/null || true
+        kubectl config delete-cluster prd-apps 2>/dev/null || true
         
         echo "✓ Removed contexts and users from ~/.kube/config"
       fi
@@ -869,9 +1286,14 @@ resource "null_resource" "merge_kubeconfigs" {
         echo "✓ Removed: $${MANAGER_CONFIG}"
       fi
       
-      if [ -f "$${APPS_CONFIG}" ]; then
-        rm -f "$${APPS_CONFIG}"
-        echo "✓ Removed: $${APPS_CONFIG}"
+      if [ -f "$${NPRD_APPS_CONFIG}" ]; then
+        rm -f "$${NPRD_APPS_CONFIG}"
+        echo "✓ Removed: $${NPRD_APPS_CONFIG}"
+      fi
+      
+      if [ -f "$${PRD_APPS_CONFIG}" ]; then
+        rm -f "$${PRD_APPS_CONFIG}"
+        echo "✓ Removed: $${PRD_APPS_CONFIG}"
       fi
       
       echo "✓ Kubeconfig cleanup complete"
@@ -879,7 +1301,8 @@ resource "null_resource" "merge_kubeconfigs" {
   }
 
   depends_on = [
-    module.rancher_downstream_registration
+    module.rancher_downstream_registration_nprd_apps,
+    module.rancher_downstream_registration_prd_apps
   ]
 }
 

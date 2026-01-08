@@ -65,6 +65,12 @@ variable "vm_id_start_apps" {
   default     = 404
 }
 
+variable "vm_id_start_prd_apps" {
+  description = "Starting VM ID for prd-apps cluster (e.g., 410 for VMs 410, 411, 412)"
+  type        = number
+  default     = 410
+}
+
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
@@ -150,6 +156,24 @@ variable "manager_cluster_aliases" {
 
 variable "apps_cluster_aliases" {
   description = "Additional hostname aliases for apps cluster TLS SANs"
+  type        = list(string)
+  default     = []
+}
+
+variable "prd_apps_cluster_hostname" {
+  description = "Hostname for prd-apps cluster TLS SANs (used in RKE2 certificate generation)"
+  type        = string
+  default     = "prd-apps.example.com"
+}
+
+variable "prd_apps_cluster_primary_ip" {
+  description = "Primary IP for prd-apps cluster TLS SANs"
+  type        = string
+  default     = "192.168.1.120"
+}
+
+variable "prd_apps_cluster_aliases" {
+  description = "Additional hostname aliases for prd-apps cluster TLS SANs"
   type        = list(string)
   default     = []
 }
