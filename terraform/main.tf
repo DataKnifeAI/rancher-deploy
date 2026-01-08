@@ -399,7 +399,7 @@ module "nprd_apps_workers" {
 
   depends_on = [
     module.nprd_apps_primary,
-    module.nprd_apps_additional,  # CRITICAL: Workers must wait for all control nodes to be ready
+    module.nprd_apps_additional, # CRITICAL: Workers must wait for all control nodes to be ready
     data.local_file.nprd_apps_token
   ]
 }
@@ -713,7 +713,7 @@ module "prd_apps_workers" {
 
   depends_on = [
     module.prd_apps_primary,
-    module.prd_apps_additional,  # CRITICAL: Workers must wait for all control nodes to be ready
+    module.prd_apps_additional, # CRITICAL: Workers must wait for all control nodes to be ready
     data.local_file.prd_apps_token
   ]
 }
@@ -745,7 +745,7 @@ module "rke2_prd_apps" {
   depends_on = [
     module.prd_apps_primary,
     module.prd_apps_additional,
-    module.prd_apps_workers, # Always include (empty if worker_count = 0)
+    module.prd_apps_workers,  # Always include (empty if worker_count = 0)
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
 }
