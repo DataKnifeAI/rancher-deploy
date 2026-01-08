@@ -1310,9 +1310,10 @@ resource "null_resource" "merge_kubeconfigs" {
 # DEMOCRATIC CSI STORAGE CLASS DEPLOYMENT
 # Installs democratic-csi with TrueNAS and creates storage class
 # Runs at the end of the plan after all clusters are ready
+# Deploys to both nprd-apps and prd-apps clusters
 # ============================================================================
 
-resource "null_resource" "deploy_democratic_csi" {
+resource "null_resource" "deploy_democratic_csi_nprd_apps" {
   count = var.truenas_host != "" && var.truenas_api_key != "" ? 1 : 0
 
   provisioner "local-exec" {
@@ -1320,7 +1321,7 @@ resource "null_resource" "deploy_democratic_csi" {
       set -e
       
       echo "=========================================="
-      echo "Deploying Democratic CSI with TrueNAS"
+      echo "Deploying Democratic CSI with TrueNAS to NPRD Apps Cluster"
       echo "=========================================="
       
       # Generate Helm values from Terraform variables
@@ -1328,7 +1329,7 @@ resource "null_resource" "deploy_democratic_csi" {
       cd "${path.root}/.."
       ./scripts/generate-helm-values-from-tfvars.sh
       
-      # Set kubeconfig to apps cluster
+      # Set kubeconfig to nprd-apps cluster
       export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
       
       # Verify cluster access
@@ -1444,3 +1445,134 @@ resource "null_resource" "deploy_democratic_csi" {
   }
 }
 
+resource "null_resource" "deploy_democratic_csi_prd_apps" {
+  count = var.truenas_host != "" && var.truenas_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying Democratic CSI with TrueNAS to PRD Apps Cluster"
+      echo "=========================================="
+      
+      # Generate Helm values from Terraform variables
+      echo "Generating Helm values from terraform.tfvars..."
+      cd "${path.root}/.."
+      ./scripts/generate-helm-values-from-tfvars.sh
+      
+      # Set kubeconfig to prd-apps cluster
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Add Helm repository
+      echo "Adding Helm repository..."
+      helm repo add democratic-csi https://democratic-csi.github.io/charts/ 2>/dev/null || echo "Repository already added"
+      helm repo update
+      
+      # Create namespace
+      echo "Creating namespace..."
+      kubectl create namespace democratic-csi --dry-run=client -o yaml | kubectl apply -f -
+      
+      # Install democratic-csi
+      echo "Installing democratic-csi..."
+      helm upgrade --install democratic-csi democratic-csi/democratic-csi \
+        --namespace democratic-csi \
+        -f helm-values/democratic-csi-truenas.yaml \
+        --wait \
+        --timeout 10m
+      
+      echo "✓ Democratic CSI installed"
+      
+      # Wait for pods to be ready
+      echo "Waiting for pods to be ready..."
+      kubectl wait --for=condition=ready pod -l app=democratic-csi-controller -n democratic-csi --timeout=5m || true
+      kubectl wait --for=condition=ready pod -l app=democratic-csi-node -n democratic-csi --timeout=5m || true
+      
+      # Verify storage class
+      echo ""
+      echo "Verifying storage class..."
+      if kubectl get storageclass ${var.csi_storage_class_name} &>/dev/null; then
+        echo "✓ Storage class '${var.csi_storage_class_name}' created"
+        
+        # Check if it's default
+        IS_DEFAULT=$(kubectl get storageclass ${var.csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
+        if [ "$IS_DEFAULT" = "true" ]; then
+          echo "✓ Storage class '${var.csi_storage_class_name}' is set as default"
+        elif [ "${var.csi_storage_class_default}" = "true" ]; then
+          echo "Setting storage class as default..."
+          # Remove default from any existing default storage class
+          EXISTING_DEFAULT=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || echo "")
+          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.csi_storage_class_name}" ]; then
+            echo "  Removing default from: $EXISTING_DEFAULT"
+            kubectl patch storageclass "$EXISTING_DEFAULT" -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}' || true
+          fi
+          # Set as default
+          kubectl patch storageclass ${var.csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
+          echo "✓ Storage class set as default"
+        fi
+      else
+        echo "⚠ Storage class '${var.csi_storage_class_name}' not found"
+        echo "  This may be normal if Helm installation is still in progress"
+      fi
+      
+      echo ""
+      echo "Storage Classes:"
+      kubectl get storageclass
+      
+      echo ""
+      echo "Democratic CSI Pods:"
+      kubectl get pods -n democratic-csi
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ Democratic CSI deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing Democratic CSI from PRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      if kubectl get namespace democratic-csi &>/dev/null; then
+        echo "Uninstalling democratic-csi..."
+        helm uninstall democratic-csi --namespace democratic-csi 2>/dev/null || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace democratic-csi --timeout=2m 2>/dev/null || true
+        
+        echo "✓ Democratic CSI removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    truenas_host              = var.truenas_host
+    truenas_api_key           = sha256(var.truenas_api_key) # Use hash to avoid storing secret
+    truenas_dataset           = var.truenas_dataset
+    csi_storage_class_name    = var.csi_storage_class_name
+    csi_storage_class_default = var.csi_storage_class_default
+    helm_values_file          = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+  }
+}
