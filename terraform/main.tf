@@ -1576,3 +1576,205 @@ resource "null_resource" "deploy_democratic_csi_prd_apps" {
     helm_values_file          = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
+
+# ============================================================================
+# CLOUDNATIVEPG OPERATOR DEPLOYMENT
+# Installs CloudNativePG operator for PostgreSQL management
+# Deploys to both nprd-apps and prd-apps clusters
+# ============================================================================
+
+resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying CloudNativePG Operator to NPRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to nprd-apps cluster
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access nprd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Install CloudNativePG operator using official manifest
+      echo "Installing CloudNativePG operator..."
+      CNPG_VERSION="1.28.0"
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+      
+      # Apply the manifest with server-side apply
+      kubectl apply --server-side -f "$CNPG_MANIFEST_URL" || {
+        echo "⚠ Server-side apply failed, trying regular apply..."
+        kubectl apply -f "$CNPG_MANIFEST_URL"
+      }
+      
+      echo "✓ CloudNativePG operator manifest applied"
+      
+      # Wait for operator to be ready
+      echo "Waiting for operator to be ready..."
+      kubectl wait --for=condition=available deployment/cnpg-controller-manager \
+        -n cnpg-system \
+        --timeout=5m || {
+        echo "⚠ Deployment may still be starting, checking status..."
+        kubectl get deployment -n cnpg-system
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying CloudNativePG installation..."
+      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m || true
+      
+      echo ""
+      echo "CloudNativePG Pods:"
+      kubectl get pods -n cnpg-system
+      
+      echo ""
+      echo "CloudNativePG CRDs:"
+      kubectl get crd | grep cnpg || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ CloudNativePG deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing CloudNativePG from NPRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      if kubectl get namespace cnpg-system &>/dev/null; then
+        echo "Removing CloudNativePG operator..."
+        CNPG_VERSION="1.28.0"
+        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+        kubectl delete -f "$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ CloudNativePG removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_apps
+  ]
+
+  triggers = {
+    cnpg_version = "1.28.0"
+  }
+}
+
+resource "null_resource" "deploy_cloudnativepg_prd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying CloudNativePG Operator to PRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to prd-apps cluster
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Install CloudNativePG operator using official manifest
+      echo "Installing CloudNativePG operator..."
+      CNPG_VERSION="1.28.0"
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+      
+      # Apply the manifest with server-side apply
+      kubectl apply --server-side -f "$CNPG_MANIFEST_URL" || {
+        echo "⚠ Server-side apply failed, trying regular apply..."
+        kubectl apply -f "$CNPG_MANIFEST_URL"
+      }
+      
+      echo "✓ CloudNativePG operator manifest applied"
+      
+      # Wait for operator to be ready
+      echo "Waiting for operator to be ready..."
+      kubectl wait --for=condition=available deployment/cnpg-controller-manager \
+        -n cnpg-system \
+        --timeout=5m || {
+        echo "⚠ Deployment may still be starting, checking status..."
+        kubectl get deployment -n cnpg-system
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying CloudNativePG installation..."
+      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m || true
+      
+      echo ""
+      echo "CloudNativePG Pods:"
+      kubectl get pods -n cnpg-system
+      
+      echo ""
+      echo "CloudNativePG CRDs:"
+      kubectl get crd | grep cnpg || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ CloudNativePG deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing CloudNativePG from PRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      if kubectl get namespace cnpg-system &>/dev/null; then
+        echo "Removing CloudNativePG operator..."
+        CNPG_VERSION="1.28.0"
+        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+        kubectl delete -f "$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ CloudNativePG removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    cnpg_version = "1.28.0"
+  }
+}

@@ -22,6 +22,9 @@ Complete documentation for the Rancher Deploy project.
 - **[TRUENAS_SECRETS_MANAGEMENT.md](TRUENAS_SECRETS_MANAGEMENT.md)** - Secrets management workflow
 - **[STORAGE_CLASS_DEFAULT.md](STORAGE_CLASS_DEFAULT.md)** - Storage class default configuration
 
+### Database Management
+- **[CLOUDNATIVEPG_SETUP.md](CLOUDNATIVEPG_SETUP.md)** - CloudNativePG operator setup and PostgreSQL cluster management
+
 ### Infrastructure
 - **[API_TOKEN_AND_PERMISSIONS.md](API_TOKEN_AND_PERMISSIONS.md)** - Proxmox API token creation and permissions
 - **[PROXMOX_AGENT_SETUP.md](PROXMOX_AGENT_SETUP.md)** - Proxmox guest agent configuration
@@ -45,6 +48,9 @@ Complete documentation for the Rancher Deploy project.
 ### Storage Setup
 1. [TrueNAS Storage Setup](TRUENAS_STORAGE_SETUP.md) - Complete storage guide
 2. [Secrets Management](TRUENAS_SECRETS_MANAGEMENT.md) - How secrets are managed
+
+### Database Management
+1. [CloudNativePG Setup](CLOUDNATIVEPG_SETUP.md) - PostgreSQL cluster management with CloudNativePG
 
 ### Troubleshooting
 1. [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues
