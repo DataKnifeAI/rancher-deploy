@@ -215,7 +215,8 @@ Complete documentation is available in the [docs/](docs/) folder. See [docs/READ
 │   ├── create-rancher-api-token.sh # Create API token manually
 │   ├── test-rancher-api-token.sh # Test API connectivity
 │   ├── generate-helm-values-from-tfvars.sh # Generate Helm values from Terraform
-│   └── install-democratic-csi.sh # Manual democratic-csi installation
+│   ├── install-democratic-csi.sh # Manual democratic-csi installation
+│   └── update-dns-servers.sh     # Update DNS on existing VMs
 ├── helm-values/                  # Helm chart values
 │   ├── democratic-csi-truenas.yaml # Generated (gitignored)
 │   └── *.example                 # Example templates

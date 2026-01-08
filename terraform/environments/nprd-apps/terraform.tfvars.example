@@ -19,5 +19,5 @@ disk_size_gb = 150
 
 # Network Configuration
 gateway     = "192.168.1.1"
-dns_servers = ["192.168.1.1", "1.1.1.1"]
+dns_servers = ["192.168.1.1"]
 storage     = "local-lvm"

@@ -124,7 +124,7 @@ fi
 log "Configuring node DNS servers..."
 
 # Get DNS servers from environment or use defaults
-DNS_SERVERS="${DNS_SERVERS:-192.168.1.1 1.1.1.1}"
+DNS_SERVERS="${DNS_SERVERS:-192.168.1.1}"
 
 # Stop and disable systemd-resolved
 log "Stopping and disabling systemd-resolved..."

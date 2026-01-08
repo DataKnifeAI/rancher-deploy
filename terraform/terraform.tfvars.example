@@ -59,7 +59,7 @@ clusters = {
     ip_subnet      = "192.168.1"    # Base subnet
     ip_start_octet = 100             # VMs will be .100, .101, .102
     gateway        = "192.168.1.1"  # Network gateway
-    dns_servers    = ["192.168.1.1", "1.1.1.1"]
+    dns_servers    = ["192.168.1.1"]
     storage        = "local-vm-zfs" # VM storage (cloud image downloaded to 'local' then imported)
     vlan_id        = 1               # VLAN ID (1 for no VLAN, or your VLAN number)
   }
@@ -80,7 +80,7 @@ clusters = {
     ip_start_octet = 110            # Server VMs: .110, .111, .112
                                     # Worker VMs: .113, .114, .115, .116 (if worker_count > 0)
     gateway        = "192.168.1.1"
-    dns_servers    = ["192.168.1.1", "1.1.1.1"]
+    dns_servers    = ["192.168.1.1"]
     storage        = "local-vm-zfs" # VM storage (cloud image downloaded to 'local' then imported)
     vlan_id        = 1              # VLAN ID (1 for no VLAN, or your VLAN number)
   }
