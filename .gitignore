@@ -61,3 +61,17 @@ temp/
 # Helm values with secrets
 helm-values/*-dataknife.yaml
 !helm-values/*-dataknife.yaml.example
+
+# GitHub App private keys and secrets
+.github-arc/
+*.pem
+*.key
+*private-key*
+*private_key*
+
+# Temporary files and backups
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store

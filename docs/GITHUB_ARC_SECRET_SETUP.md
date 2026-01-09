@@ -4,7 +4,12 @@
 
 ## Overview
 
-The **Official GitHub Actions Runner Controller (ARC)** requires GitHub authentication to manage runners. This document explains how to configure the required secrets for the official GitHub-supported version.
+The **Official GitHub Actions Runner Controller (ARC)** requires GitHub authentication at **two levels**:
+
+1. **Controller Secret** (`controller-manager` in `actions-runner-system`) - For the controller to manage runner scale sets
+2. **Runner Scale Set Secret** (referenced by `AutoscalingRunnerSet` via `githubConfigSecret`) - For the runner scale set to authenticate with GitHub
+
+This document explains how to configure both secrets for the official GitHub-supported version.
 
 ## Current Status
 
@@ -13,11 +18,103 @@ The **Official GitHub Actions Runner Controller (ARC)** requires GitHub authenti
 ✅ **Fleet Ready**: Fleet can validate runner resources because CRDs exist  
 ✅ **Version**: Official GitHub-supported ARC (not legacy community version)
 
+## Secret Configuration
+
+### Secret 1: Controller Secret (`controller-manager`)
+
+The controller requires authentication to create and manage runner scale sets. This secret must be in the `actions-runner-system` namespace.
+
+### Secret 2: Runner Scale Set Secret (`githubConfigSecret`)
+
+Each `AutoscalingRunnerSet` resource references a secret via `spec.githubConfigSecret`. This secret must be in the same namespace as the `AutoscalingRunnerSet` resource (e.g., `managed-cicd`).
+
+**Recommendation**: Use **GitHub App** for both secrets in production environments.
+
+## Helper Scripts
+
+We provide helper scripts to automate secret creation:
+
+### Interactive Setup Script (Recommended)
+
+```bash
+# Interactive guide through GitHub App creation and secret setup
+./scripts/setup-github-app-arc.sh
+```
+
+This script will:
+- Guide you through creating the GitHub App via web interface
+- Collect App ID, Installation ID, and private key path
+- Automatically create Kubernetes secrets for your cluster(s)
+
+### Direct Secret Creation Script
+
+```bash
+# Create secrets directly (if you already have app details)
+./scripts/create-github-app-secrets.sh \
+  -c nprd-apps \
+  -i YOUR_APP_ID \
+  -n YOUR_INSTALLATION_ID \
+  -k /path/to/private-key.pem
+```
+
+### List Existing Apps
+
+```bash
+# View GitHub Apps (opens web interface)
+./scripts/list-github-apps.sh
+```
+
 ## Authentication Methods
 
-ARC supports two authentication methods:
+ARC supports two authentication methods for both secrets:
 
 ### Method 1: GitHub Personal Access Token (PAT) - Recommended for Testing
+
+**Use for**: Development/testing environments, quick setup
+
+**Pros**:
+- Simple setup (just one token)
+- Quick to configure
+
+**Cons**:
+- Less secure (broad permissions)
+- User account dependency
+- Can expire if account is inactive
+- Not recommended for production
+
+#### Controller Secret (PAT)
+
+```bash
+# For nprd-apps
+kubectl --kubeconfig ~/.kube/nprd-apps.yaml create secret generic controller-manager \
+  -n actions-runner-system \
+  --from-literal=github_token="YOUR_GITHUB_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# For prd-apps
+kubectl --kubeconfig ~/.kube/prd-apps.yaml create secret generic controller-manager \
+  -n actions-runner-system \
+  --from-literal=github_token="YOUR_GITHUB_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+#### Runner Scale Set Secret (PAT)
+
+```bash
+# For nprd-apps - Create secret in the runner namespace (e.g., managed-cicd)
+kubectl --kubeconfig ~/.kube/nprd-apps.yaml create secret generic github-app-secret \
+  -n managed-cicd \
+  --from-literal=github_token="YOUR_GITHUB_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+**Note**: The `AutoscalingRunnerSet` resource must reference this secret:
+```yaml
+spec:
+  githubConfigSecret: github-app-secret  # Name of the secret
+```
+
+### Method 2: GitHub App Authentication - **Recommended for Production** ✅
 
 1. **Create a GitHub Personal Access Token**:
    - Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
@@ -44,15 +141,57 @@ kubectl --kubeconfig ~/.kube/nprd-apps.yaml rollout restart deployment gha-runne
 kubectl --kubeconfig ~/.kube/prd-apps.yaml rollout restart deployment gha-runner-scale-set-controller -n actions-runner-system
 ```
 
-### Method 2: GitHub App Authentication - Recommended for Production
+### Method 2: GitHub App Authentication - **Recommended for Production** ✅
 
-1. **Create a GitHub App**:
-   - Go to your organization → Settings → Developer settings → GitHub Apps
-   - Create a new GitHub App
-   - Note the App ID and Installation ID
-   - Generate and download a private key
+**Use for**: Production environments, organizations, security-sensitive setups
 
-2. **Update the Secret**:
+**Pros**:
+- ✅ More secure (scoped permissions)
+- ✅ No user account dependency
+- ✅ Fine-grained permissions
+- ✅ Better audit trail
+- ✅ Official GitHub recommendation
+- ✅ Better runner group support
+
+**Cons**:
+- Slightly more complex setup
+- Requires GitHub App creation
+
+#### Step 1: Create a GitHub App
+
+1. Go to your organization → **Settings** → **Developer settings** → **GitHub Apps**
+2. **Check existing apps** (to avoid name conflicts): https://github.com/organizations/YOUR_ORG/settings/apps
+3. Click **New GitHub App**
+4. Configure the app:
+   - **Name**: Must be unique across all GitHub. Try:
+     - `arc-runner-controller-{org-name}` (e.g., `arc-runner-controller-dataknifeai`)
+     - `arc-runner-controller-{date}` (e.g., `arc-runner-controller-20260109`)
+     - `arc-runner-controller-{org}-{env}` (e.g., `arc-runner-controller-dataknifeai-nprd`)
+     - ⚠️ **If name is taken**: Try adding date suffix, organization name, or environment
+   - **Homepage URL**: Your organization URL (e.g., `https://github.com/DataKnifeAI`)
+   - **Webhook**: Unchecked (not required for ARC)
+   - **Permissions**:
+     - **Repository Permissions**:
+       - `Actions`: **Read & Write**
+       - `Metadata`: **Read-only**
+     - **Organization Permissions**:
+       - `Self-hosted runners`: **Read & Write**
+   - **Where can this GitHub App be installed?**: **Only on this account**
+5. Click **Create GitHub App**
+   - ⚠️ **If you see "Name already taken"**: Choose a different name (see suggestions above)
+6. **Note the App ID** (visible on the app page, under the app name)
+7. Generate and download the private key:
+   - Scroll down to **Private keys**
+   - Click **Generate a private key**
+   - Save the downloaded `.pem` file securely (you can only download it once!)
+8. Install the app on your organization:
+   - Click **Install App** (in sidebar or top of app page)
+   - Select your organization (e.g., **DataKnifeAI**)
+   - Choose installation permissions (All repositories recommended for ARC)
+   - Click **Install**
+   - **Note the Installation ID** (visible in the URL: `/installations/<INSTALLATION_ID>`)
+
+#### Step 2: Create Controller Secret (GitHub App)
 
 ```bash
 # For nprd-apps
@@ -63,7 +202,7 @@ kubectl --kubeconfig ~/.kube/nprd-apps.yaml create secret generic controller-man
   --from-literal=github_app_private_key="$(cat path/to/private-key.pem)" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# For prd-apps (same process)
+# For prd-apps
 kubectl --kubeconfig ~/.kube/prd-apps.yaml create secret generic controller-manager \
   -n actions-runner-system \
   --from-literal=github_app_id="YOUR_APP_ID" \
@@ -75,6 +214,35 @@ kubectl --kubeconfig ~/.kube/prd-apps.yaml create secret generic controller-mana
 kubectl --kubeconfig ~/.kube/nprd-apps.yaml rollout restart deployment gha-runner-scale-set-controller -n actions-runner-system
 kubectl --kubeconfig ~/.kube/prd-apps.yaml rollout restart deployment gha-runner-scale-set-controller -n actions-runner-system
 ```
+
+#### Step 3: Create Runner Scale Set Secret (GitHub App)
+
+**Important**: This secret is referenced by the `AutoscalingRunnerSet` resource via `spec.githubConfigSecret`.
+
+```bash
+# For nprd-apps - Create secret in the runner namespace (e.g., managed-cicd)
+kubectl --kubeconfig ~/.kube/nprd-apps.yaml create secret generic github-app-secret \
+  -n managed-cicd \
+  --from-literal=github_app_id="YOUR_APP_ID" \
+  --from-literal=github_app_installation_id="YOUR_INSTALLATION_ID" \
+  --from-literal=github_app_private_key="$(cat path/to/private-key.pem)" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+**Note**: The `AutoscalingRunnerSet` resource must reference this secret:
+```yaml
+apiVersion: actions.github.com/v1beta1
+kind: AutoscalingRunnerSet
+metadata:
+  name: nprd-autoscale-runners
+  namespace: managed-cicd
+spec:
+  githubConfigUrl: "https://github.com/DataKnifeAI"  # Organization URL
+  githubConfigSecret: github-app-secret  # Name of the secret created above
+  # ... rest of configuration
+```
+
+**Same App or Different?**: You can use the same GitHub App for both secrets, or create separate apps for controller and runners. Using the same app is simpler and recommended for most setups.
 
 ## Verification
 
@@ -129,21 +297,35 @@ kubectl create secret generic controller-manager -n actions-runner-system \
 
 **Solution**: Update secret with valid GitHub credentials (see Method 1 or 2 above)
 
-### Checking Secret
+### Checking Secrets
+
+#### Controller Secret
 
 ```bash
-# View secret (note: values are base64 encoded)
+# View controller secret (note: values are base64 encoded)
 kubectl get secret controller-manager -n actions-runner-system -o yaml
 
 # Decode values
 kubectl get secret controller-manager -n actions-runner-system -o jsonpath='{.data.github_token}' | base64 -d
+kubectl get secret controller-manager -n actions-runner-system -o jsonpath='{.data.github_app_id}' | base64 -d
 ```
 
-## Current Configuration
+#### Runner Scale Set Secret
 
-### Secret Structure
+```bash
+# View runner secret (replace 'managed-cicd' with your namespace)
+kubectl get secret github-app-secret -n managed-cicd -o yaml
 
-The `controller-manager` secret can contain:
+# Decode values
+kubectl get secret github-app-secret -n managed-cicd -o jsonpath='{.data.github_app_id}' | base64 -d
+kubectl get secret github-app-secret -n managed-cicd -o jsonpath='{.data.github_app_installation_id}' | base64 -d
+```
+
+## Secret Structure
+
+### Controller Secret (`controller-manager` in `actions-runner-system`)
+
+Can contain:
 - `github_token` - Personal Access Token (optional)
 - `github_app_id` - GitHub App ID (optional)
 - `github_app_installation_id` - Installation ID (optional)
@@ -152,6 +334,20 @@ The `controller-manager` secret can contain:
 **Note**: Only ONE authentication method should be used:
 - Use either `github_token` OR `github_app_*` fields
 - Don't mix both methods
+
+### Runner Scale Set Secret (`githubConfigSecret` in runner namespace)
+
+**For GitHub App** (recommended):
+- `github_app_id` - GitHub App ID (required)
+- `github_app_installation_id` - Installation ID (required)
+- `github_app_private_key` - PEM-encoded private key (required)
+
+**For Personal Access Token**:
+- `github_token` - Personal Access Token (required)
+
+**Secret Name**: The secret name is specified in the `AutoscalingRunnerSet` resource via `spec.githubConfigSecret` (e.g., `github-app-secret`).
+
+**Namespace**: The secret must be in the same namespace as the `AutoscalingRunnerSet` resource.
 
 ### Helm Values
 

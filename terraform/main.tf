@@ -1864,6 +1864,72 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       echo ""
       echo "=========================================="
+      echo "Configuring RBAC for ARC Controller"
+      echo "=========================================="
+      
+      # Ensure managed-cicd namespace exists
+      RUNNER_NAMESPACE="managed-cicd"
+      if ! kubectl get namespace "$RUNNER_NAMESPACE" &>/dev/null; then
+        echo "Creating namespace: $RUNNER_NAMESPACE"
+        kubectl create namespace "$RUNNER_NAMESPACE" || true
+      fi
+      
+      # Wait for controller ServiceAccount to be created
+      echo "Waiting for controller ServiceAccount..."
+      CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
+      for i in {1..30}; do
+        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$NAMESPACE" &>/dev/null; then
+          echo "✓ Controller ServiceAccount found"
+          break
+        fi
+        if [ $i -eq 30 ]; then
+          echo "⚠ Warning: Controller ServiceAccount not found, but continuing..."
+        fi
+        sleep 2
+      done
+      
+      # Create Role for managing secrets and RBAC in managed-cicd namespace
+      # The controller needs to:
+      # 1. Read/create secrets (for github-app-secret authentication and listener config)
+      # 2. Create/manage Roles and RoleBindings (for AutoscalingListener pods)
+      echo "Creating Role for secret and RBAC access in $RUNNER_NAMESPACE namespace..."
+      kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: arc-controller-secret-reader
+  namespace: $RUNNER_NAMESPACE
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+EOF
+      
+      # Create RoleBinding to grant controller ServiceAccount permission to read secrets
+      echo "Creating RoleBinding for controller secret access..."
+      kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arc-controller-secret-reader
+  namespace: $RUNNER_NAMESPACE
+subjects:
+- kind: ServiceAccount
+  name: $CONTROLLER_SA
+  namespace: $NAMESPACE
+roleRef:
+  kind: Role
+  name: arc-controller-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+EOF
+      
+      echo "✓ RBAC configured: Controller can now read secrets in $RUNNER_NAMESPACE namespace"
+      
+      echo ""
+      echo "=========================================="
       echo "✓ Official ARC deployment complete"
       echo "=========================================="
       echo ""
@@ -1886,6 +1952,10 @@ resource "null_resource" "deploy_arc_nprd_apps" {
         echo "Uninstalling ARC controller..."
         helm uninstall actions-runner-controller -n actions-runner-system 2>/dev/null || true
         helm uninstall gha-runner-scale-set-controller -n actions-runner-system 2>/dev/null || true
+        
+        echo "Cleaning up RBAC resources..."
+        kubectl delete rolebinding arc-controller-secret-reader -n managed-cicd 2>/dev/null || true
+        kubectl delete role arc-controller-secret-reader -n managed-cicd 2>/dev/null || true
         
         echo "Deleting namespace..."
         kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
@@ -1977,6 +2047,72 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       echo ""
       echo "=========================================="
+      echo "Configuring RBAC for ARC Controller"
+      echo "=========================================="
+      
+      # Ensure managed-cicd namespace exists
+      RUNNER_NAMESPACE="managed-cicd"
+      if ! kubectl get namespace "$RUNNER_NAMESPACE" &>/dev/null; then
+        echo "Creating namespace: $RUNNER_NAMESPACE"
+        kubectl create namespace "$RUNNER_NAMESPACE" || true
+      fi
+      
+      # Wait for controller ServiceAccount to be created
+      echo "Waiting for controller ServiceAccount..."
+      CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
+      for i in {1..30}; do
+        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$NAMESPACE" &>/dev/null; then
+          echo "✓ Controller ServiceAccount found"
+          break
+        fi
+        if [ $i -eq 30 ]; then
+          echo "⚠ Warning: Controller ServiceAccount not found, but continuing..."
+        fi
+        sleep 2
+      done
+      
+      # Create Role for managing secrets and RBAC in managed-cicd namespace
+      # The controller needs to:
+      # 1. Read/create secrets (for github-app-secret authentication and listener config)
+      # 2. Create/manage Roles and RoleBindings (for AutoscalingListener pods)
+      echo "Creating Role for secret and RBAC access in $RUNNER_NAMESPACE namespace..."
+      kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: arc-controller-secret-reader
+  namespace: $RUNNER_NAMESPACE
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+EOF
+      
+      # Create RoleBinding to grant controller ServiceAccount permission to read secrets
+      echo "Creating RoleBinding for controller secret access..."
+      kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arc-controller-secret-reader
+  namespace: $RUNNER_NAMESPACE
+subjects:
+- kind: ServiceAccount
+  name: $CONTROLLER_SA
+  namespace: $NAMESPACE
+roleRef:
+  kind: Role
+  name: arc-controller-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+EOF
+      
+      echo "✓ RBAC configured: Controller can now read secrets in $RUNNER_NAMESPACE namespace"
+      
+      echo ""
+      echo "=========================================="
       echo "✓ Official ARC deployment complete"
       echo "=========================================="
       echo ""
@@ -1999,6 +2135,10 @@ resource "null_resource" "deploy_arc_prd_apps" {
         echo "Uninstalling ARC controller..."
         helm uninstall actions-runner-controller -n actions-runner-system 2>/dev/null || true
         helm uninstall gha-runner-scale-set-controller -n actions-runner-system 2>/dev/null || true
+        
+        echo "Cleaning up RBAC resources..."
+        kubectl delete rolebinding arc-controller-secret-reader -n managed-cicd 2>/dev/null || true
+        kubectl delete role arc-controller-secret-reader -n managed-cicd 2>/dev/null || true
         
         echo "Deleting namespace..."
         kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
