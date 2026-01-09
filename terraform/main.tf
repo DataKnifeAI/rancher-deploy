@@ -1791,7 +1791,7 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
 # GITHUB ACTIONS RUNNER CONTROLLER (ARC) DEPLOYMENT
 # Installs ARC controller for GitHub Actions runner management
 # Deploys to both nprd-apps and prd-apps clusters
-# Required before Fleet processes RunnerDeployment resources
+# Required before Fleet processes AutoscalingRunnerSet resources (official GitHub version)
 # ============================================================================
 
 resource "null_resource" "deploy_arc_nprd_apps" {
@@ -1800,7 +1800,7 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       set -e
       
       echo "=========================================="
-      echo "Deploying GitHub ARC Controller to NPRD Apps Cluster"
+      echo "Deploying Official GitHub ARC Controller to NPRD Apps Cluster"
       echo "=========================================="
       
       # Set kubeconfig to nprd-apps cluster
@@ -1820,64 +1820,55 @@ resource "null_resource" "deploy_arc_nprd_apps" {
         exit 1
       fi
       
-      # Add Helm repository if not already added
-      if ! helm repo list | grep -q actions-runner-controller; then
-        echo "Adding Helm repository..."
-        helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
-      fi
-      helm repo update actions-runner-controller
+      # Official GitHub ARC uses OCI registry (no Helm repo needed)
+      echo "Using official GitHub OCI chart (no Helm repo needed)"
       
-      echo "✓ Helm repository configured"
-      
-      # Install ARC controller using Helm
-      echo "Installing GitHub ARC controller..."
+      # Install official ARC controller using OCI chart
+      echo "Installing official GitHub ARC controller..."
       NAMESPACE="actions-runner-system"
-      RELEASE_NAME="actions-runner-controller"
-      CHART="actions-runner-controller/actions-runner-controller"
+      RELEASE_NAME="gha-runner-scale-set-controller"
+      CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
       
       # Check if already installed
       if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading..."
+        echo "  ARC controller already installed, upgrading to official version..."
         helm upgrade "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
-          --set syncPeriod=10m \
           --wait=false
       else
-        echo "  Installing ARC controller..."
+        echo "  Installing official ARC controller..."
         helm install "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
           --create-namespace \
-          --set syncPeriod=10m \
           --wait=false
       fi
       
-      echo "✓ ARC controller installed"
+      echo "✓ Official ARC controller installed"
       
       # Wait a moment for CRDs to be created
       sleep 5
       
       # Verify CRDs are installed (these are what Fleet needs)
       echo ""
-      echo "Verifying ARC CRDs installation..."
-      if kubectl get crd runnerdeployments.actions.summerwind.dev &>/dev/null && \
-         kubectl get crd horizontalrunnerautoscalers.actions.summerwind.dev &>/dev/null; then
+      echo "Verifying ARC CRDs installation (Official Version)..."
+      if kubectl get crd autoscalingrunnersets.actions.github.com &>/dev/null; then
         echo "✓ Required CRDs installed:"
-        kubectl get crd | grep -E "runnerdeployments|horizontalrunnerautoscalers|runnersets" || true
+        kubectl get crd | grep -E "autoscalingrunnersets|ephemeralrunnersets|ephemeralrunners" || true
       else
         echo "⚠ CRDs may still be installing, but controller chart is installed"
       fi
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=actions-runner-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
-      echo "✓ ARC deployment complete"
+      echo "✓ Official ARC deployment complete"
       echo "=========================================="
       echo ""
       echo "Note: CRDs are installed immediately. Fleet can now validate"
-      echo "RunnerDeployment and HorizontalRunnerAutoscaler resources."
+      echo "AutoscalingRunnerSet resources (official GitHub version)."
     EOT
   }
 
@@ -1891,9 +1882,10 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
       
-      if helm list -n actions-runner-system 2>/dev/null | grep -q "actions-runner-controller"; then
+      if helm list -n actions-runner-system 2>/dev/null | grep -qE "(actions-runner-controller|gha-runner-scale-set-controller)"; then
         echo "Uninstalling ARC controller..."
-        helm uninstall actions-runner-controller -n actions-runner-system || true
+        helm uninstall actions-runner-controller -n actions-runner-system 2>/dev/null || true
+        helm uninstall gha-runner-scale-set-controller -n actions-runner-system 2>/dev/null || true
         
         echo "Deleting namespace..."
         kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
@@ -1921,7 +1913,7 @@ resource "null_resource" "deploy_arc_prd_apps" {
       set -e
       
       echo "=========================================="
-      echo "Deploying GitHub ARC Controller to PRD Apps Cluster"
+      echo "Deploying Official GitHub ARC Controller to PRD Apps Cluster"
       echo "=========================================="
       
       # Set kubeconfig to prd-apps cluster
@@ -1941,64 +1933,55 @@ resource "null_resource" "deploy_arc_prd_apps" {
         exit 1
       fi
       
-      # Add Helm repository if not already added
-      if ! helm repo list | grep -q actions-runner-controller; then
-        echo "Adding Helm repository..."
-        helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
-      fi
-      helm repo update actions-runner-controller
+      # Official GitHub ARC uses OCI registry (no Helm repo needed)
+      echo "Using official GitHub OCI chart (no Helm repo needed)"
       
-      echo "✓ Helm repository configured"
-      
-      # Install ARC controller using Helm
-      echo "Installing GitHub ARC controller..."
+      # Install official ARC controller using OCI chart
+      echo "Installing official GitHub ARC controller..."
       NAMESPACE="actions-runner-system"
-      RELEASE_NAME="actions-runner-controller"
-      CHART="actions-runner-controller/actions-runner-controller"
+      RELEASE_NAME="gha-runner-scale-set-controller"
+      CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
       
       # Check if already installed
       if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading..."
+        echo "  ARC controller already installed, upgrading to official version..."
         helm upgrade "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
-          --set syncPeriod=10m \
           --wait=false
       else
-        echo "  Installing ARC controller..."
+        echo "  Installing official ARC controller..."
         helm install "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
           --create-namespace \
-          --set syncPeriod=10m \
           --wait=false
       fi
       
-      echo "✓ ARC controller installed"
+      echo "✓ Official ARC controller installed"
       
       # Wait a moment for CRDs to be created
       sleep 5
       
       # Verify CRDs are installed (these are what Fleet needs)
       echo ""
-      echo "Verifying ARC CRDs installation..."
-      if kubectl get crd runnerdeployments.actions.summerwind.dev &>/dev/null && \
-         kubectl get crd horizontalrunnerautoscalers.actions.summerwind.dev &>/dev/null; then
+      echo "Verifying ARC CRDs installation (Official Version)..."
+      if kubectl get crd autoscalingrunnersets.actions.github.com &>/dev/null; then
         echo "✓ Required CRDs installed:"
-        kubectl get crd | grep -E "runnerdeployments|horizontalrunnerautoscalers|runnersets" || true
+        kubectl get crd | grep -E "autoscalingrunnersets|ephemeralrunnersets|ephemeralrunners" || true
       else
         echo "⚠ CRDs may still be installing, but controller chart is installed"
       fi
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=actions-runner-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
-      echo "✓ ARC deployment complete"
+      echo "✓ Official ARC deployment complete"
       echo "=========================================="
       echo ""
       echo "Note: CRDs are installed immediately. Fleet can now validate"
-      echo "RunnerDeployment and HorizontalRunnerAutoscaler resources."
+      echo "AutoscalingRunnerSet resources (official GitHub version)."
     EOT
   }
 
@@ -2012,9 +1995,10 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
       
-      if helm list -n actions-runner-system 2>/dev/null | grep -q "actions-runner-controller"; then
+      if helm list -n actions-runner-system 2>/dev/null | grep -qE "(actions-runner-controller|gha-runner-scale-set-controller)"; then
         echo "Uninstalling ARC controller..."
-        helm uninstall actions-runner-controller -n actions-runner-system || true
+        helm uninstall actions-runner-controller -n actions-runner-system 2>/dev/null || true
+        helm uninstall gha-runner-scale-set-controller -n actions-runner-system 2>/dev/null || true
         
         echo "Deleting namespace..."
         kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
@@ -2032,6 +2016,6 @@ resource "null_resource" "deploy_arc_prd_apps" {
   ]
 
   triggers = {
-    arc_chart_version = "0.23.7"
+    arc_chart_version = "official-github-version"
   }
 }
