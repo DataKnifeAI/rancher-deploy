@@ -35,5 +35,5 @@ provider "proxmox" {
 provider "rancher2" {
   api_url   = "https://${var.rancher_hostname}"
   token_key = var.register_downstream_cluster ? try(trimspace(file("${path.root}/../config/.rancher-api-token")), "placeholder-token") : "placeholder-token"
-  insecure  = true  # For self-signed certificates
+  insecure  = true # For self-signed certificates
 }
