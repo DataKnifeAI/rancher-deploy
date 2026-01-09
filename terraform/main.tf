@@ -47,6 +47,7 @@ module "rancher_manager_primary" {
   datastore_id          = var.clusters["manager"].storage
 
   cpu_cores    = var.clusters["manager"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["manager"].memory_mb
   disk_size_gb = var.clusters["manager"].disk_size_gb
 
@@ -138,6 +139,7 @@ module "rancher_manager_additional" {
   datastore_id          = var.clusters["manager"].storage
 
   cpu_cores    = var.clusters["manager"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["manager"].memory_mb
   disk_size_gb = var.clusters["manager"].disk_size_gb
 
@@ -237,6 +239,7 @@ module "nprd_apps_primary" {
   datastore_id          = var.clusters["nprd-apps"].storage
 
   cpu_cores    = var.clusters["nprd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].disk_size_gb
 
@@ -301,6 +304,7 @@ module "nprd_apps_additional" {
   datastore_id          = var.clusters["nprd-apps"].storage
 
   cpu_cores    = var.clusters["nprd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].disk_size_gb
 
@@ -367,6 +371,7 @@ module "nprd_apps_workers" {
 
   # Use worker-specific resources if provided, otherwise use server defaults
   cpu_cores    = var.clusters["nprd-apps"].worker_cpu_cores > 0 ? var.clusters["nprd-apps"].worker_cpu_cores : var.clusters["nprd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].worker_memory_mb > 0 ? var.clusters["nprd-apps"].worker_memory_mb : var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].worker_disk_size_gb > 0 ? var.clusters["nprd-apps"].worker_disk_size_gb : var.clusters["nprd-apps"].disk_size_gb
 
@@ -551,6 +556,7 @@ module "prd_apps_primary" {
   datastore_id          = var.clusters["prd-apps"].storage
 
   cpu_cores    = var.clusters["prd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].disk_size_gb
 
@@ -615,6 +621,7 @@ module "prd_apps_additional" {
   datastore_id          = var.clusters["prd-apps"].storage
 
   cpu_cores    = var.clusters["prd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].disk_size_gb
 
@@ -681,6 +688,7 @@ module "prd_apps_workers" {
 
   # Use worker-specific resources if provided, otherwise use server defaults
   cpu_cores    = var.clusters["prd-apps"].worker_cpu_cores > 0 ? var.clusters["prd-apps"].worker_cpu_cores : var.clusters["prd-apps"].cpu_cores
+  cpu_type      = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].worker_memory_mb > 0 ? var.clusters["prd-apps"].worker_memory_mb : var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].worker_disk_size_gb > 0 ? var.clusters["prd-apps"].worker_disk_size_gb : var.clusters["prd-apps"].disk_size_gb
 
@@ -1776,5 +1784,254 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
 
   triggers = {
     cnpg_version = "1.28.0"
+  }
+}
+
+# ============================================================================
+# GITHUB ACTIONS RUNNER CONTROLLER (ARC) DEPLOYMENT
+# Installs ARC controller for GitHub Actions runner management
+# Deploys to both nprd-apps and prd-apps clusters
+# Required before Fleet processes RunnerDeployment resources
+# ============================================================================
+
+resource "null_resource" "deploy_arc_nprd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying GitHub ARC Controller to NPRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to nprd-apps cluster
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access nprd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # Add Helm repository if not already added
+      if ! helm repo list | grep -q actions-runner-controller; then
+        echo "Adding Helm repository..."
+        helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+      fi
+      helm repo update actions-runner-controller
+      
+      echo "✓ Helm repository configured"
+      
+      # Install ARC controller using Helm
+      echo "Installing GitHub ARC controller..."
+      NAMESPACE="actions-runner-system"
+      RELEASE_NAME="actions-runner-controller"
+      CHART="actions-runner-controller/actions-runner-controller"
+      
+      # Check if already installed
+      if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
+        echo "  ARC controller already installed, upgrading..."
+        helm upgrade "$RELEASE_NAME" "$CHART" \
+          --namespace "$NAMESPACE" \
+          --set syncPeriod=10m \
+          --wait=false
+      else
+        echo "  Installing ARC controller..."
+        helm install "$RELEASE_NAME" "$CHART" \
+          --namespace "$NAMESPACE" \
+          --create-namespace \
+          --set syncPeriod=10m \
+          --wait=false
+      fi
+      
+      echo "✓ ARC controller installed"
+      
+      # Wait a moment for CRDs to be created
+      sleep 5
+      
+      # Verify CRDs are installed (these are what Fleet needs)
+      echo ""
+      echo "Verifying ARC CRDs installation..."
+      if kubectl get crd runnerdeployments.actions.summerwind.dev &>/dev/null && \
+         kubectl get crd horizontalrunnerautoscalers.actions.summerwind.dev &>/dev/null; then
+        echo "✓ Required CRDs installed:"
+        kubectl get crd | grep -E "runnerdeployments|horizontalrunnerautoscalers|runnersets" || true
+      else
+        echo "⚠ CRDs may still be installing, but controller chart is installed"
+      fi
+      
+      echo ""
+      echo "ARC Controller Pods:"
+      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=actions-runner-controller || echo "Pods may still be starting..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ ARC deployment complete"
+      echo "=========================================="
+      echo ""
+      echo "Note: CRDs are installed immediately. Fleet can now validate"
+      echo "RunnerDeployment and HorizontalRunnerAutoscaler resources."
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing GitHub ARC Controller from NPRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      if helm list -n actions-runner-system 2>/dev/null | grep -q "actions-runner-controller"; then
+        echo "Uninstalling ARC controller..."
+        helm uninstall actions-runner-controller -n actions-runner-system || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ ARC controller removed"
+      else
+        echo "✓ ARC controller already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_apps
+  ]
+
+  triggers = {
+    arc_chart_version = "0.23.7"
+  }
+}
+
+resource "null_resource" "deploy_arc_prd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying GitHub ARC Controller to PRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to prd-apps cluster
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # Add Helm repository if not already added
+      if ! helm repo list | grep -q actions-runner-controller; then
+        echo "Adding Helm repository..."
+        helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+      fi
+      helm repo update actions-runner-controller
+      
+      echo "✓ Helm repository configured"
+      
+      # Install ARC controller using Helm
+      echo "Installing GitHub ARC controller..."
+      NAMESPACE="actions-runner-system"
+      RELEASE_NAME="actions-runner-controller"
+      CHART="actions-runner-controller/actions-runner-controller"
+      
+      # Check if already installed
+      if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
+        echo "  ARC controller already installed, upgrading..."
+        helm upgrade "$RELEASE_NAME" "$CHART" \
+          --namespace "$NAMESPACE" \
+          --set syncPeriod=10m \
+          --wait=false
+      else
+        echo "  Installing ARC controller..."
+        helm install "$RELEASE_NAME" "$CHART" \
+          --namespace "$NAMESPACE" \
+          --create-namespace \
+          --set syncPeriod=10m \
+          --wait=false
+      fi
+      
+      echo "✓ ARC controller installed"
+      
+      # Wait a moment for CRDs to be created
+      sleep 5
+      
+      # Verify CRDs are installed (these are what Fleet needs)
+      echo ""
+      echo "Verifying ARC CRDs installation..."
+      if kubectl get crd runnerdeployments.actions.summerwind.dev &>/dev/null && \
+         kubectl get crd horizontalrunnerautoscalers.actions.summerwind.dev &>/dev/null; then
+        echo "✓ Required CRDs installed:"
+        kubectl get crd | grep -E "runnerdeployments|horizontalrunnerautoscalers|runnersets" || true
+      else
+        echo "⚠ CRDs may still be installing, but controller chart is installed"
+      fi
+      
+      echo ""
+      echo "ARC Controller Pods:"
+      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=actions-runner-controller || echo "Pods may still be starting..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ ARC deployment complete"
+      echo "=========================================="
+      echo ""
+      echo "Note: CRDs are installed immediately. Fleet can now validate"
+      echo "RunnerDeployment and HorizontalRunnerAutoscaler resources."
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing GitHub ARC Controller from PRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      if helm list -n actions-runner-system 2>/dev/null | grep -q "actions-runner-controller"; then
+        echo "Uninstalling ARC controller..."
+        helm uninstall actions-runner-controller -n actions-runner-system || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace actions-runner-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ ARC controller removed"
+      else
+        echo "✓ ARC controller already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    arc_chart_version = "0.23.7"
   }
 }

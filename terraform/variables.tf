@@ -31,25 +31,31 @@ variable "proxmox_node" {
   type        = string
 }
 
+variable "vm_cpu_type" {
+  description = "CPU type for VMs (e.g., qemu64, host, kvm64)"
+  type        = string
+  default     = "qemu64"
+}
+
 variable "clusters" {
   description = "Configuration for Rancher clusters"
   type = map(object({
     name                = string
-    node_count          = number      # Server nodes (control plane + etcd)
-    worker_count        = number      # Worker nodes (optional, default: 0)
-    cpu_cores           = number      # Server CPU cores
-    memory_mb           = number      # Server memory
-    disk_size_gb        = number      # Server disk
-    worker_cpu_cores    = number      # Worker CPU cores (optional, defaults to server value)
-    worker_memory_mb    = number      # Worker memory (optional, defaults to server value)
-    worker_disk_size_gb = number      # Worker disk (optional, defaults to server value)
+    node_count          = number # Server nodes (control plane + etcd)
+    worker_count        = number # Worker nodes (optional, default: 0)
+    cpu_cores           = number # Server CPU cores
+    memory_mb           = number # Server memory
+    disk_size_gb        = number # Server disk
+    worker_cpu_cores    = number # Worker CPU cores (optional, defaults to server value)
+    worker_memory_mb    = number # Worker memory (optional, defaults to server value)
+    worker_disk_size_gb = number # Worker disk (optional, defaults to server value)
     domain              = string
     ip_subnet           = string
-    ip_start_octet      = number      # Starting IP octet (e.g., 100 for 192.168.1.100)
+    ip_start_octet      = number # Starting IP octet (e.g., 100 for 192.168.1.100)
     gateway             = string
     dns_servers         = list(string)
     storage             = string
-    vlan_id             = number      # VLAN ID for network interface
+    vlan_id             = number # VLAN ID for network interface
   }))
 }
 
@@ -186,13 +192,13 @@ variable "rancher_manager_ip" {
 variable "downstream_cluster_name" {
   description = "Name of the downstream cluster to register with Rancher Manager. Defaults to first non-manager cluster from clusters map."
   type        = string
-  default     = ""  # Empty = auto-detect first non-manager cluster
+  default     = "" # Empty = auto-detect first non-manager cluster
 }
 
 variable "downstream_cluster_id" {
   description = "DEPRECATED: Rancher cluster ID is now automatically fetched from Rancher API. This variable is kept for backward compatibility but is no longer used."
   type        = string
-  default     = ""  # Now fetched dynamically from Rancher API
+  default     = "" # Now fetched dynamically from Rancher API
 }
 
 # ============================================================================

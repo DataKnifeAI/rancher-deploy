@@ -42,6 +42,12 @@ variable "cpu_cores" {
   type        = number
 }
 
+variable "cpu_type" {
+  description = "CPU type (e.g., qemu64, host, kvm64)"
+  type        = string
+  default     = "qemu64"
+}
+
 variable "memory_mb" {
   description = "Memory in MB"
   type        = number
@@ -196,6 +202,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   cpu {
     cores   = var.cpu_cores
     sockets = 1
+    type    = var.cpu_type
   }
 
   memory {

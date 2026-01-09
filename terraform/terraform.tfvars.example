@@ -34,6 +34,10 @@ proxmox_tls_insecure = true
 # Target Proxmox node where VMs will be created
 proxmox_node = "pve"
 
+# CPU type for VMs (e.g., qemu64, host, kvm64)
+# Default: qemu64 (compatible with most hosts)
+vm_cpu_type = "qemu64"
+
 # ============================================================================
 # UBUNTU CLOUD IMAGE CONFIGURATION (24.04 LTS Noble)
 # ============================================================================

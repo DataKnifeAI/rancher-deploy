@@ -99,6 +99,9 @@ csiDriver:
 driver:
   config:
     driver: freenas-api-nfs
+    # Enable debug logging (workaround for issue #394: volume expansion fails with 405)
+    # See: https://github.com/democratic-csi/democratic-csi/issues/394
+    logLevel: debug
     # HTTP connection to TrueNAS API
     httpConnection:
       protocol: "${TRUENAS_PROTOCOL}"
