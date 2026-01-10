@@ -24,11 +24,12 @@ This guide covers setting up Gateway API on RKE2 clusters managed by Rancher. Ga
 helm repo add envoy-gateway https://gateway.envoyproxy.io/helm-releases
 helm repo update
 
-# Install on manager cluster
+# Install on manager cluster (using version 1.6.1)
 export KUBECONFIG=~/.kube/rancher-manager.yaml
 helm install eg envoy-gateway/envoy-gateway \
   --namespace envoy-gateway-system \
   --create-namespace \
+  --version v1.6.1 \
   --wait
 
 # Install on nprd-apps cluster
@@ -36,12 +37,15 @@ export KUBECONFIG=~/.kube/nprd-apps.yaml
 helm install eg envoy-gateway/envoy-gateway \
   --namespace envoy-gateway-system \
   --create-namespace \
+  --version v1.6.1 \
   --wait
 
 # Verify installation
 kubectl get pods -n envoy-gateway-system
 kubectl get gatewayclass
 ```
+
+**Note:** Envoy Gateway v1.6.1 uses Gateway API v1.4.1 internally, but Gateway API v1.0.0 CRDs are fully compatible.
 
 **Basic Gateway Configuration:**
 
@@ -143,6 +147,8 @@ helm install traefik traefik/traefik \
 ```bash
 # Ensure Gateway API CRDs are installed
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+
+# Note: Envoy Gateway v1.6.1 supports Gateway API v1.0.0
 
 # Verify CRDs
 kubectl get crd | grep gateway

@@ -259,3 +259,25 @@ variable "csi_storage_class_default" {
   type        = bool
   default     = true
 }
+
+# ============================================================================
+# ENVOY GATEWAY CONFIGURATION
+# ============================================================================
+
+variable "install_envoy_gateway" {
+  description = "Whether to install Envoy Gateway on downstream clusters"
+  type        = bool
+  default     = true
+}
+
+variable "gateway_api_version" {
+  description = "Gateway API CRDs version to install. Envoy Gateway 1.6.1 uses Gateway API 1.4.1 internally. Recommended: v1.1.0 (latest stable) or let Envoy Gateway Helm chart install CRDs automatically"
+  type        = string
+  default     = "v1.1.0"  # Latest stable Gateway API CRDs; compatible with Envoy Gateway 1.6.1
+}
+
+variable "envoy_gateway_version" {
+  description = "Envoy Gateway Helm chart version"
+  type        = string
+  default     = "v1.6.1"
+}

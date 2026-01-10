@@ -922,7 +922,7 @@ clusters = {
 }
 ```
 
-See [DNS_CONFIGURATION_GUIDE.md](DNS_CONFIGURATION_GUIDE.md) for complete DNS troubleshooting.
+See [DNS_CONFIGURATION.md](DNS_CONFIGURATION.md) for complete DNS troubleshooting.
 
 ## Storage/PVC Mount Issues
 
@@ -1169,6 +1169,6 @@ This ensures CSI node pods can run on server nodes to handle volume mounts for p
 
 ## Related Documentation
 
-- [DNS_CONFIGURATION_GUIDE.md](DNS_CONFIGURATION_GUIDE.md) - Complete DNS configuration and troubleshooting
+- [DNS_CONFIGURATION.md](DNS_CONFIGURATION.md) - Complete DNS configuration and troubleshooting
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough
 - [MODULES_AND_AUTOMATION.md](MODULES_AND_AUTOMATION.md) - Terraform modules

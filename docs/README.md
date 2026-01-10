@@ -14,16 +14,17 @@ Complete documentation for the Rancher Deploy project.
 - **[RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md)** - Automatic downstream cluster registration
 
 ### Network & DNS
-- **[DNS_CONFIGURATION_GUIDE.md](DNS_CONFIGURATION_GUIDE.md)** - Complete DNS configuration guide
-- **[DNS_CONFIGURATION.md](DNS_CONFIGURATION.md)** - DNS records required for Rancher
+- **[DNS_CONFIGURATION.md](DNS_CONFIGURATION.md)** - Complete DNS configuration guide (DNS records and DNS server configuration)
 
 ### Storage
-- **[TRUENAS_STORAGE_SETUP.md](TRUENAS_STORAGE_SETUP.md)** - Complete TrueNAS storage setup guide (consolidated)
-- **[TRUENAS_SECRETS_MANAGEMENT.md](TRUENAS_SECRETS_MANAGEMENT.md)** - Secrets management workflow
+- **[DEMOCRATIC_CSI_TRUENAS_SETUP.md](DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - Complete TrueNAS storage setup guide (installation, permissions, secrets, troubleshooting)
 - **[STORAGE_CLASS_DEFAULT.md](STORAGE_CLASS_DEFAULT.md)** - Storage class default configuration
 
 ### Database Management
 - **[CLOUDNATIVEPG_SETUP.md](CLOUDNATIVEPG_SETUP.md)** - CloudNativePG operator setup and PostgreSQL cluster management
+
+### CI/CD
+- **[GITHUB_ARC_SETUP.md](GITHUB_ARC_SETUP.md)** - GitHub Actions Runner Controller setup with Fleet integration
 
 ### Infrastructure
 - **[API_TOKEN_AND_PERMISSIONS.md](API_TOKEN_AND_PERMISSIONS.md)** - Proxmox API token creation and permissions
@@ -34,9 +35,9 @@ Complete documentation for the Rancher Deploy project.
 
 ## Reference Documentation
 
-### TrueNAS Permissions
-- **[TRUENAS_MINIMUM_PERMISSIONS.md](TRUENAS_MINIMUM_PERMISSIONS.md)** - Minimum permissions reference
-- **[DEMOCRATIC_CSI_TRUENAS_SETUP.md](DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - General democratic-csi setup
+### Gateway API & Ingress
+- **[GATEWAY_API_SETUP.md](GATEWAY_API_SETUP.md)** - Gateway API setup with Envoy Gateway
+- **[ENVOY_VS_TRAEFIK.md](ENVOY_VS_TRAEFIK.md)** - Comparison between Envoy and Traefik
 
 ## Quick Links
 
@@ -46,8 +47,7 @@ Complete documentation for the Rancher Deploy project.
 3. [DNS Configuration](DNS_CONFIGURATION.md) - Required DNS records
 
 ### Storage Setup
-1. [TrueNAS Storage Setup](TRUENAS_STORAGE_SETUP.md) - Complete storage guide
-2. [Secrets Management](TRUENAS_SECRETS_MANAGEMENT.md) - How secrets are managed
+1. [TrueNAS Storage Setup](DEMOCRATIC_CSI_TRUENAS_SETUP.md) - Complete storage guide (includes permissions, secrets, troubleshooting)
 
 ### Database Management
 1. [CloudNativePG Setup](CLOUDNATIVEPG_SETUP.md) - PostgreSQL cluster management with CloudNativePG
@@ -64,9 +64,10 @@ docs/
 │   ├── Deployment guides
 │   ├── Rancher configuration
 │   ├── Network & DNS
-│   └── Storage
+│   ├── Storage (TrueNAS/Democratic CSI)
+│   └── Gateway API & Ingress
 ├── Reference Documentation/
-│   ├── TrueNAS (legacy - see TRUENAS_STORAGE_SETUP.md)
+│   ├── Infrastructure components
 │   └── Analysis & Planning
 └── Troubleshooting
 ```

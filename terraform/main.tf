@@ -759,6 +759,43 @@ module "rke2_prd_apps" {
 }
 
 # ============================================================================
+# ENVOY GATEWAY DEPLOYMENT - DOWNSTREAM CLUSTERS
+# Installs Envoy Gateway and Gateway API CRDs on downstream clusters
+# ============================================================================
+
+# Envoy Gateway for NPRD Apps Cluster
+module "envoy_gateway_nprd_apps" {
+  source = "./modules/envoy_gateway"
+
+  cluster_name          = "nprd-apps"
+  kubeconfig_path       = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  install_envoy_gateway = var.install_envoy_gateway
+  gateway_api_version   = var.gateway_api_version
+  envoy_gateway_version = var.envoy_gateway_version
+  namespace             = "envoy-gateway-system"
+
+  depends_on = [
+    module.rke2_apps  # Wait for cluster to be fully ready
+  ]
+}
+
+# Envoy Gateway for PRD Apps Cluster
+module "envoy_gateway_prd_apps" {
+  source = "./modules/envoy_gateway"
+
+  cluster_name          = "prd-apps"
+  kubeconfig_path       = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  install_envoy_gateway = var.install_envoy_gateway
+  gateway_api_version   = var.gateway_api_version
+  envoy_gateway_version = var.envoy_gateway_version
+  namespace             = "envoy-gateway-system"
+
+  depends_on = [
+    module.rke2_prd_apps  # Wait for cluster to be fully ready
+  ]
+}
+
+# ============================================================================
 # CREATE DOWNSTREAM CLUSTER OBJECTS IN RANCHER
 # Creates the clusters in Rancher to generate the cluster IDs
 # ============================================================================
@@ -1614,12 +1651,12 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       # Install CloudNativePG operator using official manifest
       echo "Installing CloudNativePG operator..."
       CNPG_VERSION="1.28.0"
-      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
-      kubectl apply --server-side -f "$CNPG_MANIFEST_URL" || {
+      kubectl apply --server-side -f "$$CNPG_MANIFEST_URL" || {
         echo "⚠ Server-side apply failed, trying regular apply..."
-        kubectl apply -f "$CNPG_MANIFEST_URL"
+        kubectl apply -f "$$CNPG_MANIFEST_URL"
       }
       
       echo "✓ CloudNativePG operator manifest applied"
@@ -1661,13 +1698,12 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       echo "Removing CloudNativePG from NPRD Apps Cluster"
       echo "=========================================="
       
-      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      export KUBECONFIG="$$HOME/.kube/nprd-apps.yaml"
       
       if kubectl get namespace cnpg-system &>/dev/null; then
         echo "Removing CloudNativePG operator..."
-        CNPG_VERSION="1.28.0"
-        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
-        kubectl delete -f "$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
+        kubectl delete -f "$$CNPG_MANIFEST_URL" --ignore-not-found=true || true
         
         echo "Deleting namespace..."
         kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
@@ -1712,12 +1748,12 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       # Install CloudNativePG operator using official manifest
       echo "Installing CloudNativePG operator..."
       CNPG_VERSION="1.28.0"
-      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
-      kubectl apply --server-side -f "$CNPG_MANIFEST_URL" || {
+      kubectl apply --server-side -f "$$CNPG_MANIFEST_URL" || {
         echo "⚠ Server-side apply failed, trying regular apply..."
-        kubectl apply -f "$CNPG_MANIFEST_URL"
+        kubectl apply -f "$$CNPG_MANIFEST_URL"
       }
       
       echo "✓ CloudNativePG operator manifest applied"
@@ -1759,13 +1795,12 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       echo "Removing CloudNativePG from PRD Apps Cluster"
       echo "=========================================="
       
-      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      export KUBECONFIG="$$HOME/.kube/prd-apps.yaml"
       
       if kubectl get namespace cnpg-system &>/dev/null; then
         echo "Removing CloudNativePG operator..."
-        CNPG_VERSION="1.28.0"
-        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-${CNPG_VERSION}.yaml"
-        kubectl delete -f "$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
+        kubectl delete -f "$$CNPG_MANIFEST_URL" --ignore-not-found=true || true
         
         echo "Deleting namespace..."
         kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
@@ -1831,22 +1866,22 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       ARC_VERSION="0.12.1"
       
       # Check if already installed
-      if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading to version ${ARC_VERSION}..."
-        helm upgrade "$RELEASE_NAME" "$CHART" \
-          --namespace "$NAMESPACE" \
-          --version "$ARC_VERSION" \
+      if helm list -n "$$NAMESPACE" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
+        echo "  ARC controller already installed, upgrading to version $${ARC_VERSION}..."
+        helm upgrade "$$RELEASE_NAME" "$$CHART" \
+          --namespace "$$NAMESPACE" \
+          --version "$$ARC_VERSION" \
           --wait=false
       else
-        echo "  Installing official ARC controller version ${ARC_VERSION}..."
-        helm install "$RELEASE_NAME" "$CHART" \
-          --namespace "$NAMESPACE" \
+        echo "  Installing official ARC controller version $${ARC_VERSION}..."
+        helm install "$$RELEASE_NAME" "$$CHART" \
+          --namespace "$$NAMESPACE" \
           --create-namespace \
-          --version "$ARC_VERSION" \
+          --version "$$ARC_VERSION" \
           --wait=false
       fi
       
-      echo "✓ Official ARC controller installed (version ${ARC_VERSION})"
+      echo "✓ Official ARC controller installed (version $${ARC_VERSION})"
       
       # Wait a moment for CRDs to be created
       sleep 5
@@ -1863,7 +1898,7 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
@@ -1872,16 +1907,16 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       # Ensure managed-cicd namespace exists
       RUNNER_NAMESPACE="managed-cicd"
-      if ! kubectl get namespace "$RUNNER_NAMESPACE" &>/dev/null; then
+      if ! kubectl get namespace "$$RUNNER_NAMESPACE" &>/dev/null; then
         echo "Creating namespace: $RUNNER_NAMESPACE"
-        kubectl create namespace "$RUNNER_NAMESPACE" || true
+        kubectl create namespace "$$RUNNER_NAMESPACE" || true
       fi
       
       # Wait for controller ServiceAccount to be created
       echo "Waiting for controller ServiceAccount..."
       CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
       for i in {1..30}; do
-        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$NAMESPACE" &>/dev/null; then
+        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$$NAMESPACE" &>/dev/null; then
           echo "✓ Controller ServiceAccount found"
           break
         fi
@@ -2017,22 +2052,22 @@ resource "null_resource" "deploy_arc_prd_apps" {
       ARC_VERSION="0.12.1"
       
       # Check if already installed
-      if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading to version ${ARC_VERSION}..."
-        helm upgrade "$RELEASE_NAME" "$CHART" \
-          --namespace "$NAMESPACE" \
-          --version "$ARC_VERSION" \
+      if helm list -n "$$NAMESPACE" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
+        echo "  ARC controller already installed, upgrading to version $${ARC_VERSION}..."
+        helm upgrade "$$RELEASE_NAME" "$$CHART" \
+          --namespace "$$NAMESPACE" \
+          --version "$$ARC_VERSION" \
           --wait=false
       else
-        echo "  Installing official ARC controller version ${ARC_VERSION}..."
-        helm install "$RELEASE_NAME" "$CHART" \
-          --namespace "$NAMESPACE" \
+        echo "  Installing official ARC controller version $${ARC_VERSION}..."
+        helm install "$$RELEASE_NAME" "$$CHART" \
+          --namespace "$$NAMESPACE" \
           --create-namespace \
-          --version "$ARC_VERSION" \
+          --version "$$ARC_VERSION" \
           --wait=false
       fi
       
-      echo "✓ Official ARC controller installed (version ${ARC_VERSION})"
+      echo "✓ Official ARC controller installed (version $${ARC_VERSION})"
       
       # Wait a moment for CRDs to be created
       sleep 5
@@ -2049,7 +2084,7 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
@@ -2058,16 +2093,16 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       # Ensure managed-cicd namespace exists
       RUNNER_NAMESPACE="managed-cicd"
-      if ! kubectl get namespace "$RUNNER_NAMESPACE" &>/dev/null; then
+      if ! kubectl get namespace "$$RUNNER_NAMESPACE" &>/dev/null; then
         echo "Creating namespace: $RUNNER_NAMESPACE"
-        kubectl create namespace "$RUNNER_NAMESPACE" || true
+        kubectl create namespace "$$RUNNER_NAMESPACE" || true
       fi
       
       # Wait for controller ServiceAccount to be created
       echo "Waiting for controller ServiceAccount..."
       CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
       for i in {1..30}; do
-        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$NAMESPACE" &>/dev/null; then
+        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$$NAMESPACE" &>/dev/null; then
           echo "✓ Controller ServiceAccount found"
           break
         fi

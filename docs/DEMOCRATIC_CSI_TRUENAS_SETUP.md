@@ -41,13 +41,126 @@ RKE2 Cluster
 1. **Log into TrueNAS Web UI**
 2. **Create a dataset:**
    - Storage → Pools → Add Dataset
-   - Name: `k8s-storage` (or your preferred name)
+   - Name: `k8s-storage` (or your preferred name, e.g., `RKE2`)
    - Type: Filesystem
    - Share Type: Generic
    - Enable compression (recommended: lz4)
    - Enable deduplication (optional, requires more RAM)
 
-### 1.2 Configure NFS Share
+### 1.2 Configure User Permissions
+
+The TrueNAS user needs specific permissions to create and manage datasets via the API.
+
+#### Minimum Required Permissions
+
+**Quick Answer:**
+- User with **write access** to dataset
+- Ability to **create and delete** child datasets
+- **API key** for that user
+- **Network access** to TrueNAS API (port 443)
+
+#### Detailed Requirements
+
+**1. Dataset Permissions**
+
+The user needs to be able to:
+- ✅ **Create** datasets under parent dataset (for PVCs)
+- ✅ **Delete** datasets under parent dataset (when PVCs are deleted)
+- ✅ **Read** dataset properties
+- ✅ **Modify** dataset properties (optional, for quotas/compression)
+
+**How to Grant:**
+```bash
+# Option 1: Ownership (simplest and recommended)
+ssh root@your-truenas-host
+chown -R csi-user:csi-user /mnt/pool/dataset
+
+# Option 2: ACLs (more flexible, TrueNAS SCALE)
+setfacl -R -m u:csi-user:rwx /mnt/pool/dataset
+setfacl -R -d -m u:csi-user:rwx /mnt/pool/dataset
+```
+
+**2. Verify Permissions**
+
+Test if the user can create and delete datasets:
+```bash
+# SSH to TrueNAS
+ssh root@your-truenas-host
+
+# Test if user can create datasets
+sudo -u csi-user zfs create pool/dataset/test-permission-check
+sudo -u csi-user zfs destroy pool/dataset/test-permission-check
+
+# If successful: ✅ User has sufficient permissions
+# If fails: Grant permissions using chown or ACLs as shown above
+```
+
+**3. Permission Levels Comparison**
+
+| Level | Permissions | Limitations | Use Case |
+|-------|-------------|-------------|----------|
+| **Level 1: Minimum** | Dataset access only | Cannot create NFS shares via API | Basic functionality, manual NFS management |
+| **Level 2: Recommended** | Dataset + NFS management | May require admin/root-level access | Full automated functionality |
+| **Level 3: Production** | Dedicated user with minimal permissions | Requires careful setup | Production environments (best practice) |
+
+**Recommended for Production:** Use Level 3 - dedicated user with ownership of dataset only.
+
+#### API Access
+
+The user needs:
+- ✅ **API key** created in TrueNAS (System → API Keys)
+- ✅ **HTTPS access** to TrueNAS API (port 443)
+- ✅ **Network connectivity** from RKE2 nodes to TrueNAS
+
+**API Endpoints Used:**
+- `POST /api/v2.0/pool/dataset` - Create datasets
+- `DELETE /api/v2.0/pool/dataset/id/{id}` - Delete datasets
+- `GET /api/v2.0/pool/dataset/id/{id}` - Read dataset info
+- `GET /api/v2.0/pool/dataset` - List datasets
+
+**Note:** API keys inherit the user's permissions, so if the user can create datasets, the API key will work.
+
+### 1.3 Create API Key
+
+1. **Login to TrueNAS UI**: `https://your-truenas-host`
+2. **Navigate**: **System → API Keys → Add**
+3. **User**: Select the user with dataset permissions (e.g., `csi-user` or `rke2`)
+4. **Name**: `k8s-csi` (or your preferred name)
+5. **Generate key** and **copy it immediately** (you won't see it again)
+6. **Add to Terraform variables**:
+   ```hcl
+   # terraform/terraform.tfvars
+   truenas_api_key = "1-xxxxxxxxxxxxx"
+   ```
+
+**Important Notes:**
+- Use the IP address that NFS service is bound to (not just any IP)
+- Verify NFS service binding: Services → NFS → Edit → Check "Bind IP Addresses"
+- API Port: `443` (HTTPS) or `80` (HTTP)
+
+**Test API Access:**
+```bash
+API_KEY="your-api-key"
+TRUENAS_HOST="your-truenas-host"
+
+# Test dataset query
+curl -k -H "Authorization: Bearer ${API_KEY}" \
+  "https://${TRUENAS_HOST}/api/v2.0/pool/dataset/id/SAS%2FRKE2"
+
+# Test dataset creation
+curl -k -X POST \
+  -H "Authorization: Bearer ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "SAS/RKE2/test-api", "type": "FILESYSTEM"}' \
+  "https://${TRUENAS_HOST}/api/v2.0/pool/dataset"
+
+# Clean up test dataset
+curl -k -X DELETE \
+  -H "Authorization: Bearer ${API_KEY}" \
+  "https://${TRUENAS_HOST}/api/v2.0/pool/dataset/id/SAS%2FRKE2%2Ftest-api"
+```
+
+### 1.4 Configure NFS Share
 
 1. **Enable NFS Service:**
    - Services → NFS → Enable
@@ -57,12 +170,12 @@ RKE2 Cluster
 
 2. **Create NFS Share:**
    - Sharing → Unix Shares (NFS) → Add
-   - Path: `/mnt/<pool>/k8s-storage`
+   - Path: `/mnt/<pool>/k8s-storage` (or your dataset path)
    - Description: `Kubernetes Storage`
    - Enable: ✓
-   - Network: `10.0.0.0/24` (your cluster subnet)
+   - Network: `10.0.0.0/24` (your cluster subnet, e.g., `192.168.14.0/24`)
    - Authorized Networks: `10.0.0.0/24` (your cluster subnet)
-   - Maproot User: `root`
+   - Maproot User: `root` (or user with dataset ownership)
    - Maproot Group: `wheel`
    - Save
 
@@ -85,23 +198,116 @@ RKE2 Cluster
    - Check TrueNAS NFS service configuration
    - Update bind IP addresses or use correct IP in CSI configuration
 
-### 1.3 Create Service Account (for TrueNAS API)
+## Step 2: Install Democratic CSI
 
-1. **Create API Key:**
-   - System → API Keys → Add
-   - Name: `k8s-csi`
-   - Generate key and **save it securely**
+### 2.1 Automated Installation via Terraform (Recommended)
 
-2. **Note TrueNAS Details:**
-   - TrueNAS Hostname/IP: `truenas.example.com` (or IP)
-   - **Important:** Use the IP address that NFS service is bound to (not just any IP)
-   - Verify NFS service binding: Services → NFS → Edit → Check "Bind IP Addresses"
-   - API Port: `443` (HTTPS) or `80` (HTTP)
-   - Dataset Path: `/mnt/<pool>/k8s-storage`
+Democratic CSI is **automatically deployed** at the end of your Terraform plan if TrueNAS is configured:
 
-## Step 2: Install Democratic CSI via Rancher
+1. **Configure TrueNAS in Terraform** (`terraform/terraform.tfvars`):
+   ```hcl
+   truenas_host = "192.168.9.10"
+   truenas_api_key = "your-api-key-here"
+   truenas_dataset = "/mnt/SAS/RKE2"
+   truenas_user = "rke2"
+   truenas_protocol = "https"
+   truenas_port = 443
+   truenas_allow_insecure = true
+   csi_storage_class_name = "truenas-nfs"
+   csi_storage_class_default = true
+   ```
 
-### 2.1 Using Rancher UI (Recommended)
+2. **Generate Helm values from Terraform variables**:
+   ```bash
+   ./scripts/generate-helm-values-from-tfvars.sh
+   ```
+
+3. **Run Terraform**:
+   ```bash
+   cd terraform
+   terraform apply
+   ```
+
+   The storage class will be created automatically at the end of the deployment.
+
+**Resource Dependencies:**
+```
+VMs → RKE2 Clusters → Rancher → Downstream Registration → Kubeconfigs → Democratic CSI
+```
+
+The democratic-csi resource depends on:
+- `null_resource.merge_kubeconfigs` (kubeconfigs ready)
+- `module.rke2_apps` (apps cluster ready)
+
+### 2.2 Secrets Management
+
+#### Architecture
+
+```
+terraform/terraform.tfvars (source of truth)
+    ↓
+scripts/generate-helm-values-from-tfvars.sh
+    ↓
+helm-values/democratic-csi-truenas.yaml (generated)
+    ↓
+Helm installation uses generated values
+```
+
+#### Workflow
+
+1. **Edit secrets** in `terraform/terraform.tfvars`
+2. **Generate Helm values**: `./scripts/generate-helm-values-from-tfvars.sh`
+3. **Install/Update**: Terraform will deploy automatically, or run Helm manually
+
+#### Security
+
+- ✅ `terraform/terraform.tfvars` - gitignored (contains secrets)
+- ✅ `helm-values/democratic-csi-truenas.yaml` - gitignored (auto-generated)
+- ✅ Example files tracked in git (no secrets)
+
+#### Terraform Variables
+
+All TrueNAS variables are defined in `terraform/variables.tf`:
+
+- `truenas_host` - TrueNAS hostname
+- `truenas_api_key` - API key (sensitive)
+- `truenas_dataset` - Dataset path
+- `truenas_user` - Username
+- `truenas_protocol` - Protocol (https/http)
+- `truenas_port` - API port
+- `truenas_allow_insecure` - Allow self-signed certs
+- `csi_storage_class_name` - Storage class name
+- `csi_storage_class_default` - Make it default
+
+#### Updating Configuration
+
+To update TrueNAS configuration:
+
+1. Edit `terraform/terraform.tfvars`
+2. Run `./scripts/generate-helm-values-from-tfvars.sh` to regenerate Helm values
+3. Run `terraform apply` (if using Terraform) or reinstall via Helm
+
+**Note:** The Helm values file is **auto-generated** from `terraform.tfvars`. Do not edit it manually - it will be overwritten.
+
+### 2.3 Manual Installation via Rancher UI
+
+If you prefer manual installation or need to install after Terraform:
+
+1. **Navigate to Cluster:**
+   - Cluster Management → nprd-apps → Explore Cluster
+
+2. **Install via Apps & Marketplace:**
+   - Apps & Marketplace → Charts
+   - Search for: `democratic-csi`
+   - Click: `democratic-csi` (from `democratic-csi` repository)
+   - Click: Install
+
+3. **Configure Installation:**
+   - Namespace: `democratic-csi` (create new)
+   - Release Name: `democratic-csi`
+   - Version: Latest stable (e.g., `v1.1.0`)
+
+4. **Configure Values:**
 
 1. **Navigate to Cluster:**
    - Cluster Management → nprd-apps → Explore Cluster
@@ -175,7 +381,7 @@ storageClasses:
 
 5. **Click Install**
 
-### 2.2 Using Helm CLI (Alternative)
+### 2.4 Manual Installation via Helm CLI (Alternative)
 
 ```bash
 # Add democratic-csi Helm repository
@@ -201,6 +407,19 @@ helm install democratic-csi democratic-csi/democratic-csi \
   --set config.truenas.dataset=/mnt/pool/k8s-storage \
   --set storageClasses[0].name=truenas-nfs \
   --set storageClasses[0].default=true
+```
+
+### 2.5 Manual Installation via Script
+
+If you prefer using the installation script:
+
+```bash
+# Generate Helm values first
+./scripts/generate-helm-values-from-tfvars.sh
+
+# Install via script
+export KUBECONFIG=~/.kube/nprd-apps.yaml
+./scripts/install-democratic-csi.sh
 ```
 
 ## Step 3: Verify Installation
@@ -476,6 +695,77 @@ ping truenas.example.com
 2. NFS share permissions on TrueNAS
 3. Network connectivity (ports 111, 2049)
 
+#### Issue: Permission Denied When Creating PVC
+
+**Symptom**: PVC creation fails with "Permission denied" errors
+
+**Check:**
+```bash
+# Verify user can create datasets
+ssh root@your-truenas-host
+sudo -u csi-user zfs create pool/dataset/test-permission
+
+# Check dataset ownership
+ls -ld /mnt/SAS/RKE2
+
+# Check ACLs (TrueNAS SCALE)
+getfacl /mnt/SAS/RKE2
+```
+
+**Fix:**
+```bash
+# Grant ownership
+chown -R csi-user:csi-user /mnt/pool/dataset
+
+# Or use ACLs (TrueNAS SCALE)
+setfacl -R -m u:csi-user:rwx /mnt/pool/dataset
+setfacl -R -d -m u:csi-user:rwx /mnt/pool/dataset
+```
+
+#### Issue: API Authentication Failed
+
+**Symptom**: Controller logs show API authentication errors
+
+**Check:**
+- API key is correct
+- User account is active
+- API key hasn't expired
+- Network connectivity to TrueNAS
+
+**Fix:**
+- Create new API key in TrueNAS UI
+- Verify user permissions
+- Test API access with curl (see Step 1.3)
+- Update `terraform.tfvars` and regenerate Helm values
+
+#### Issue: CSI Node Pods Not Scheduling on Server Nodes
+
+**Symptom**: CSI node pods only on worker nodes, PVCs fail to mount on server nodes
+
+**Root Cause:**
+RKE2 server nodes have taints that prevent normal pods from scheduling:
+- `node-role.kubernetes.io/control-plane:NoSchedule`
+- `node-role.kubernetes.io/etcd:NoExecute`
+- `CriticalAddonsOnly`
+
+**Solution:**
+Add tolerations to CSI node daemonset (already included in Helm values):
+```yaml
+# helm-values/democratic-csi-truenas.yaml
+node:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/etcd
+      operator: Exists
+      effect: NoExecute
+    - key: CriticalAddonsOnly
+      operator: Exists
+```
+
+This ensures CSI node pods can run on server nodes to handle volume mounts for pods scheduled there.
+
 ### 7.3 Enable Debug Logging
 
 Update democratic-csi values:
@@ -696,6 +986,101 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#storagepvc-mount-issues) for detaile
    sudo mount -t nfs 192.168.9.10:/mnt/pool/k8s-storage /tmp/test
    ```
 
+## Security Considerations
+
+### What Democratic CSI Does
+
+1. **Creates datasets** for each PVC (e.g., `pool/dataset/pvc-xxxxx`)
+2. **Creates NFS shares** for each dataset (if using NFS)
+3. **Deletes datasets** when PVCs are deleted
+4. **Deletes NFS shares** when volumes are removed
+
+### Minimum Permissions Needed
+
+- ✅ **Dataset operations** on parent dataset and children
+- ✅ **NFS share operations** (if automated, otherwise manual setup)
+- ✅ **API access** to TrueNAS management interface
+
+### What's NOT Needed
+
+- ❌ Full pool access
+- ❌ System administration
+- ❌ Access to other datasets
+- ❌ Shell/SSH access (API only)
+
+### Security Best Practices
+
+1. **Use HTTPS for TrueNAS API** (set `truenas_protocol = "https"` in tfvars)
+2. **Create dedicated user** with minimal permissions (not root)
+3. **Restrict API key scope** to dataset management only
+4. **Use VLANs** to isolate storage traffic
+5. **Configure firewall rules** to limit access to necessary ports
+6. **Rotate API keys** periodically
+7. **Monitor API access logs** in TrueNAS
+
+## Terraform Integration
+
+### Automatic Deployment
+
+When TrueNAS is configured in `terraform.tfvars`, Terraform will:
+
+1. Generate Helm values from Terraform variables
+2. Install democratic-csi at the end of the plan
+3. Create and configure the storage class
+4. Set it as default (if configured)
+
+### Resource Dependencies
+
+```
+VMs → RKE2 Clusters → Rancher → Downstream Registration → Kubeconfigs → Democratic CSI
+```
+
+The democratic-csi resource depends on:
+- `null_resource.merge_kubeconfigs` (kubeconfigs ready)
+- `module.rke2_apps` (apps cluster ready)
+
+### Updating Configuration
+
+To update TrueNAS configuration:
+
+1. Edit `terraform/terraform.tfvars`
+2. Run `terraform apply`
+3. Terraform will regenerate Helm values and update the deployment
+
+Or manually:
+1. Edit `terraform/terraform.tfvars`
+2. Run `./scripts/generate-helm-values-from-tfvars.sh`
+3. Reinstall via Helm: `helm upgrade democratic-csi ...`
+
+## Common Commands
+
+```bash
+# Set kubeconfig
+export KUBECONFIG=~/.kube/nprd-apps.yaml
+
+# Check CSI status
+kubectl get pods -n democratic-csi
+kubectl get storageclass
+kubectl get csidriver
+
+# View logs
+kubectl logs -n democratic-csi -l app=democratic-csi-controller
+kubectl logs -n democratic-csi -l app=democratic-csi-node
+
+# List PVCs
+kubectl get pvc --all-namespaces
+
+# Delete test PVC
+kubectl delete pvc test-pvc
+
+# Verify TrueNAS connectivity from nodes
+WORKER_IP=$(kubectl get nodes -o wide | grep worker | head -1 | awk '{print $6}')
+ssh ubuntu@$WORKER_IP "timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.9.10/2049' && echo 'Port 2049 accessible' || echo 'Port 2049 NOT accessible'"
+
+# Test manual mount from node
+ssh ubuntu@$WORKER_IP "sudo mkdir -p /tmp/test-nfs && sudo mount -t nfs 192.168.9.10:/mnt/SAS/RKE2 /tmp/test-nfs 2>&1 && echo 'Mount successful!' && ls -la /tmp/test-nfs | head -5 && sudo umount /tmp/test-nfs && sudo rmdir /tmp/test-nfs || echo 'Mount failed'"
+```
+
 ## Additional Resources
 
 - **Democratic CSI Documentation:** https://github.com/democratic-csi/democratic-csi
@@ -708,19 +1093,22 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#storagepvc-mount-issues) for detaile
 
 - [ ] TrueNAS NFS service is enabled and running
 - [ ] NFS share is configured and accessible
+- [ ] User has write access to dataset (ownership or ACLs)
+- [ ] User can create/delete child datasets (test with `zfs create/destroy`)
 - [ ] API key is valid and has proper permissions
 - [ ] Network connectivity from nodes to TrueNAS (ports 111, 2049, 443)
 - [ ] Dataset path exists on TrueNAS
 - [ ] `nfs-common` package installed on all nodes
-- [ ] CSI driver pods are running
+- [ ] CSI driver pods are running (including on server nodes if needed)
 - [ ] Storage class is created and default (if desired)
 - [ ] PVC can be created and bound
 - [ ] Pods can mount volumes successfully
+- [ ] Helm values file is generated from Terraform variables
 
 ## Next Steps
 
-1. ✅ Install democratic-csi
-2. ✅ Configure TrueNAS backend
+1. ✅ Install democratic-csi (via Terraform or manually)
+2. ✅ Configure TrueNAS backend (dataset, permissions, API key)
 3. ✅ Create storage classes
 4. ✅ Test with sample PVC
 5. ✅ Deploy applications using persistent storage
