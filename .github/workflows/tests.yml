@@ -59,7 +59,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git remote add gitlab https://gitlab.com/dk-raas/dkai/devops/rancher-deploy.git || true
+          git remote remove gitlab 2>/dev/null || true
+          git remote add gitlab https://gitlab.com/dk-raas/dkai/devops/rancher-deploy.git
           git config credential.helper '!f() { echo "username=oauth2"; echo "password=${GITLAB_TOKEN}"; }; f'
-          git fetch gitlab main || true
-          git push gitlab HEAD:main || echo "GitLab push failed"
+          git fetch gitlab main
+          git push gitlab HEAD:main
