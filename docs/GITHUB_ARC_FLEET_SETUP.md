@@ -25,7 +25,7 @@ We use the **Official GitHub-Supported ARC**:
 ### Official ARC (gha-runner-scale-set) ✅ **CURRENT**
 - **Maintainer**: GitHub (official support)
 - **CRDs**: `AutoscalingRunnerSet`, `EphemeralRunnerSet`, `EphemeralRunner`
-- **API Group**: `actions.github.com/v1beta1`
+- **API Group**: `actions.github.com/v1alpha1`
 - **Chart**: `oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller`
 - **Release Name**: `gha-runner-scale-set-controller`
 - **Documentation**: https://docs.github.com/en/actions/tutorials/use-actions-runner-controller
@@ -214,7 +214,7 @@ spec:
 ### Official ARC (AutoscalingRunnerSet) ✅ **CURRENT**
 
 ```yaml
-apiVersion: actions.github.com/v1beta1
+apiVersion: actions.github.com/v1alpha1
 kind: AutoscalingRunnerSet
 metadata:
   name: example-runner-scale-set
@@ -268,7 +268,7 @@ kind: RunnerDeployment
 ✅ **Install controller first** - Official ARC controller (with CRDs) must be installed before Fleet processes runner resources  
 ✅ **Separate controller from runners** - Controller via Helm/Terraform, runners via Fleet  
 ✅ **Use official version** - Official GitHub-supported ARC (`AutoscalingRunnerSet`, not legacy `RunnerDeployment`)  
-✅ **Verify CRD compatibility** - Ensure Fleet resources use `AutoscalingRunnerSet` (actions.github.com/v1beta1)  
+✅ **Verify CRD compatibility** - Ensure Fleet resources use `AutoscalingRunnerSet` (actions.github.com/v1alpha1)  
 ✅ **Fleet paths** - Only include runner resources, not controller manifests  
 
 This ensures Fleet can validate runner resources because CRDs exist when Fleet processes them.

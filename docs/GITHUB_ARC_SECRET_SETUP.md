@@ -231,7 +231,7 @@ kubectl --kubeconfig ~/.kube/nprd-apps.yaml create secret generic github-app-sec
 
 **Note**: The `AutoscalingRunnerSet` resource must reference this secret:
 ```yaml
-apiVersion: actions.github.com/v1beta1
+apiVersion: actions.github.com/v1alpha1
 kind: AutoscalingRunnerSet
 metadata:
   name: nprd-autoscale-runners
@@ -268,7 +268,7 @@ Expected: Pods should show `2/2 Running` status and logs should show no authenti
 ✅ **Fleet can validate `AutoscalingRunnerSet` resources right now (official version)**  
 ✅ **CRDs are installed on both clusters**  
 ✅ **Controller doesn't need to be running for Fleet validation**  
-✅ **Using official GitHub-supported ARC** (`actions.github.com/v1beta1`)
+✅ **Using official GitHub-supported ARC** (`actions.github.com/v1alpha1`)
 
 The controller only needs to be running when:
 - Actually managing and scaling runners
