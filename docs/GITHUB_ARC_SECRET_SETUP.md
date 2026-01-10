@@ -239,6 +239,8 @@ metadata:
 spec:
   githubConfigUrl: "https://github.com/DataKnifeAI"  # Organization URL
   githubConfigSecret: github-app-secret  # Name of the secret created above
+  runnerLabels:
+    - self-hosted
   # ... rest of configuration
 ```
 

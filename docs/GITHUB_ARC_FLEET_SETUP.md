@@ -224,6 +224,8 @@ spec:
   githubConfigSecret: github-config-secret
   maxRunners: 10
   minRunners: 0
+  runnerLabels:
+    - self-hosted
   template:
     spec:
       containers:
