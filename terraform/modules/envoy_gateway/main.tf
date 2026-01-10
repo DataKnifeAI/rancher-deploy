@@ -24,9 +24,9 @@ variable "install_envoy_gateway" {
 }
 
 variable "gateway_api_version" {
-  description = "Gateway API CRDs version"
+  description = "Gateway API CRDs version (not used - Envoy Gateway install.yaml includes CRDs)"
   type        = string
-  default     = "v1.0.0"
+  default     = "v1.1.0"
 }
 
 variable "envoy_gateway_version" {

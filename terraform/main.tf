@@ -1654,9 +1654,9 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
-      kubectl apply --server-side -f "$$CNPG_MANIFEST_URL" || {
+      kubectl apply --server-side -f "$${CNPG_MANIFEST_URL}" || {
         echo "⚠ Server-side apply failed, trying regular apply..."
-        kubectl apply -f "$$CNPG_MANIFEST_URL"
+        kubectl apply -f "$${CNPG_MANIFEST_URL}"
       }
       
       echo "✓ CloudNativePG operator manifest applied"
@@ -1698,12 +1698,12 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       echo "Removing CloudNativePG from NPRD Apps Cluster"
       echo "=========================================="
       
-      export KUBECONFIG="$$HOME/.kube/nprd-apps.yaml"
+      export KUBECONFIG="$${HOME}/.kube/nprd-apps.yaml"
       
       if kubectl get namespace cnpg-system &>/dev/null; then
         echo "Removing CloudNativePG operator..."
         CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
-        kubectl delete -f "$$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        kubectl delete -f "$${CNPG_MANIFEST_URL}" --ignore-not-found=true || true
         
         echo "Deleting namespace..."
         kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
@@ -1751,9 +1751,9 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
-      kubectl apply --server-side -f "$$CNPG_MANIFEST_URL" || {
+      kubectl apply --server-side -f "$${CNPG_MANIFEST_URL}" || {
         echo "⚠ Server-side apply failed, trying regular apply..."
-        kubectl apply -f "$$CNPG_MANIFEST_URL"
+        kubectl apply -f "$${CNPG_MANIFEST_URL}"
       }
       
       echo "✓ CloudNativePG operator manifest applied"
@@ -1795,12 +1795,12 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       echo "Removing CloudNativePG from PRD Apps Cluster"
       echo "=========================================="
       
-      export KUBECONFIG="$$HOME/.kube/prd-apps.yaml"
+      export KUBECONFIG="$${HOME}/.kube/prd-apps.yaml"
       
       if kubectl get namespace cnpg-system &>/dev/null; then
         echo "Removing CloudNativePG operator..."
         CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
-        kubectl delete -f "$$CNPG_MANIFEST_URL" --ignore-not-found=true || true
+        kubectl delete -f "$${CNPG_MANIFEST_URL}" --ignore-not-found=true || true
         
         echo "Deleting namespace..."
         kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
@@ -1866,18 +1866,18 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       ARC_VERSION="0.12.1"
       
       # Check if already installed
-      if helm list -n "$$NAMESPACE" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
+      if helm list -n "$${NAMESPACE}" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
         echo "  ARC controller already installed, upgrading to version $${ARC_VERSION}..."
-        helm upgrade "$$RELEASE_NAME" "$$CHART" \
-          --namespace "$$NAMESPACE" \
-          --version "$$ARC_VERSION" \
+        helm upgrade "$${RELEASE_NAME}" "$${CHART}" \
+          --namespace "$${NAMESPACE}" \
+          --version "$${ARC_VERSION}" \
           --wait=false
       else
         echo "  Installing official ARC controller version $${ARC_VERSION}..."
-        helm install "$$RELEASE_NAME" "$$CHART" \
-          --namespace "$$NAMESPACE" \
+        helm install "$${RELEASE_NAME}" "$${CHART}" \
+          --namespace "$${NAMESPACE}" \
           --create-namespace \
-          --version "$$ARC_VERSION" \
+          --version "$${ARC_VERSION}" \
           --wait=false
       fi
       
@@ -1898,7 +1898,7 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$${NAMESPACE}" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
@@ -1907,16 +1907,16 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       
       # Ensure managed-cicd namespace exists
       RUNNER_NAMESPACE="managed-cicd"
-      if ! kubectl get namespace "$$RUNNER_NAMESPACE" &>/dev/null; then
-        echo "Creating namespace: $RUNNER_NAMESPACE"
-        kubectl create namespace "$$RUNNER_NAMESPACE" || true
+      if ! kubectl get namespace "$${RUNNER_NAMESPACE}" &>/dev/null; then
+        echo "Creating namespace: $${RUNNER_NAMESPACE}"
+        kubectl create namespace "$${RUNNER_NAMESPACE}" || true
       fi
       
       # Wait for controller ServiceAccount to be created
       echo "Waiting for controller ServiceAccount..."
       CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
       for i in {1..30}; do
-        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$$NAMESPACE" &>/dev/null; then
+        if kubectl get serviceaccount "$${CONTROLLER_SA}" -n "$${NAMESPACE}" &>/dev/null; then
           echo "✓ Controller ServiceAccount found"
           break
         fi
@@ -1930,13 +1930,13 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       # The controller needs to:
       # 1. Read/create secrets (for github-app-secret authentication and listener config)
       # 2. Create/manage Roles and RoleBindings (for AutoscalingListener pods)
-      echo "Creating Role for secret and RBAC access in $RUNNER_NAMESPACE namespace..."
+      echo "Creating Role for secret and RBAC access in $${RUNNER_NAMESPACE} namespace..."
       kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: arc-controller-secret-reader
-  namespace: $RUNNER_NAMESPACE
+  namespace: $${RUNNER_NAMESPACE}
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -1953,18 +1953,18 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: arc-controller-secret-reader
-  namespace: $RUNNER_NAMESPACE
+  namespace: $${RUNNER_NAMESPACE}
 subjects:
 - kind: ServiceAccount
-  name: $CONTROLLER_SA
-  namespace: $NAMESPACE
+  name: $${CONTROLLER_SA}
+  namespace: $${NAMESPACE}
 roleRef:
   kind: Role
   name: arc-controller-secret-reader
   apiGroup: rbac.authorization.k8s.io
 EOF
       
-      echo "✓ RBAC configured: Controller can now read secrets in $RUNNER_NAMESPACE namespace"
+      echo "✓ RBAC configured: Controller can now read secrets in $${RUNNER_NAMESPACE} namespace"
       
       echo ""
       echo "=========================================="
@@ -2052,18 +2052,18 @@ resource "null_resource" "deploy_arc_prd_apps" {
       ARC_VERSION="0.12.1"
       
       # Check if already installed
-      if helm list -n "$$NAMESPACE" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
+      if helm list -n "$${NAMESPACE}" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
         echo "  ARC controller already installed, upgrading to version $${ARC_VERSION}..."
-        helm upgrade "$$RELEASE_NAME" "$$CHART" \
-          --namespace "$$NAMESPACE" \
-          --version "$$ARC_VERSION" \
+        helm upgrade "$${RELEASE_NAME}" "$${CHART}" \
+          --namespace "$${NAMESPACE}" \
+          --version "$${ARC_VERSION}" \
           --wait=false
       else
         echo "  Installing official ARC controller version $${ARC_VERSION}..."
-        helm install "$$RELEASE_NAME" "$$CHART" \
-          --namespace "$$NAMESPACE" \
+        helm install "$${RELEASE_NAME}" "$${CHART}" \
+          --namespace "$${NAMESPACE}" \
           --create-namespace \
-          --version "$$ARC_VERSION" \
+          --version "$${ARC_VERSION}" \
           --wait=false
       fi
       
@@ -2084,7 +2084,7 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       echo ""
       echo "ARC Controller Pods:"
-      kubectl get pods -n "$$NAMESPACE" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
+      kubectl get pods -n "$${NAMESPACE}" -l app.kubernetes.io/name=gha-runner-scale-set-controller || echo "Pods may still be starting..."
       
       echo ""
       echo "=========================================="
@@ -2093,16 +2093,16 @@ resource "null_resource" "deploy_arc_prd_apps" {
       
       # Ensure managed-cicd namespace exists
       RUNNER_NAMESPACE="managed-cicd"
-      if ! kubectl get namespace "$$RUNNER_NAMESPACE" &>/dev/null; then
-        echo "Creating namespace: $RUNNER_NAMESPACE"
-        kubectl create namespace "$$RUNNER_NAMESPACE" || true
+      if ! kubectl get namespace "$${RUNNER_NAMESPACE}" &>/dev/null; then
+        echo "Creating namespace: $${RUNNER_NAMESPACE}"
+        kubectl create namespace "$${RUNNER_NAMESPACE}" || true
       fi
       
       # Wait for controller ServiceAccount to be created
       echo "Waiting for controller ServiceAccount..."
       CONTROLLER_SA="gha-runner-scale-set-controller-gha-rs-controller"
       for i in {1..30}; do
-        if kubectl get serviceaccount "$CONTROLLER_SA" -n "$$NAMESPACE" &>/dev/null; then
+        if kubectl get serviceaccount "$${CONTROLLER_SA}" -n "$${NAMESPACE}" &>/dev/null; then
           echo "✓ Controller ServiceAccount found"
           break
         fi
@@ -2116,13 +2116,13 @@ resource "null_resource" "deploy_arc_prd_apps" {
       # The controller needs to:
       # 1. Read/create secrets (for github-app-secret authentication and listener config)
       # 2. Create/manage Roles and RoleBindings (for AutoscalingListener pods)
-      echo "Creating Role for secret and RBAC access in $RUNNER_NAMESPACE namespace..."
+      echo "Creating Role for secret and RBAC access in $${RUNNER_NAMESPACE} namespace..."
       kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: arc-controller-secret-reader
-  namespace: $RUNNER_NAMESPACE
+  namespace: $${RUNNER_NAMESPACE}
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -2139,18 +2139,18 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: arc-controller-secret-reader
-  namespace: $RUNNER_NAMESPACE
+  namespace: $${RUNNER_NAMESPACE}
 subjects:
 - kind: ServiceAccount
-  name: $CONTROLLER_SA
-  namespace: $NAMESPACE
+  name: $${CONTROLLER_SA}
+  namespace: $${NAMESPACE}
 roleRef:
   kind: Role
   name: arc-controller-secret-reader
   apiGroup: rbac.authorization.k8s.io
 EOF
       
-      echo "✓ RBAC configured: Controller can now read secrets in $RUNNER_NAMESPACE namespace"
+      echo "✓ RBAC configured: Controller can now read secrets in $${RUNNER_NAMESPACE} namespace"
       
       echo ""
       echo "=========================================="

@@ -19,31 +19,30 @@ This guide covers setting up Gateway API on RKE2 clusters managed by Rancher. Ga
 
 **Installation:**
 
+Envoy Gateway can be installed using the official installation manifest:
+
 ```bash
-# Add Helm repository
-helm repo add envoy-gateway https://gateway.envoyproxy.io/helm-releases
-helm repo update
+# Install Gateway API CRDs first (if not already installed)
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
 
-# Install on manager cluster (using version 1.6.1)
+# Install Envoy Gateway using official manifest (version 1.6.1)
+# On manager cluster
 export KUBECONFIG=~/.kube/rancher-manager.yaml
-helm install eg envoy-gateway/envoy-gateway \
-  --namespace envoy-gateway-system \
-  --create-namespace \
-  --version v1.6.1 \
-  --wait
+kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
 
-# Install on nprd-apps cluster
+# On nprd-apps cluster
 export KUBECONFIG=~/.kube/nprd-apps.yaml
-helm install eg envoy-gateway/envoy-gateway \
-  --namespace envoy-gateway-system \
-  --create-namespace \
-  --version v1.6.1 \
-  --wait
+kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
+
+# Wait for deployment to be ready
+kubectl wait --for=condition=available deployment/envoy-gateway -n envoy-gateway-system --timeout=5m
 
 # Verify installation
 kubectl get pods -n envoy-gateway-system
 kubectl get gatewayclass
 ```
+
+**Note:** The Helm repository method is not currently available. Use the manifest installation method shown above.
 
 **Note:** Envoy Gateway v1.6.1 uses Gateway API v1.4.1 internally, but Gateway API v1.0.0 CRDs are fully compatible.
 
@@ -154,21 +153,31 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/downloa
 kubectl get crd | grep gateway
 ```
 
-### Step 1: Install Envoy Gateway
+### Step 1: Install Gateway API CRDs (if not already installed)
+
+```bash
+# Install Gateway API CRDs
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+
+# Verify CRDs are installed
+kubectl get crd | grep gateway
+```
+
+### Step 2: Install Envoy Gateway
 
 ```bash
 # Set context for manager cluster
 export KUBECONFIG=~/.kube/rancher-manager.yaml
 
-# Add Helm repository
-helm repo add envoy-gateway https://gateway.envoyproxy.io/helm-releases
-helm repo update
+# Install Envoy Gateway using official manifest
+kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
 
-# Install Envoy Gateway
-helm install eg envoy-gateway/envoy-gateway \
-  --namespace envoy-gateway-system \
-  --create-namespace \
-  --set config.envoyGateway.gateway.controllerName=gateway.envoyproxy.io/gatewayclass-eg
+# Wait for deployment to be ready
+kubectl wait --for=condition=available deployment/envoy-gateway -n envoy-gateway-system --timeout=5m
+
+# Verify installation
+kubectl get pods -n envoy-gateway-system
+kubectl get gatewayclass
 ```
 
 ### Step 2: Create GatewayClass

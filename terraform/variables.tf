@@ -271,9 +271,9 @@ variable "install_envoy_gateway" {
 }
 
 variable "gateway_api_version" {
-  description = "Gateway API CRDs version to install. Envoy Gateway 1.6.1 uses Gateway API 1.4.1 internally. Recommended: v1.1.0 (latest stable) or let Envoy Gateway Helm chart install CRDs automatically"
+  description = "Gateway API CRDs version (deprecated - Envoy Gateway install.yaml includes CRDs automatically). Kept for compatibility but not used."
   type        = string
-  default     = "v1.1.0"  # Latest stable Gateway API CRDs; compatible with Envoy Gateway 1.6.1
+  default     = "v1.1.0"
 }
 
 variable "envoy_gateway_version" {
