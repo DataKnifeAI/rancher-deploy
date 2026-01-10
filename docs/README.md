@@ -37,7 +37,6 @@ Complete documentation for the Rancher Deploy project.
 
 ### Gateway API & Ingress
 - **[GATEWAY_API_SETUP.md](GATEWAY_API_SETUP.md)** - Gateway API setup with Envoy Gateway
-- **[ENVOY_VS_TRAEFIK.md](ENVOY_VS_TRAEFIK.md)** - Comparison between Envoy and Traefik
 
 ## Quick Links
 
