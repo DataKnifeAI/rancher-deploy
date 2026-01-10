@@ -1828,22 +1828,25 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       NAMESPACE="actions-runner-system"
       RELEASE_NAME="gha-runner-scale-set-controller"
       CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
+      ARC_VERSION="0.12.1"
       
       # Check if already installed
       if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading to official version..."
+        echo "  ARC controller already installed, upgrading to version ${ARC_VERSION}..."
         helm upgrade "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
+          --version "$ARC_VERSION" \
           --wait=false
       else
-        echo "  Installing official ARC controller..."
+        echo "  Installing official ARC controller version ${ARC_VERSION}..."
         helm install "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
           --create-namespace \
+          --version "$ARC_VERSION" \
           --wait=false
       fi
       
-      echo "✓ Official ARC controller installed"
+      echo "✓ Official ARC controller installed (version ${ARC_VERSION})"
       
       # Wait a moment for CRDs to be created
       sleep 5
@@ -1973,7 +1976,7 @@ EOF
   ]
 
   triggers = {
-    arc_chart_version = "0.23.7"
+    arc_chart_version = "0.12.1"
   }
 }
 
@@ -2011,22 +2014,25 @@ resource "null_resource" "deploy_arc_prd_apps" {
       NAMESPACE="actions-runner-system"
       RELEASE_NAME="gha-runner-scale-set-controller"
       CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
+      ARC_VERSION="0.12.1"
       
       # Check if already installed
       if helm list -n "$NAMESPACE" 2>/dev/null | grep -q "^${RELEASE_NAME}\s"; then
-        echo "  ARC controller already installed, upgrading to official version..."
+        echo "  ARC controller already installed, upgrading to version ${ARC_VERSION}..."
         helm upgrade "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
+          --version "$ARC_VERSION" \
           --wait=false
       else
-        echo "  Installing official ARC controller..."
+        echo "  Installing official ARC controller version ${ARC_VERSION}..."
         helm install "$RELEASE_NAME" "$CHART" \
           --namespace "$NAMESPACE" \
           --create-namespace \
+          --version "$ARC_VERSION" \
           --wait=false
       fi
       
-      echo "✓ Official ARC controller installed"
+      echo "✓ Official ARC controller installed (version ${ARC_VERSION})"
       
       # Wait a moment for CRDs to be created
       sleep 5
@@ -2156,6 +2162,6 @@ EOF
   ]
 
   triggers = {
-    arc_chart_version = "official-github-version"
+    arc_chart_version = "0.12.1"
   }
 }
