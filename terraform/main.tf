@@ -2104,6 +2104,256 @@ resource "null_resource" "deploy_mongodb_community_operator_prd_apps" {
 }
 
 # ============================================================================
+# OPENSEARCH OPERATOR DEPLOYMENT
+# Installs OpenSearch Kubernetes Operator for OpenSearch cluster management
+# Deploys to both nprd-apps and prd-apps clusters
+# ============================================================================
+
+resource "null_resource" "deploy_opensearch_operator_nprd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying OpenSearch Operator to NPRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to nprd-apps cluster
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access nprd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # OpenSearch Operator configuration
+      OPENSEARCH_NAMESPACE="opensearch-operator-system"
+      OPENSEARCH_RELEASE_NAME="opensearch-operator"
+      OPENSEARCH_CHART="opensearch-operator/opensearch-operator"
+      OPENSEARCH_HELM_REPO="https://opensearch-project.github.io/opensearch-k8s-operator/"
+      
+      # Add OpenSearch Helm repository
+      echo "Adding OpenSearch Helm repository..."
+      helm repo add opensearch-operator "$${OPENSEARCH_HELM_REPO}" 2>/dev/null || echo "Repository already added"
+      helm repo update
+      echo "✓ Helm repository added and updated"
+      
+      # Install OpenSearch Operator via Helm
+      # Note: CRDs are installed automatically by the Helm chart
+      echo "Installing OpenSearch Operator..."
+      if helm list -n "$${OPENSEARCH_NAMESPACE}" 2>/dev/null | grep -q "^$${OPENSEARCH_RELEASE_NAME}\\s"; then
+        echo "  OpenSearch Operator already installed, upgrading..."
+        helm upgrade "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
+          --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --wait \
+          --timeout 10m
+      else
+        echo "  Installing OpenSearch Operator..."
+        helm install "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
+          --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --create-namespace \
+          --wait \
+          --timeout 10m
+      fi
+      
+      echo "✓ OpenSearch Operator installed"
+      
+      # Wait for operator pods to be ready
+      echo "Waiting for operator pods to be ready..."
+      sleep 5
+      kubectl wait --for=condition=ready pod --all -n "$${OPENSEARCH_NAMESPACE}" --timeout=5m 2>/dev/null || {
+        echo "⚠ Some pods may still be starting"
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying OpenSearch Operator installation..."
+      DEPLOYMENT_NAME=$(kubectl get deployment -n "$${OPENSEARCH_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+      if [ -n "$${DEPLOYMENT_NAME}" ]; then
+        kubectl rollout status "deployment/$${DEPLOYMENT_NAME}" -n "$${OPENSEARCH_NAMESPACE}" --timeout=5m || true
+      fi
+      
+      echo ""
+      echo "OpenSearch Operator Pods:"
+      kubectl get pods -n "$${OPENSEARCH_NAMESPACE}"
+      
+      echo ""
+      echo "OpenSearch Operator CRDs:"
+      kubectl get crd | grep opensearch || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ OpenSearch Operator deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing OpenSearch Operator from NPRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$${HOME}/.kube/nprd-apps.yaml"
+      
+      if kubectl get namespace opensearch-operator-system &>/dev/null; then
+        echo "Removing OpenSearch Operator..."
+        helm uninstall opensearch-operator -n opensearch-operator-system 2>/dev/null || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace opensearch-operator-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ OpenSearch Operator removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_apps
+  ]
+
+  triggers = {
+    opensearch_operator_version = "latest"
+  }
+}
+
+resource "null_resource" "deploy_opensearch_operator_prd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying OpenSearch Operator to PRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to prd-apps cluster
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # OpenSearch Operator configuration
+      OPENSEARCH_NAMESPACE="opensearch-operator-system"
+      OPENSEARCH_RELEASE_NAME="opensearch-operator"
+      OPENSEARCH_CHART="opensearch-operator/opensearch-operator"
+      OPENSEARCH_HELM_REPO="https://opensearch-project.github.io/opensearch-k8s-operator/"
+      
+      # Add OpenSearch Helm repository
+      echo "Adding OpenSearch Helm repository..."
+      helm repo add opensearch-operator "$${OPENSEARCH_HELM_REPO}" 2>/dev/null || echo "Repository already added"
+      helm repo update
+      echo "✓ Helm repository added and updated"
+      
+      # Install OpenSearch Operator via Helm
+      # Note: CRDs are installed automatically by the Helm chart
+      echo "Installing OpenSearch Operator..."
+      if helm list -n "$${OPENSEARCH_NAMESPACE}" 2>/dev/null | grep -q "^$${OPENSEARCH_RELEASE_NAME}\\s"; then
+        echo "  OpenSearch Operator already installed, upgrading..."
+        helm upgrade "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
+          --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --wait \
+          --timeout 10m
+      else
+        echo "  Installing OpenSearch Operator..."
+        helm install "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
+          --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --create-namespace \
+          --wait \
+          --timeout 10m
+      fi
+      
+      echo "✓ OpenSearch Operator installed"
+      
+      # Wait for operator pods to be ready
+      echo "Waiting for operator pods to be ready..."
+      sleep 5
+      kubectl wait --for=condition=ready pod --all -n "$${OPENSEARCH_NAMESPACE}" --timeout=5m 2>/dev/null || {
+        echo "⚠ Some pods may still be starting"
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying OpenSearch Operator installation..."
+      DEPLOYMENT_NAME=$(kubectl get deployment -n "$${OPENSEARCH_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+      if [ -n "$${DEPLOYMENT_NAME}" ]; then
+        kubectl rollout status "deployment/$${DEPLOYMENT_NAME}" -n "$${OPENSEARCH_NAMESPACE}" --timeout=5m || true
+      fi
+      
+      echo ""
+      echo "OpenSearch Operator Pods:"
+      kubectl get pods -n "$${OPENSEARCH_NAMESPACE}"
+      
+      echo ""
+      echo "OpenSearch Operator CRDs:"
+      kubectl get crd | grep opensearch || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ OpenSearch Operator deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing OpenSearch Operator from PRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$${HOME}/.kube/prd-apps.yaml"
+      
+      if kubectl get namespace opensearch-operator-system &>/dev/null; then
+        echo "Removing OpenSearch Operator..."
+        helm uninstall opensearch-operator -n opensearch-operator-system 2>/dev/null || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace opensearch-operator-system --timeout=2m 2>/dev/null || true
+        
+        echo "✓ OpenSearch Operator removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    opensearch_operator_version = "latest"
+  }
+}
+
+# ============================================================================
 # GITHUB ACTIONS RUNNER CONTROLLER (ARC) DEPLOYMENT
 # Installs ARC controller for GitHub Actions runner management
 # Deploys to both nprd-apps and prd-apps clusters
