@@ -63,4 +63,4 @@ jobs:
           git remote add gitlab https://gitlab.com/dk-raas/dkai/devops/rancher-deploy.git
           git config credential.helper '!f() { echo "username=oauth2"; echo "password=${GITLAB_TOKEN}"; }; f'
           git fetch gitlab main
-          git push gitlab HEAD:main
+          git push gitlab HEAD:main --force
