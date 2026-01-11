@@ -222,6 +222,19 @@ envoy_gateway_version = "v1.6.1"
 # Check latest version: https://github.com/opensearch-project/opensearch-k8s-operator/releases
 opensearch_operator_version = "2.8.0"
 
+# MongoDB Community Operator Helm chart version (default: 0.13.0)
+# Check latest version: https://github.com/mongodb/mongodb-kubernetes-operator/releases
+mongodb_operator_version = "0.13.0"
+
+# CloudNativePG Operator version (default: 1.28.0)
+# Installed via manifest, not Helm
+# Check latest version: https://github.com/cloudnative-pg/cloudnative-pg/releases
+cloudnativepg_operator_version = "1.28.0"
+
+# GitHub Actions Runner Controller (ARC) Helm chart version (default: 0.12.1)
+# Check latest version: https://github.com/actions/actions-runner-controller/releases
+github_arc_controller_version = "0.12.1"
+
 # ============================================================================
 # NOTES FOR PRODUCTION
 # ============================================================================

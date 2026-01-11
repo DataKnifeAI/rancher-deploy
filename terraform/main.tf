@@ -1649,9 +1649,10 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       echo "✓ Cluster access verified"
       
       # Install CloudNativePG operator using official manifest
-      echo "Installing CloudNativePG operator..."
-      CNPG_VERSION="1.28.0"
-      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
+      echo "Installing CloudNativePG operator version ${var.cloudnativepg_operator_version}..."
+      CNPG_VERSION="${var.cloudnativepg_operator_version}"
+      CNPG_RELEASE_VERSION=$(echo "$${CNPG_VERSION}" | cut -d. -f1,2)
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-$${CNPG_RELEASE_VERSION}/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
       kubectl apply --server-side -f "$${CNPG_MANIFEST_URL}" || {
@@ -1721,7 +1722,7 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
   ]
 
   triggers = {
-    cnpg_version = "1.28.0"
+    cnpg_version = var.cloudnativepg_operator_version
   }
 }
 
@@ -1746,9 +1747,10 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       echo "✓ Cluster access verified"
       
       # Install CloudNativePG operator using official manifest
-      echo "Installing CloudNativePG operator..."
-      CNPG_VERSION="1.28.0"
-      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-$${CNPG_VERSION}.yaml"
+      echo "Installing CloudNativePG operator version ${var.cloudnativepg_operator_version}..."
+      CNPG_VERSION="${var.cloudnativepg_operator_version}"
+      CNPG_RELEASE_VERSION=$(echo "$${CNPG_VERSION}" | cut -d. -f1,2)
+      CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-$${CNPG_RELEASE_VERSION}/releases/cnpg-$${CNPG_VERSION}.yaml"
       
       # Apply the manifest with server-side apply
       kubectl apply --server-side -f "$${CNPG_MANIFEST_URL}" || {
@@ -1818,7 +1820,7 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
   ]
 
   triggers = {
-    cnpg_version = "1.28.0"
+    cnpg_version = var.cloudnativepg_operator_version
   }
 }
 
@@ -1860,6 +1862,7 @@ resource "null_resource" "deploy_mongodb_community_operator_nprd_apps" {
       MONGODB_RELEASE_NAME="community-operator"
       MONGODB_CHART="mongodb/community-operator"
       MONGODB_HELM_REPO="https://mongodb.github.io/helm-charts"
+      MONGODB_VERSION="${var.mongodb_operator_version}"
       
       # Add MongoDB Helm repository
       echo "Adding MongoDB Helm repository..."
@@ -1882,19 +1885,21 @@ resource "null_resource" "deploy_mongodb_community_operator_nprd_apps" {
       # Install MongoDB Community Operator via Helm
       # Note: CRDs are installed automatically by the Helm chart
       # Configure operator to watch all namespaces (required for MongoDBCommunity resources in other namespaces)
-      echo "Installing MongoDB Community Operator..."
+      echo "Installing MongoDB Community Operator version $${MONGODB_VERSION}..."
       if helm list -n "$${MONGODB_NAMESPACE}" 2>/dev/null | grep -q "^$${MONGODB_RELEASE_NAME}\\s"; then
-        echo "  MongoDB Community Operator already installed, upgrading..."
+        echo "  MongoDB Community Operator already installed, upgrading to version $${MONGODB_VERSION}..."
         helm upgrade "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
           --namespace "$${MONGODB_NAMESPACE}" \
+          --version "$${MONGODB_VERSION}" \
           --set operator.watchNamespace='*' \
           --wait \
           --timeout 10m
       else
-        echo "  Installing MongoDB Community Operator..."
+        echo "  Installing MongoDB Community Operator version $${MONGODB_VERSION}..."
         helm install "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
           --namespace "$${MONGODB_NAMESPACE}" \
           --create-namespace \
+          --version "$${MONGODB_VERSION}" \
           --set operator.watchNamespace='*' \
           --wait \
           --timeout 10m
@@ -1962,7 +1967,7 @@ resource "null_resource" "deploy_mongodb_community_operator_nprd_apps" {
   ]
 
   triggers = {
-    mongodb_operator_version = "latest"
+    mongodb_operator_version = var.mongodb_operator_version
   }
 }
 
@@ -1997,6 +2002,7 @@ resource "null_resource" "deploy_mongodb_community_operator_prd_apps" {
       MONGODB_RELEASE_NAME="community-operator"
       MONGODB_CHART="mongodb/community-operator"
       MONGODB_HELM_REPO="https://mongodb.github.io/helm-charts"
+      MONGODB_VERSION="${var.mongodb_operator_version}"
       
       # Add MongoDB Helm repository
       echo "Adding MongoDB Helm repository..."
@@ -2019,19 +2025,21 @@ resource "null_resource" "deploy_mongodb_community_operator_prd_apps" {
       # Install MongoDB Community Operator via Helm
       # Note: CRDs are installed automatically by the Helm chart
       # Configure operator to watch all namespaces (required for MongoDBCommunity resources in other namespaces)
-      echo "Installing MongoDB Community Operator..."
+      echo "Installing MongoDB Community Operator version $${MONGODB_VERSION}..."
       if helm list -n "$${MONGODB_NAMESPACE}" 2>/dev/null | grep -q "^$${MONGODB_RELEASE_NAME}\\s"; then
-        echo "  MongoDB Community Operator already installed, upgrading..."
+        echo "  MongoDB Community Operator already installed, upgrading to version $${MONGODB_VERSION}..."
         helm upgrade "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
           --namespace "$${MONGODB_NAMESPACE}" \
+          --version "$${MONGODB_VERSION}" \
           --set operator.watchNamespace='*' \
           --wait \
           --timeout 10m
       else
-        echo "  Installing MongoDB Community Operator..."
+        echo "  Installing MongoDB Community Operator version $${MONGODB_VERSION}..."
         helm install "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
           --namespace "$${MONGODB_NAMESPACE}" \
           --create-namespace \
+          --version "$${MONGODB_VERSION}" \
           --set operator.watchNamespace='*' \
           --wait \
           --timeout 10m
@@ -2099,7 +2107,7 @@ resource "null_resource" "deploy_mongodb_community_operator_prd_apps" {
   ]
 
   triggers = {
-    mongodb_operator_version = "latest"
+    mongodb_operator_version = var.mongodb_operator_version
   }
 }
 
@@ -2396,11 +2404,11 @@ resource "null_resource" "deploy_arc_nprd_apps" {
       echo "Using official GitHub OCI chart (no Helm repo needed)"
       
       # Install official ARC controller using OCI chart
-      echo "Installing official GitHub ARC controller..."
+      echo "Installing official GitHub ARC controller version ${var.github_arc_controller_version}..."
       NAMESPACE="actions-runner-system"
       RELEASE_NAME="gha-runner-scale-set-controller"
       CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
-      ARC_VERSION="0.12.1"
+      ARC_VERSION="${var.github_arc_controller_version}"
       
       # Check if already installed
       if helm list -n "$${NAMESPACE}" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
@@ -2548,7 +2556,7 @@ EOF
   ]
 
   triggers = {
-    arc_chart_version = "0.12.1"
+    arc_chart_version = var.github_arc_controller_version
   }
 }
 
@@ -2582,11 +2590,11 @@ resource "null_resource" "deploy_arc_prd_apps" {
       echo "Using official GitHub OCI chart (no Helm repo needed)"
       
       # Install official ARC controller using OCI chart
-      echo "Installing official GitHub ARC controller..."
+      echo "Installing official GitHub ARC controller version ${var.github_arc_controller_version}..."
       NAMESPACE="actions-runner-system"
       RELEASE_NAME="gha-runner-scale-set-controller"
       CHART="oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller"
-      ARC_VERSION="0.12.1"
+      ARC_VERSION="${var.github_arc_controller_version}"
       
       # Check if already installed
       if helm list -n "$${NAMESPACE}" 2>/dev/null | grep -q "^$${RELEASE_NAME}\\s"; then
@@ -2734,6 +2742,6 @@ EOF
   ]
 
   triggers = {
-    arc_chart_version = "0.12.1"
+    arc_chart_version = var.github_arc_controller_version
   }
 }
