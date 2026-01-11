@@ -303,5 +303,5 @@ variable "cloudnativepg_operator_version" {
 variable "github_arc_controller_version" {
   description = "GitHub Actions Runner Controller (ARC) Helm chart version"
   type        = string
-  default     = "0.12.1"
+  default     = "0.13.1"
 }
