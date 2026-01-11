@@ -215,6 +215,14 @@ gateway_api_version = "v1.1.0"
 envoy_gateway_version = "v1.6.1"
 
 # ============================================================================
+# OPENSEARCH OPERATOR CONFIGURATION
+# ============================================================================
+
+# OpenSearch Kubernetes Operator Helm chart version (default: 2.8.0)
+# Check latest version: https://github.com/opensearch-project/opensearch-k8s-operator/releases
+opensearch_operator_version = "2.8.0"
+
+# ============================================================================
 # NOTES FOR PRODUCTION
 # ============================================================================
 

@@ -281,3 +281,9 @@ variable "envoy_gateway_version" {
   type        = string
   default     = "v1.6.1"
 }
+
+variable "opensearch_operator_version" {
+  description = "OpenSearch Kubernetes Operator Helm chart version"
+  type        = string
+  default     = "2.8.0"
+}

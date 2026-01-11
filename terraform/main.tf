@@ -2140,6 +2140,7 @@ resource "null_resource" "deploy_opensearch_operator_nprd_apps" {
       OPENSEARCH_RELEASE_NAME="opensearch-operator"
       OPENSEARCH_CHART="opensearch-operator/opensearch-operator"
       OPENSEARCH_HELM_REPO="https://opensearch-project.github.io/opensearch-k8s-operator/"
+      OPENSEARCH_VERSION="${var.opensearch_operator_version}"
       
       # Add OpenSearch Helm repository
       echo "Adding OpenSearch Helm repository..."
@@ -2149,18 +2150,20 @@ resource "null_resource" "deploy_opensearch_operator_nprd_apps" {
       
       # Install OpenSearch Operator via Helm
       # Note: CRDs are installed automatically by the Helm chart
-      echo "Installing OpenSearch Operator..."
+      echo "Installing OpenSearch Operator version $${OPENSEARCH_VERSION}..."
       if helm list -n "$${OPENSEARCH_NAMESPACE}" 2>/dev/null | grep -q "^$${OPENSEARCH_RELEASE_NAME}\\s"; then
-        echo "  OpenSearch Operator already installed, upgrading..."
+        echo "  OpenSearch Operator already installed, upgrading to version $${OPENSEARCH_VERSION}..."
         helm upgrade "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
           --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --version "$${OPENSEARCH_VERSION}" \
           --wait \
           --timeout 10m
       else
-        echo "  Installing OpenSearch Operator..."
+        echo "  Installing OpenSearch Operator version $${OPENSEARCH_VERSION}..."
         helm install "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
           --namespace "$${OPENSEARCH_NAMESPACE}" \
           --create-namespace \
+          --version "$${OPENSEARCH_VERSION}" \
           --wait \
           --timeout 10m
       fi
@@ -2227,7 +2230,7 @@ resource "null_resource" "deploy_opensearch_operator_nprd_apps" {
   ]
 
   triggers = {
-    opensearch_operator_version = "latest"
+    opensearch_operator_version = var.opensearch_operator_version
   }
 }
 
@@ -2262,6 +2265,7 @@ resource "null_resource" "deploy_opensearch_operator_prd_apps" {
       OPENSEARCH_RELEASE_NAME="opensearch-operator"
       OPENSEARCH_CHART="opensearch-operator/opensearch-operator"
       OPENSEARCH_HELM_REPO="https://opensearch-project.github.io/opensearch-k8s-operator/"
+      OPENSEARCH_VERSION="${var.opensearch_operator_version}"
       
       # Add OpenSearch Helm repository
       echo "Adding OpenSearch Helm repository..."
@@ -2271,18 +2275,20 @@ resource "null_resource" "deploy_opensearch_operator_prd_apps" {
       
       # Install OpenSearch Operator via Helm
       # Note: CRDs are installed automatically by the Helm chart
-      echo "Installing OpenSearch Operator..."
+      echo "Installing OpenSearch Operator version $${OPENSEARCH_VERSION}..."
       if helm list -n "$${OPENSEARCH_NAMESPACE}" 2>/dev/null | grep -q "^$${OPENSEARCH_RELEASE_NAME}\\s"; then
-        echo "  OpenSearch Operator already installed, upgrading..."
+        echo "  OpenSearch Operator already installed, upgrading to version $${OPENSEARCH_VERSION}..."
         helm upgrade "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
           --namespace "$${OPENSEARCH_NAMESPACE}" \
+          --version "$${OPENSEARCH_VERSION}" \
           --wait \
           --timeout 10m
       else
-        echo "  Installing OpenSearch Operator..."
+        echo "  Installing OpenSearch Operator version $${OPENSEARCH_VERSION}..."
         helm install "$${OPENSEARCH_RELEASE_NAME}" "$${OPENSEARCH_CHART}" \
           --namespace "$${OPENSEARCH_NAMESPACE}" \
           --create-namespace \
+          --version "$${OPENSEARCH_VERSION}" \
           --wait \
           --timeout 10m
       fi
@@ -2349,7 +2355,7 @@ resource "null_resource" "deploy_opensearch_operator_prd_apps" {
   ]
 
   triggers = {
-    opensearch_operator_version = "latest"
+    opensearch_operator_version = var.opensearch_operator_version
   }
 }
 
