@@ -45,6 +45,7 @@ Storage and CSI driver installation:
 Database operator installation:
 
 - **`install-cloudnativepg.sh`** - Install CloudNativePG operator for PostgreSQL
+- **`install-mongodb-community-operator.sh`** - Install MongoDB Community Operator CRDs and operator for MongoDB management (required for Graylog Helm chart)
 
 ### Utility Scripts
 
@@ -107,7 +108,11 @@ export KUBECONFIG=~/.kube/nprd-apps.yaml
 ```bash
 # Install CloudNativePG
 export KUBECONFIG=~/.kube/nprd-apps.yaml
-./scripts/install-cloudnativepg.sh
+./scripts/install-cloudnativepg.sh nprd-apps
+
+# Install MongoDB Community Operator (for Graylog)
+export KUBECONFIG=~/.kube/nprd-apps.yaml
+./scripts/install-mongodb-community-operator.sh nprd-apps
 ```
 
 ## Script Dependencies

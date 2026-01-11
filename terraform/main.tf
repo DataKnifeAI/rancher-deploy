@@ -1823,6 +1823,287 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
 }
 
 # ============================================================================
+# MONGODB COMMUNITY OPERATOR DEPLOYMENT
+# Installs MongoDB Community Operator CRDs and operator for MongoDB management
+# Required for Graylog Helm chart deployments
+# Deploys to both nprd-apps and prd-apps clusters
+# ============================================================================
+
+resource "null_resource" "deploy_mongodb_community_operator_nprd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying MongoDB Community Operator to NPRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to nprd-apps cluster
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access nprd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # MongoDB Community Operator configuration
+      MONGODB_NAMESPACE="mongodb"
+      MONGODB_RELEASE_NAME="community-operator"
+      MONGODB_CHART="mongodb/community-operator"
+      MONGODB_HELM_REPO="https://mongodb.github.io/helm-charts"
+      
+      # Add MongoDB Helm repository
+      echo "Adding MongoDB Helm repository..."
+      helm repo add mongodb "$${MONGODB_HELM_REPO}" 2>/dev/null || echo "Repository already added"
+      helm repo update
+      echo "✓ Helm repository added and updated"
+      
+      # Clean up any existing CRDs that were installed manually (if present)
+      # This is needed if a previous installation attempt failed
+      echo "Checking for existing CRDs from previous installation..."
+      if kubectl get crd mongodbcommunity.mongodbcommunity.mongodb.com &>/dev/null; then
+        # Check if it's managed by Helm
+        if ! kubectl get crd mongodbcommunity.mongodbcommunity.mongodb.com -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null | grep -q "Helm"; then
+          echo "  Removing manually installed CRD (will be installed by Helm)..."
+          kubectl delete crd mongodbcommunity.mongodbcommunity.mongodb.com --ignore-not-found=true || true
+          sleep 2
+        fi
+      fi
+      
+      # Install MongoDB Community Operator via Helm
+      # Note: CRDs are installed automatically by the Helm chart
+      # Configure operator to watch all namespaces (required for MongoDBCommunity resources in other namespaces)
+      echo "Installing MongoDB Community Operator..."
+      if helm list -n "$${MONGODB_NAMESPACE}" 2>/dev/null | grep -q "^$${MONGODB_RELEASE_NAME}\\s"; then
+        echo "  MongoDB Community Operator already installed, upgrading..."
+        helm upgrade "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
+          --namespace "$${MONGODB_NAMESPACE}" \
+          --set operator.watchNamespace='*' \
+          --wait \
+          --timeout 10m
+      else
+        echo "  Installing MongoDB Community Operator..."
+        helm install "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
+          --namespace "$${MONGODB_NAMESPACE}" \
+          --create-namespace \
+          --set operator.watchNamespace='*' \
+          --wait \
+          --timeout 10m
+      fi
+      
+      echo "✓ MongoDB Community Operator installed"
+      
+      # Wait for operator pods to be ready
+      echo "Waiting for operator pods to be ready..."
+      sleep 5
+      kubectl wait --for=condition=ready pod --all -n "$${MONGODB_NAMESPACE}" --timeout=5m 2>/dev/null || {
+        echo "⚠ Some pods may still be starting"
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying MongoDB Community Operator installation..."
+      DEPLOYMENT_NAME=$(kubectl get deployment -n "$${MONGODB_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+      if [ -n "$${DEPLOYMENT_NAME}" ]; then
+        kubectl rollout status "deployment/$${DEPLOYMENT_NAME}" -n "$${MONGODB_NAMESPACE}" --timeout=5m || true
+      fi
+      
+      echo ""
+      echo "MongoDB Community Operator Pods:"
+      kubectl get pods -n "$${MONGODB_NAMESPACE}"
+      
+      echo ""
+      echo "MongoDB Community Operator CRDs:"
+      kubectl get crd | grep mongodbcommunity || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ MongoDB Community Operator deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing MongoDB Community Operator from NPRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$${HOME}/.kube/nprd-apps.yaml"
+      
+      if kubectl get namespace mongodb &>/dev/null; then
+        echo "Removing MongoDB Community Operator..."
+        helm uninstall community-operator -n mongodb 2>/dev/null || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace mongodb --timeout=2m 2>/dev/null || true
+        
+        echo "✓ MongoDB Community Operator removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_apps
+  ]
+
+  triggers = {
+    mongodb_operator_version = "latest"
+  }
+}
+
+resource "null_resource" "deploy_mongodb_community_operator_prd_apps" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "=========================================="
+      echo "Deploying MongoDB Community Operator to PRD Apps Cluster"
+      echo "=========================================="
+      
+      # Set kubeconfig to prd-apps cluster
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      
+      # Verify cluster access
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      
+      echo "✓ Cluster access verified"
+      
+      # Check if Helm is available
+      if ! command -v helm &>/dev/null; then
+        echo "ERROR: helm not found"
+        exit 1
+      fi
+      
+      # MongoDB Community Operator configuration
+      MONGODB_NAMESPACE="mongodb"
+      MONGODB_RELEASE_NAME="community-operator"
+      MONGODB_CHART="mongodb/community-operator"
+      MONGODB_HELM_REPO="https://mongodb.github.io/helm-charts"
+      
+      # Add MongoDB Helm repository
+      echo "Adding MongoDB Helm repository..."
+      helm repo add mongodb "$${MONGODB_HELM_REPO}" 2>/dev/null || echo "Repository already added"
+      helm repo update
+      echo "✓ Helm repository added and updated"
+      
+      # Clean up any existing CRDs that were installed manually (if present)
+      # This is needed if a previous installation attempt failed
+      echo "Checking for existing CRDs from previous installation..."
+      if kubectl get crd mongodbcommunity.mongodbcommunity.mongodb.com &>/dev/null; then
+        # Check if it's managed by Helm
+        if ! kubectl get crd mongodbcommunity.mongodbcommunity.mongodb.com -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null | grep -q "Helm"; then
+          echo "  Removing manually installed CRD (will be installed by Helm)..."
+          kubectl delete crd mongodbcommunity.mongodbcommunity.mongodb.com --ignore-not-found=true || true
+          sleep 2
+        fi
+      fi
+      
+      # Install MongoDB Community Operator via Helm
+      # Note: CRDs are installed automatically by the Helm chart
+      # Configure operator to watch all namespaces (required for MongoDBCommunity resources in other namespaces)
+      echo "Installing MongoDB Community Operator..."
+      if helm list -n "$${MONGODB_NAMESPACE}" 2>/dev/null | grep -q "^$${MONGODB_RELEASE_NAME}\\s"; then
+        echo "  MongoDB Community Operator already installed, upgrading..."
+        helm upgrade "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
+          --namespace "$${MONGODB_NAMESPACE}" \
+          --set operator.watchNamespace='*' \
+          --wait \
+          --timeout 10m
+      else
+        echo "  Installing MongoDB Community Operator..."
+        helm install "$${MONGODB_RELEASE_NAME}" "$${MONGODB_CHART}" \
+          --namespace "$${MONGODB_NAMESPACE}" \
+          --create-namespace \
+          --set operator.watchNamespace='*' \
+          --wait \
+          --timeout 10m
+      fi
+      
+      echo "✓ MongoDB Community Operator installed"
+      
+      # Wait for operator pods to be ready
+      echo "Waiting for operator pods to be ready..."
+      sleep 5
+      kubectl wait --for=condition=ready pod --all -n "$${MONGODB_NAMESPACE}" --timeout=5m 2>/dev/null || {
+        echo "⚠ Some pods may still be starting"
+      }
+      
+      # Verify installation
+      echo ""
+      echo "Verifying MongoDB Community Operator installation..."
+      DEPLOYMENT_NAME=$(kubectl get deployment -n "$${MONGODB_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+      if [ -n "$${DEPLOYMENT_NAME}" ]; then
+        kubectl rollout status "deployment/$${DEPLOYMENT_NAME}" -n "$${MONGODB_NAMESPACE}" --timeout=5m || true
+      fi
+      
+      echo ""
+      echo "MongoDB Community Operator Pods:"
+      kubectl get pods -n "$${MONGODB_NAMESPACE}"
+      
+      echo ""
+      echo "MongoDB Community Operator CRDs:"
+      kubectl get crd | grep mongodbcommunity || echo "CRDs may still be installing..."
+      
+      echo ""
+      echo "=========================================="
+      echo "✓ MongoDB Community Operator deployment complete"
+      echo "=========================================="
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      echo "=========================================="
+      echo "Removing MongoDB Community Operator from PRD Apps Cluster"
+      echo "=========================================="
+      
+      export KUBECONFIG="$${HOME}/.kube/prd-apps.yaml"
+      
+      if kubectl get namespace mongodb &>/dev/null; then
+        echo "Removing MongoDB Community Operator..."
+        helm uninstall community-operator -n mongodb 2>/dev/null || true
+        
+        echo "Deleting namespace..."
+        kubectl delete namespace mongodb --timeout=2m 2>/dev/null || true
+        
+        echo "✓ MongoDB Community Operator removed"
+      else
+        echo "✓ Namespace already removed"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    mongodb_operator_version = "latest"
+  }
+}
+
+# ============================================================================
 # GITHUB ACTIONS RUNNER CONTROLLER (ARC) DEPLOYMENT
 # Installs ARC controller for GitHub Actions runner management
 # Deploys to both nprd-apps and prd-apps clusters
