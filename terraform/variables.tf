@@ -65,16 +65,22 @@ variable "vm_id_start_manager" {
   default     = 401
 }
 
-variable "vm_id_start_apps" {
-  description = "Starting VM ID for apps cluster (e.g., 404 for VMs 404, 405, 406)"
+variable "vm_id_start_nprd_apps" {
+  description = "Starting VM ID for nprd-apps cluster (e.g., 410 for VMs 410, 411, 412)"
   type        = number
-  default     = 404
+  default     = 410
 }
 
 variable "vm_id_start_prd_apps" {
-  description = "Starting VM ID for prd-apps cluster (e.g., 410 for VMs 410, 411, 412)"
+  description = "Starting VM ID for prd-apps cluster (e.g., 420 for VMs 420, 421, 422)"
   type        = number
-  default     = 410
+  default     = 420
+}
+
+variable "vm_id_start_poc_apps" {
+  description = "Starting VM ID for poc-apps cluster (e.g., 430 for VMs 430, 431, 432)"
+  type        = number
+  default     = 430
 }
 
 variable "cert_manager_version" {
@@ -125,7 +131,7 @@ variable "rancher_api_token" {
 }
 
 variable "register_downstream_cluster" {
-  description = "Whether to automatically register downstream cluster (nprd-apps) with Rancher Manager using native rancher2 provider"
+  description = "Whether to automatically register all downstream clusters (nprd-apps, prd-apps, poc-apps) with Rancher Manager"
   type        = bool
   default     = true
 }
@@ -142,14 +148,14 @@ variable "manager_cluster_primary_ip" {
   default     = "192.168.1.100"
 }
 
-variable "apps_cluster_hostname" {
-  description = "Hostname for apps cluster TLS SANs (used in RKE2 certificate generation)"
+variable "nprd_apps_cluster_hostname" {
+  description = "Hostname for nprd-apps cluster TLS SANs (used in RKE2 certificate generation)"
   type        = string
   default     = "nprd-apps.example.com"
 }
 
-variable "apps_cluster_primary_ip" {
-  description = "Primary IP for apps cluster TLS SANs"
+variable "nprd_apps_cluster_primary_ip" {
+  description = "Primary IP for nprd-apps cluster TLS SANs"
   type        = string
   default     = "192.168.1.110"
 }
@@ -160,8 +166,8 @@ variable "manager_cluster_aliases" {
   default     = []
 }
 
-variable "apps_cluster_aliases" {
-  description = "Additional hostname aliases for apps cluster TLS SANs"
+variable "nprd_apps_cluster_aliases" {
+  description = "Additional hostname aliases for nprd-apps cluster TLS SANs"
   type        = list(string)
   default     = []
 }
@@ -183,6 +189,25 @@ variable "prd_apps_cluster_aliases" {
   type        = list(string)
   default     = []
 }
+
+variable "poc_apps_cluster_hostname" {
+  description = "Hostname for poc-apps cluster TLS SANs (used in RKE2 certificate generation)"
+  type        = string
+  default     = "poc-apps.example.com"
+}
+
+variable "poc_apps_cluster_primary_ip" {
+  description = "Primary IP for poc-apps cluster TLS SANs"
+  type        = string
+  default     = "192.168.1.130"
+}
+
+variable "poc_apps_cluster_aliases" {
+  description = "Additional hostname aliases for poc-apps cluster TLS SANs"
+  type        = list(string)
+  default     = []
+}
+
 variable "rancher_manager_ip" {
   description = "IP address of Rancher Manager ingress (for downstream cluster registration)"
   type        = string
@@ -190,7 +215,7 @@ variable "rancher_manager_ip" {
 }
 
 variable "downstream_cluster_name" {
-  description = "Name of the downstream cluster to register with Rancher Manager. Defaults to first non-manager cluster from clusters map."
+  description = "Name of a specific downstream cluster to register with Rancher Manager. Defaults to first non-manager cluster from clusters map (typically nprd-apps). Note: All downstream clusters are registered automatically when register_downstream_cluster is true."
   type        = string
   default     = "" # Empty = auto-detect first non-manager cluster
 }

@@ -68,6 +68,9 @@ We use the **Official GitHub-Supported ARC**:
 
 # Install on prd-apps cluster
 ./scripts/install-github-arc.sh prd-apps
+
+# Install on poc-apps cluster
+./scripts/install-github-arc.sh poc-apps
 ```
 
 ### Method 2: Install via Helm (Manual)
@@ -93,6 +96,7 @@ kubectl get crd | grep -E "autoscalingrunnerset|ephemeralrunner"
 The ARC controller can be automatically installed via Terraform. Check `terraform/main.tf` for:
 - `null_resource.deploy_arc_nprd_apps`
 - `null_resource.deploy_arc_prd_apps`
+- `null_resource.deploy_arc_poc_apps`
 
 The controller is automatically installed when you run `terraform apply`.
 

@@ -9,7 +9,7 @@ Complete guide for deploying Rancher clusters on Proxmox using Terraform.
 - **SSH key** for VM authentication (`~/.ssh/id_rsa` recommended)
 - **Shell environment**: `bash` or `zsh` (recommended; if using Fish shell, switch to `zsh` for better compatibility with automation scripts and AI tools)
 - **Network access** to Proxmox API and GitHub (for RKE2 downloads)
-- **Available resources**: 30 vCPU cores, 60GB RAM, 900GB disk space (for manager + 2 apps clusters)
+- **Available resources**: 30 vCPU cores, 60GB RAM, 900GB disk space (for manager + 3 apps clusters)
 
 ## Quick Start
 
@@ -78,8 +78,9 @@ The script will:
 - **Downstream cluster registration (NATIVE)**: ~2-3 minutes per cluster
 - RKE2 installation (NPRD Apps): ~5-10 minutes
 - RKE2 installation (PRD Apps): ~5-10 minutes
-- Democratic CSI deployment (both apps clusters): ~2-3 minutes
-- **Total: 40-60 minutes** (fully automated, no manual steps)
+- RKE2 installation (POC Apps): ~5-10 minutes
+- Democratic CSI deployment (all apps clusters): ~2-3 minutes per cluster
+- **Total: 50-70 minutes** (fully automated, no manual steps)
 
 ### 3. Monitor Progress
 
@@ -113,6 +114,10 @@ kubectl get nodes
 
 # Check prd-apps cluster
 export KUBECONFIG=~/.kube/prd-apps.yaml
+kubectl get nodes
+
+# Check poc-apps cluster
+export KUBECONFIG=~/.kube/poc-apps.yaml
 kubectl get nodes
 
 # Expected output: 3 nodes in Ready state for each cluster

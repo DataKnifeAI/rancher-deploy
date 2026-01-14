@@ -7,9 +7,21 @@
 # 4. For team sharing, keep only terraform.tfvars.example in git
 #
 # This configuration creates:
-# - 3 Rancher Manager nodes (VMs 401-403)
-# - 2 Application cluster nodes (VMs 404-405)
+# - 3 Rancher Manager nodes (VMs 401-403) - 40x range
+# - 3 NPRD Apps server nodes (VMs 410-412) - 41x range
+# - 3 NPRD Apps worker nodes (VMs 413-415) - 41x range
+# - 3 PRD Apps server nodes (VMs 420-422) - 42x range
+# - 3 PRD Apps worker nodes (VMs 423-425) - 42x range
+# - 3 POC Apps server nodes (VMs 430-432) - 43x range
+# - 3 POC Apps worker nodes (VMs 433-435) - 43x range
 # - All from Ubuntu 24.04 LTS cloud images
+# - Hybrid architecture: Servers (control plane) + Workers (workloads)
+#
+# VM ID Ranges:
+#   manager:    40x (401-403)
+#   nprd-apps:  41x (410-415)
+#   prd-apps:   42x (420-425)
+#   poc-apps:   43x (430-435)
 #
 # See CLOUD_IMAGE_SETUP.md for detailed instructions
 
@@ -69,24 +81,66 @@ clusters = {
   }
 
   nprd-apps = {
-    name           = "nprd-apps"
-    node_count     = 3              # Server nodes (control plane + etcd)
-    worker_count   = 0              # Worker nodes (set to 0 to disable, or 2-4 for hybrid setup)
-    cpu_cores      = 4               # Server CPU cores (can be 2-8 depending on workload)
-    memory_mb      = 8192           # Server memory (4GB minimum, 8GB recommended)
-    disk_size_gb   = 50              # Optimized: 50GB sufficient for control plane + etcd
-    # Worker node resources (optional - defaults to server values if not specified)
-    worker_cpu_cores    = 0         # Worker CPU cores (0 = use server value, or specify 2-8)
-    worker_memory_mb    = 0         # Worker memory (0 = use server value, or specify 4096-16384)
-    worker_disk_size_gb = 40        # Optimized: 40GB sufficient for typical workloads (0 = use server value)
-    domain         = "example.com"
-    ip_subnet      = "192.168.1"   # Same subnet
-    ip_start_octet = 110            # Server VMs: .110, .111, .112
-                                    # Worker VMs: .113, .114, .115, .116 (if worker_count > 0)
-    gateway        = "192.168.1.1"
-    dns_servers    = ["192.168.1.1"]
-    storage        = "local-vm-zfs" # VM storage (cloud image downloaded to 'local' then imported)
-    vlan_id        = 1              # VLAN ID (1 for no VLAN, or your VLAN number)
+    name         = "nprd-apps"
+    node_count   = 3    # Server nodes (control plane + etcd) - VMs 410-412
+    worker_count = 3    # Worker nodes (workloads) - VMs 413-415
+    cpu_cores    = 4    # Server CPU cores
+    memory_mb    = 8192 # Server memory (4GB minimum, 8GB recommended)
+    disk_size_gb = 80   # 80GB for control plane + etcd + container images
+    # Worker node resources (optimized for workloads)
+    worker_cpu_cores    = 4    # Worker CPU (same as server for consistency)
+    worker_memory_mb    = 8192 # Worker RAM (same as server for consistency)
+    worker_disk_size_gb = 80   # 80GB for workloads + container images
+    domain              = "example.com"
+    ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
+    ip_start_octet      = 110         # Server VMs: .110, .111, .112 (VMs 410-412)
+    # Worker VMs: .113, .114, .115 (VMs 413-415)
+    gateway     = "192.168.1.1"
+    dns_servers = ["192.168.1.1"] # Upstream DNS resolver
+    storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
+    vlan_id     = 1               # VLAN ID for applications
+  }
+
+  prd-apps = {
+    name         = "prd-apps"
+    node_count   = 3    # Server nodes (control plane + etcd) - VMs 420-422
+    worker_count = 3    # Worker nodes (workloads) - VMs 423-425
+    cpu_cores    = 4    # Server CPU cores
+    memory_mb    = 8192 # Server memory (4GB minimum, 8GB recommended)
+    disk_size_gb = 80   # 80GB for control plane + etcd + container images
+    # Worker node resources (optimized for workloads)
+    worker_cpu_cores    = 4    # Worker CPU (same as server for consistency)
+    worker_memory_mb    = 8192 # Worker RAM (same as server for consistency)
+    worker_disk_size_gb = 80   # 80GB for workloads + container images
+    domain              = "example.com"
+    ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
+    ip_start_octet      = 120         # Server VMs: .120, .121, .122 (VMs 420-422)
+    # Worker VMs: .123, .124, .125 (VMs 423-425)
+    gateway     = "192.168.1.1"
+    dns_servers = ["192.168.1.1"] # Upstream DNS resolver
+    storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
+    vlan_id     = 1               # VLAN ID for applications
+  }
+
+  poc-apps = {
+    name         = "poc-apps"
+    node_count   = 3    # Server nodes (control plane + etcd) - VMs 430-432
+    worker_count = 3    # Worker nodes (workloads) - VMs 433-435
+    cpu_cores    = 4    # Server CPU cores
+    memory_mb    = 8192 # Server memory (4GB minimum, 8GB recommended)
+    disk_size_gb = 80   # 80GB for control plane + etcd + container images
+    # Worker node resources (optimized for workloads)
+    worker_cpu_cores    = 4    # Worker CPU (same as server for consistency)
+    worker_memory_mb    = 8192 # Worker RAM (same as server for consistency)
+    worker_disk_size_gb = 80   # 80GB for workloads + container images
+    domain              = "example.com"
+    ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
+    ip_start_octet      = 130         # Server VMs: .130, .131, .132 (VMs 430-432)
+    # Worker VMs: .133, .134, .135 (VMs 433-435)
+    gateway     = "192.168.1.1"
+    dns_servers = ["192.168.1.1"] # Upstream DNS resolver
+    storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
+    vlan_id     = 1               # VLAN ID for applications
   }
 }
 
@@ -95,8 +149,10 @@ clusters = {
 # ============================================================================
 
 # Starting VM IDs for clusters
-vm_id_start_manager = 401  # Manager cluster: VMs 401-403
-vm_id_start_apps    = 404  # Apps cluster: VMs 404-406
+vm_id_start_manager   = 401 # Manager cluster: VMs 401-403 (servers only) - 40x range
+vm_id_start_nprd_apps = 410 # NPRD Apps cluster: VMs 410-412 (servers), 413-415 (workers) - 41x range
+vm_id_start_prd_apps  = 420 # PRD Apps cluster: VMs 420-422 (servers), 423-425 (workers) - 42x range
+vm_id_start_poc_apps  = 430 # POC Apps cluster: VMs 430-432 (servers), 433-435 (workers) - 43x range
 
 # ============================================================================
 # CERT-MANAGER CONFIGURATION
@@ -162,6 +218,32 @@ ssh_private_key = "~/.ssh/id_rsa"
 # 2. Register all nodes with Rancher Manager automatically
 # No manual Rancher UI steps required!
 register_downstream_cluster = true
+
+# ============================================================================
+# CLUSTER HOSTNAME AND PRIMARY IP CONFIGURATION
+# ============================================================================
+# These are used in RKE2 TLS certificate generation (tls-san values)
+# Must match your DNS configuration
+
+manager_cluster_hostname   = "manager.example.com"
+manager_cluster_primary_ip = "192.168.1.100"
+manager_cluster_aliases    = ["rancher.example.com"] # Alias for Rancher UI access
+
+nprd_apps_cluster_hostname   = "nprd-apps.example.com"
+nprd_apps_cluster_primary_ip = "192.168.1.110"
+nprd_apps_cluster_aliases    = ["nprd.example.com"] # Alias for nprd apps cluster access
+
+prd_apps_cluster_hostname   = "prd-apps.example.com"
+prd_apps_cluster_primary_ip = "192.168.1.120"
+prd_apps_cluster_aliases    = ["prd.example.com"] # Alias for prd apps cluster access
+
+poc_apps_cluster_hostname   = "poc-apps.example.com"
+poc_apps_cluster_primary_ip = "192.168.1.130"
+poc_apps_cluster_aliases    = ["poc.example.com"] # Alias for poc apps cluster access
+
+# IP address of Rancher Manager ingress (for downstream cluster system-agent registration)
+# Set to one of the manager node IPs (usually the primary node IP)
+rancher_manager_ip = "192.168.1.100"
 
 # ============================================================================
 # TRUENAS / DEMOCRATIC CSI CONFIGURATION

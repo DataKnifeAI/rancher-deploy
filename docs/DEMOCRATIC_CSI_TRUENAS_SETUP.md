@@ -237,7 +237,7 @@ VMs → RKE2 Clusters → Rancher → Downstream Registration → Kubeconfigs �
 
 The democratic-csi resource depends on:
 - `null_resource.merge_kubeconfigs` (kubeconfigs ready)
-- `module.rke2_apps` (apps cluster ready)
+- `module.rke2_nprd_apps` (nprd-apps cluster ready)
 
 ### 2.2 Secrets Management
 
@@ -1037,7 +1037,7 @@ VMs → RKE2 Clusters → Rancher → Downstream Registration → Kubeconfigs �
 
 The democratic-csi resource depends on:
 - `null_resource.merge_kubeconfigs` (kubeconfigs ready)
-- `module.rke2_apps` (apps cluster ready)
+- `module.rke2_nprd_apps` (nprd-apps cluster ready)
 
 ### Updating Configuration
 

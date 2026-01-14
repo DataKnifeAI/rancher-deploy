@@ -40,7 +40,7 @@ Kubernetes Cluster
 
 ### Automated Installation (Recommended)
 
-CloudNativePG is **automatically deployed** via Terraform to both apps clusters:
+CloudNativePG is **automatically deployed** via Terraform to nprd-apps, prd-apps, and poc-apps clusters:
 
 1. **Configure in Terraform** (already configured):
    - Operator version: `1.28.0`
@@ -579,7 +579,7 @@ kubectl get pvc -l cnpg.io/cluster=my-postgres-cluster
 
 ## Summary
 
-✅ **CloudNativePG is installed** on both nprd-apps and prd-apps clusters  
+✅ **CloudNativePG is installed** on nprd-apps, prd-apps, and poc-apps clusters  
 ✅ **Operator is ready** to manage PostgreSQL clusters  
 ✅ **Storage integration** with TrueNAS NFS is configured  
 ✅ **High availability** with automatic failover is enabled  

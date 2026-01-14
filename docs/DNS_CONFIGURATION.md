@@ -90,6 +90,80 @@ prd-apps.example.com   A    192.168.1.122
 prd.example.com        CNAME prd-apps.example.com
 ```
 
+#### 5. POC Apps Cluster
+
+**Purpose**: Proof of concept/testing apps cluster API access and ingress
+
+| Record Type | Hostname | Type | IPs | Purpose |
+|---|---|---|---|---|
+| **A Record** | `poc-apps.example.com` | Round-robin | `192.168.1.130`, `192.168.1.131`, `192.168.1.132` | POC apps cluster API and ingress load balancing (server nodes) |
+| **CNAME Record** | `poc.example.com` | CNAME | `poc-apps.example.com` | Alias for POC cluster access |
+
+**Example (DNS provider format)**:
+```
+poc-apps.example.com   A    192.168.1.130
+poc-apps.example.com   A    192.168.1.131
+poc-apps.example.com   A    192.168.1.132
+poc.example.com        CNAME poc-apps.example.com
+```
+
+#### 6. External DNS for Ingress (Worker Node Access)
+
+**Purpose**: Ingress URLs pointing to worker nodes for application access via external DNS
+
+Each cluster has a dedicated worker ingress endpoint that applications can use:
+
+| Record Type | Hostname | Type | Target | Purpose |
+|---|---|---|---|---|
+| **A Record** | `nprd-apps-wk.example.com` | Round-robin | `192.168.1.113`, `192.168.1.114`, `192.168.1.115` | NPRD apps cluster worker node ingress endpoint |
+| **A Record** | `prd-apps-wk.example.com` | Round-robin | `192.168.1.123`, `192.168.1.124`, `192.168.1.125` | PRD apps cluster worker node ingress endpoint |
+| **A Record** | `poc-apps-wk.example.com` | Round-robin | `192.168.1.133`, `192.168.1.134`, `192.168.1.135` | POC apps cluster worker node ingress endpoint |
+
+**Example (DNS provider format)**:
+```
+# Worker node ingress endpoints
+nprd-apps-wk.example.com  A    192.168.1.113
+nprd-apps-wk.example.com  A    192.168.1.114
+nprd-apps-wk.example.com  A    192.168.1.115
+
+prd-apps-wk.example.com   A    192.168.1.123
+prd-apps-wk.example.com   A    192.168.1.124
+prd-apps-wk.example.com   A    192.168.1.125
+
+poc-apps-wk.example.com   A    192.168.1.133
+poc-apps-wk.example.com   A    192.168.1.134
+poc-apps-wk.example.com   A    192.168.1.135
+```
+
+**Ingress URL Examples** (CNAME to worker endpoints):
+
+Applications deployed via Ingress should use CNAME records pointing to the cluster's worker endpoint:
+
+| Application | Record Type | Target | Cluster |
+|---|---|---|---|
+| `harbor.example.com` | CNAME | `nprd-apps-wk.example.com` | NPRD Apps |
+| `grafana.example.com` | CNAME | `nprd-apps-wk.example.com` | NPRD Apps |
+| `prometheus.example.com` | CNAME | `prd-apps-wk.example.com` | PRD Apps |
+| `harbor-prd.example.com` | CNAME | `prd-apps-wk.example.com` | PRD Apps |
+| `test-app.example.com` | CNAME | `poc-apps-wk.example.com` | POC Apps |
+
+**Example (DNS provider format)**:
+```
+# Application ingress URLs (CNAME to worker endpoints)
+harbor.example.com          CNAME nprd-apps-wk.example.com
+grafana.example.com         CNAME nprd-apps-wk.example.com
+prometheus.example.com      CNAME prd-apps-wk.example.com
+harbor-prd.example.com      CNAME prd-apps-wk.example.com
+test-app.example.com        CNAME poc-apps-wk.example.com
+```
+
+**Why Worker Nodes for Ingress?**
+
+- **Separation of Concerns**: Server nodes handle control plane, workers handle application traffic
+- **Load Distribution**: Worker nodes are dedicated to application workloads
+- **Scalability**: Can add more worker nodes without affecting control plane
+- **Best Practice**: Standard Kubernetes pattern for ingress traffic
+
 ### DNS Records Structure
 
 ```
@@ -118,6 +192,38 @@ Host: rancher.example.com
    ├─ 192.168.1.121 (prd-apps-2)
    └─ 192.168.1.122 (prd-apps-3)
    Note: Worker nodes (.123-.125) don't need DNS records
+│
+├─ poc.example.com (CNAME)
+│  └─ CNAME → poc-apps.example.com
+│
+└─ poc-apps.example.com (A records - round-robin, server nodes only)
+   ├─ 192.168.1.130 (poc-apps-1)
+   ├─ 192.168.1.131 (poc-apps-2)
+   └─ 192.168.1.132 (poc-apps-3)
+   Note: Worker nodes (.133-.135) don't need DNS records
+│
+├─ Worker Node Ingress Endpoints
+│  ├─ nprd-apps-wk.example.com (A records - round-robin, worker nodes)
+│  │  ├─ 192.168.1.113 (nprd-apps-worker-1)
+│  │  ├─ 192.168.1.114 (nprd-apps-worker-2)
+│  │  └─ 192.168.1.115 (nprd-apps-worker-3)
+│  │
+│  ├─ prd-apps-wk.example.com (A records - round-robin, worker nodes)
+│  │  ├─ 192.168.1.123 (prd-apps-worker-1)
+│  │  ├─ 192.168.1.124 (prd-apps-worker-2)
+│  │  └─ 192.168.1.125 (prd-apps-worker-3)
+│  │
+│  └─ poc-apps-wk.example.com (A records - round-robin, worker nodes)
+│     ├─ 192.168.1.133 (poc-apps-worker-1)
+│     ├─ 192.168.1.134 (poc-apps-worker-2)
+│     └─ 192.168.1.135 (poc-apps-worker-3)
+│
+└─ Application Ingress URLs (CNAME to worker endpoints)
+   ├─ harbor.example.com → CNAME → nprd-apps-wk.example.com
+   ├─ grafana.example.com → CNAME → nprd-apps-wk.example.com
+   ├─ prometheus.example.com → CNAME → prd-apps-wk.example.com
+   ├─ harbor-prd.example.com → CNAME → prd-apps-wk.example.com
+   └─ test-app.example.com → CNAME → poc-apps-wk.example.com
 ```
 
 ### Why Round-Robin (Multiple A Records)?
@@ -518,6 +624,9 @@ kubectx nprd-apps
 
 # Switch to prd-apps cluster
 kubectx prd-apps
+
+# Switch to poc-apps cluster
+kubectx poc-apps
 
 # Switch back to previous cluster
 kubectx -

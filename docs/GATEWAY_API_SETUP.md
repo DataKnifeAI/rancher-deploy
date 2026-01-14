@@ -279,8 +279,12 @@ kubectl --kubeconfig ~/.kube/rancher-manager.yaml \
 kubectl --kubeconfig ~/.kube/nprd-apps.yaml \
   apply -f envoy-gateway-install.yaml
 
-# PRD Apps cluster (if exists)
+# PRD Apps cluster
 kubectl --kubeconfig ~/.kube/prd-apps.yaml \
+  apply -f envoy-gateway-install.yaml
+
+# POC Apps cluster
+kubectl --kubeconfig ~/.kube/poc-apps.yaml \
   apply -f envoy-gateway-install.yaml
 ```
 
