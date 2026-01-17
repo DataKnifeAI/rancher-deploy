@@ -330,3 +330,37 @@ variable "github_arc_controller_version" {
   type        = string
   default     = "0.13.1"
 }
+
+# ============================================================================
+# METALLB CONFIGURATION
+# ============================================================================
+
+variable "install_metallb" {
+  description = "Whether to install MetalLB on downstream clusters"
+  type        = bool
+  default     = true
+}
+
+variable "metallb_version" {
+  description = "MetalLB version (latest: v0.15.3, see https://metallb.universe.tf/release-notes/)"
+  type        = string
+  default     = "v0.15.3"
+}
+
+variable "metallb_ip_pools" {
+  description = "IP address pools for MetalLB LoadBalancer services per cluster"
+  type = map(object({
+    addresses = string  # e.g., "192.168.1.200-192.168.1.210"
+  }))
+  default = {
+    "nprd-apps" = {
+      addresses = "192.168.1.200-192.168.1.210"
+    }
+    "prd-apps" = {
+      addresses = "192.168.1.220-192.168.1.230"
+    }
+    "poc-apps" = {
+      addresses = "192.168.1.240-192.168.1.250"
+    }
+  }
+}

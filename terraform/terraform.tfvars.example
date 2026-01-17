@@ -297,6 +297,35 @@ gateway_api_version = "v1.1.0"
 envoy_gateway_version = "v1.6.1"
 
 # ============================================================================
+# METALLB CONFIGURATION
+# ============================================================================
+
+# Install MetalLB on downstream clusters (provides LoadBalancer service type)
+install_metallb = true
+
+# MetalLB version (default: v0.15.3)
+# Latest version: v0.15.3 (see https://metallb.universe.tf/release-notes/)
+# Check latest version: https://github.com/metallb/metallb/releases
+metallb_version = "v0.15.3"
+
+# IP address pools for MetalLB LoadBalancer services per cluster
+# Choose IP ranges that are:
+# - In the same subnet as your cluster nodes
+# - NOT assigned to nodes or other services
+# - NOT in DHCP range if using DHCP
+metallb_ip_pools = {
+  nprd-apps = {
+    addresses = "192.168.1.200-192.168.1.210"  # 11 IPs for LoadBalancer services
+  }
+  prd-apps = {
+    addresses = "192.168.1.220-192.168.1.230"  # 11 IPs for LoadBalancer services
+  }
+  poc-apps = {
+    addresses = "192.168.1.240-192.168.1.250"  # 11 IPs for LoadBalancer services
+  }
+}
+
+# ============================================================================
 # OPENSEARCH OPERATOR CONFIGURATION
 # ============================================================================
 

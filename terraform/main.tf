@@ -1040,6 +1040,22 @@ module "cert_manager_nprd_apps" {
   ]
 }
 
+# MetalLB for NPRD Apps Cluster
+module "metallb_nprd_apps" {
+  source = "./modules/metallb"
+
+  cluster_name      = "nprd-apps"
+  kubeconfig_path   = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  install_metallb   = var.install_metallb
+  metallb_version   = var.metallb_version
+  namespace         = "metallb-system"
+  ip_pool_addresses = try(var.metallb_ip_pools["nprd-apps"].addresses, "")
+
+  depends_on = [
+    module.rke2_nprd_apps  # Wait for cluster to be fully ready
+  ]
+}
+
 # Envoy Gateway for PRD Apps Cluster
 module "envoy_gateway_prd_apps" {
   source = "./modules/envoy_gateway"
@@ -1070,6 +1086,22 @@ module "cert_manager_prd_apps" {
   ]
 }
 
+# MetalLB for PRD Apps Cluster
+module "metallb_prd_apps" {
+  source = "./modules/metallb"
+
+  cluster_name      = "prd-apps"
+  kubeconfig_path   = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  install_metallb   = var.install_metallb
+  metallb_version   = var.metallb_version
+  namespace         = "metallb-system"
+  ip_pool_addresses = try(var.metallb_ip_pools["prd-apps"].addresses, "")
+
+  depends_on = [
+    module.rke2_prd_apps  # Wait for cluster to be fully ready
+  ]
+}
+
 # Envoy Gateway for POC Apps Cluster
 module "envoy_gateway_poc_apps" {
   source = "./modules/envoy_gateway"
@@ -1094,6 +1126,22 @@ module "cert_manager_poc_apps" {
   kubeconfig_path     = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
   cert_manager_version = var.cert_manager_version
   namespace            = "cert-manager"
+
+  depends_on = [
+    module.rke2_poc_apps  # Wait for cluster to be fully ready
+  ]
+}
+
+# MetalLB for POC Apps Cluster
+module "metallb_poc_apps" {
+  source = "./modules/metallb"
+
+  cluster_name      = "poc-apps"
+  kubeconfig_path   = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  install_metallb   = var.install_metallb
+  metallb_version   = var.metallb_version
+  namespace         = "metallb-system"
+  ip_pool_addresses = try(var.metallb_ip_pools["poc-apps"].addresses, "")
 
   depends_on = [
     module.rke2_poc_apps  # Wait for cluster to be fully ready
