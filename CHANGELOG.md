@@ -8,13 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- New features being developed
+- **cert-manager Module**: New Terraform module for automated cert-manager deployment across downstream clusters
+  - Automatic detection and cleanup of pre-existing unmanaged cert-manager installations
+  - Comprehensive resource cleanup (CRDs, ClusterRoles, Roles, WebhookConfigurations)
+  - Version-based triggers for automatic upgrades when version changes
+  - Support for nprd-apps, prd-apps, and poc-apps clusters
+- **cert-manager Version Management**: Automatic resource recreation when `cert_manager_version` changes in terraform.tfvars
+  - Triggers on version, cluster_name, kubeconfig_path, and namespace changes
+  - Eliminates need for manual resource tainting
 
 ### Changed
-- Updates to existing features
+- **cert-manager Version**: Upgraded from v1.13.0 (EOL) to v1.19.2 (latest stable)
+  - v1.13.0 reached end-of-life on June 5, 2024
+  - v1.19.2 provides security updates, bug fixes, and improved Kubernetes compatibility
+- **cert-manager Deployment**: Now managed via dedicated Terraform module instead of inline scripts
+  - Improved error handling and resource cleanup
+  - Better support for upgrading from unmanaged installations
 
 ### Fixed
-- Bug fixes
+- **cert-manager Installation Issues**: Resolved Helm ownership metadata conflicts
+  - Automatic cleanup of unmanaged CRDs, ClusterRoles, ClusterRoleBindings
+  - Automatic cleanup of namespaced Roles and RoleBindings in kube-system
+  - Automatic cleanup of MutatingWebhookConfiguration and ValidatingWebhookConfiguration
+  - Proper waiting periods for resource deletion before reinstallation
 
 ## [1.1.0] - 2026-01-01
 

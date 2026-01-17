@@ -1026,6 +1026,20 @@ module "envoy_gateway_nprd_apps" {
   ]
 }
 
+# cert-manager for NPRD Apps Cluster
+module "cert_manager_nprd_apps" {
+  source = "./modules/cert_manager"
+
+  cluster_name        = "nprd-apps"
+  kubeconfig_path     = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cert_manager_version = var.cert_manager_version
+  namespace            = "cert-manager"
+
+  depends_on = [
+    module.rke2_nprd_apps  # Wait for cluster to be fully ready
+  ]
+}
+
 # Envoy Gateway for PRD Apps Cluster
 module "envoy_gateway_prd_apps" {
   source = "./modules/envoy_gateway"
@@ -1042,6 +1056,20 @@ module "envoy_gateway_prd_apps" {
   ]
 }
 
+# cert-manager for PRD Apps Cluster
+module "cert_manager_prd_apps" {
+  source = "./modules/cert_manager"
+
+  cluster_name        = "prd-apps"
+  kubeconfig_path     = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cert_manager_version = var.cert_manager_version
+  namespace            = "cert-manager"
+
+  depends_on = [
+    module.rke2_prd_apps  # Wait for cluster to be fully ready
+  ]
+}
+
 # Envoy Gateway for POC Apps Cluster
 module "envoy_gateway_poc_apps" {
   source = "./modules/envoy_gateway"
@@ -1052,6 +1080,20 @@ module "envoy_gateway_poc_apps" {
   gateway_api_version   = var.gateway_api_version
   envoy_gateway_version = var.envoy_gateway_version
   namespace             = "envoy-gateway-system"
+
+  depends_on = [
+    module.rke2_poc_apps  # Wait for cluster to be fully ready
+  ]
+}
+
+# cert-manager for POC Apps Cluster
+module "cert_manager_poc_apps" {
+  source = "./modules/cert_manager"
+
+  cluster_name        = "poc-apps"
+  kubeconfig_path     = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cert_manager_version = var.cert_manager_version
+  namespace            = "cert-manager"
 
   depends_on = [
     module.rke2_poc_apps  # Wait for cluster to be fully ready
