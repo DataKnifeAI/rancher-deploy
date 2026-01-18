@@ -297,31 +297,31 @@ gateway_api_version = "v1.1.0"
 envoy_gateway_version = "v1.6.1"
 
 # ============================================================================
-# METALLB CONFIGURATION
+# KUBE-VIP CONFIGURATION
 # ============================================================================
 
-# Install MetalLB on downstream clusters (provides LoadBalancer service type)
-install_metallb = true
+# Install Kube-VIP on downstream clusters (provides LoadBalancer service type)
+install_kube_vip = true
 
-# MetalLB version (default: v0.15.3)
-# Latest version: v0.15.3 (see https://metallb.universe.tf/release-notes/)
-# Check latest version: https://github.com/metallb/metallb/releases
-metallb_version = "v0.15.3"
+# Kube-VIP version (default: v1.0.3)
+# Latest version: v1.0.3 (see https://github.com/kube-vip/kube-vip/releases)
+# Check latest version: https://github.com/kube-vip/kube-vip/releases
+kube_vip_version = "v1.0.3"
 
-# IP address pools for MetalLB LoadBalancer services per cluster
+# IP address pools for Kube-VIP LoadBalancer services per cluster
 # Choose IP ranges that are:
 # - In the same subnet as your cluster nodes
 # - NOT assigned to nodes or other services
 # - NOT in DHCP range if using DHCP
-metallb_ip_pools = {
+kube_vip_ip_pools = {
   nprd-apps = {
-    addresses = "192.168.1.200-192.168.1.210"  # 11 IPs for LoadBalancer services
+    addresses = "192.168.14.150-192.168.14.183"  # 34 IPs for LoadBalancer services
   }
   prd-apps = {
-    addresses = "192.168.1.220-192.168.1.230"  # 11 IPs for LoadBalancer services
+    addresses = "192.168.14.184-192.168.14.217"  # 34 IPs for LoadBalancer services
   }
   poc-apps = {
-    addresses = "192.168.1.240-192.168.1.250"  # 11 IPs for LoadBalancer services
+    addresses = "192.168.14.218-192.168.14.251"  # 34 IPs for LoadBalancer services
   }
 }
 

@@ -332,35 +332,35 @@ variable "github_arc_controller_version" {
 }
 
 # ============================================================================
-# METALLB CONFIGURATION
+# KUBE-VIP CONFIGURATION
 # ============================================================================
 
-variable "install_metallb" {
-  description = "Whether to install MetalLB on downstream clusters"
+variable "install_kube_vip" {
+  description = "Whether to install Kube-VIP on downstream clusters"
   type        = bool
   default     = true
 }
 
-variable "metallb_version" {
-  description = "MetalLB version (latest: v0.15.3, see https://metallb.universe.tf/release-notes/)"
+variable "kube_vip_version" {
+  description = "Kube-VIP version (latest: v1.0.3, see https://github.com/kube-vip/kube-vip/releases)"
   type        = string
-  default     = "v0.15.3"
+  default     = "v1.0.3"
 }
 
-variable "metallb_ip_pools" {
-  description = "IP address pools for MetalLB LoadBalancer services per cluster"
+variable "kube_vip_ip_pools" {
+  description = "IP address pools for Kube-VIP LoadBalancer services per cluster"
   type = map(object({
-    addresses = string  # e.g., "192.168.1.200-192.168.1.210"
+    addresses = string  # e.g., "192.168.14.150-192.168.14.251"
   }))
   default = {
     "nprd-apps" = {
-      addresses = "192.168.1.200-192.168.1.210"
+      addresses = "192.168.14.150-192.168.14.183"
     }
     "prd-apps" = {
-      addresses = "192.168.1.220-192.168.1.230"
+      addresses = "192.168.14.184-192.168.14.217"
     }
     "poc-apps" = {
-      addresses = "192.168.1.240-192.168.1.250"
+      addresses = "192.168.14.218-192.168.14.251"
     }
   }
 }

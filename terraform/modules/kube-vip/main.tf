@@ -17,26 +17,26 @@ variable "kubeconfig_path" {
   type        = string
 }
 
-variable "install_metallb" {
-  description = "Whether to install MetalLB on this cluster"
+variable "install_kube_vip" {
+  description = "Whether to install Kube-VIP on this cluster"
   type        = bool
   default     = true
 }
 
-variable "metallb_version" {
-  description = "MetalLB version (latest: v0.15.3, see https://metallb.universe.tf/release-notes/)"
+variable "kube_vip_version" {
+  description = "Kube-VIP version (latest: v1.0.3, see https://github.com/kube-vip/kube-vip/releases)"
   type        = string
-  default     = "v0.15.3"
+  default     = "v1.0.3"
 }
 
 variable "namespace" {
-  description = "Namespace for MetalLB"
+  description = "Namespace for Kube-VIP"
   type        = string
-  default     = "metallb-system"
+  default     = "kube-vip"
 }
 
 variable "ip_pool_addresses" {
-  description = "IP address pool for MetalLB LoadBalancer services (e.g., '192.168.1.200-192.168.1.210')"
+  description = "IP address range for Kube-VIP LoadBalancer services (e.g., '192.168.14.150-192.168.14.251')"
   type        = string
   default     = ""
 }
@@ -49,17 +49,25 @@ output "cluster_name" {
   value = var.cluster_name
 }
 
-# Deploy MetalLB using external script
-# Script handles: MetalLB installation + IP pool configuration
-resource "null_resource" "deploy_metallb" {
-  count = var.install_metallb ? 1 : 0
+# Deploy Kube-VIP using external script
+# Script handles: Kube-VIP installation + IP pool configuration
+resource "null_resource" "deploy_kube_vip" {
+  count = var.install_kube_vip ? 1 : 0
+
+  triggers = {
+    # Trigger re-deployment when any of these change
+    ip_pool_addresses = var.ip_pool_addresses
+    kube_vip_version  = var.kube_vip_version
+    cluster_name      = var.cluster_name
+    kubeconfig_path   = var.kubeconfig_path
+  }
 
   provisioner "local-exec" {
     command = <<-EOT
-      chmod +x ${path.module}/deploy-metallb.sh
-      ${path.module}/deploy-metallb.sh \
+      chmod +x ${path.module}/deploy-kube-vip.sh
+      ${path.module}/deploy-kube-vip.sh \
         "${pathexpand(var.kubeconfig_path)}" \
-        "${var.metallb_version}" \
+        "${var.kube_vip_version}" \
         "${var.namespace}" \
         "${var.cluster_name}" \
         "${var.ip_pool_addresses}"
@@ -67,46 +75,25 @@ resource "null_resource" "deploy_metallb" {
   }
 }
 
-# Verify MetalLB deployment
-resource "null_resource" "verify_metallb" {
-  count = var.install_metallb ? 1 : 0
+# Verify Kube-VIP deployment
+resource "null_resource" "verify_kube_vip" {
+  count = var.install_kube_vip ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
       echo ""
       echo "=========================================="
-      echo "Verifying MetalLB Deployment"
+      echo "Verifying Kube-VIP Deployment"
       echo "=========================================="
       
       export KUBECONFIG="${pathexpand(var.kubeconfig_path)}"
       
-      # Wait for MetalLB CRDs to be ready
-      echo "Checking MetalLB CRDs..."
-      CRD_READY=0
-      for i in {1..30}; do
-        if kubectl get crd ipaddresspools.metallb.io &>/dev/null && \
-           kubectl get crd l2advertisements.metallb.io &>/dev/null; then
-          CRD_READY=1
-          echo "  ✓ MetalLB CRDs are ready"
-          break
-        fi
-        if [ $((i % 5)) -eq 0 ]; then
-          echo "  Waiting for MetalLB CRDs... attempt $i/30"
-        fi
-        sleep 2
-      done
-      
-      if [ "$CRD_READY" -eq 0 ]; then
-        echo "  ⚠ MetalLB CRDs not ready after 60 seconds"
-        echo "  This may be normal if installation is still in progress"
-      fi
-      
-      # Check MetalLB pods
+      # Check Kube-VIP pods
       echo ""
-      echo "Checking MetalLB pods in namespace ${var.namespace}..."
+      echo "Checking Kube-VIP pods in namespace ${var.namespace}..."
       POD_COUNT=$(kubectl get pods -n ${var.namespace} --no-headers 2>/dev/null | wc -l || echo "0")
       if [ "$POD_COUNT" -gt 0 ]; then
-        echo "  MetalLB Pods Status:"
+        echo "  Kube-VIP Pods Status:"
         kubectl get pods -n ${var.namespace} --no-headers | head -5
         echo ""
         echo "  Pod Details:"
@@ -116,27 +103,27 @@ resource "null_resource" "verify_metallb" {
         echo "  This may be normal if installation is still in progress"
       fi
       
-      # Check IP pool if configured
+      # Check ConfigMap if configured
       if [ -n "${var.ip_pool_addresses}" ]; then
         echo ""
-        echo "Checking IP address pool..."
-        if kubectl get ipaddresspool -n ${var.namespace} &>/dev/null; then
-          kubectl get ipaddresspool -n ${var.namespace}
+        echo "Checking Kube-VIP ConfigMap..."
+        if kubectl get configmap kubevip -n ${var.namespace} &>/dev/null; then
+          kubectl get configmap kubevip -n ${var.namespace} -o yaml | grep -A 5 "range"
           echo ""
-          echo "  ✓ IP address pool configured"
+          echo "  ✓ Kube-VIP ConfigMap configured"
         else
-          echo "  ⚠ IP address pool not found yet"
+          echo "  ⚠ ConfigMap not found yet"
           echo "  This may be normal if installation is still in progress"
         fi
       fi
       
       echo ""
       echo "=========================================="
-      echo "MetalLB Installation Summary"
+      echo "Kube-VIP Installation Summary"
       echo "=========================================="
       echo "Cluster: ${var.cluster_name}"
       echo "Namespace: ${var.namespace}"
-      echo "MetalLB Version: ${var.metallb_version}"
+      echo "Kube-VIP Version: ${var.kube_vip_version}"
       if [ -n "${var.ip_pool_addresses}" ]; then
         echo "IP Pool: ${var.ip_pool_addresses}"
       fi
@@ -144,9 +131,9 @@ resource "null_resource" "verify_metallb" {
       echo "Next steps:"
       echo "  1. Verify installation:"
       echo "     kubectl get pods -n ${var.namespace}"
-      echo "     kubectl get ipaddresspool -n ${var.namespace}"
+      echo "     kubectl get configmap kubevip -n ${var.namespace}"
       echo ""
-      echo "  2. Configure services to use LoadBalancer type (see docs/METALLB_SETUP.md)"
+      echo "  2. Configure services to use LoadBalancer type"
       echo "=========================================="
     EOT
 
@@ -155,5 +142,5 @@ resource "null_resource" "verify_metallb" {
     }
   }
 
-  depends_on = [null_resource.deploy_metallb]
+  depends_on = [null_resource.deploy_kube_vip]
 }

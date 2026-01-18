@@ -1040,16 +1040,16 @@ module "cert_manager_nprd_apps" {
   ]
 }
 
-# MetalLB for NPRD Apps Cluster
-module "metallb_nprd_apps" {
-  source = "./modules/metallb"
+# Kube-VIP for NPRD Apps Cluster
+module "kube_vip_nprd_apps" {
+  source = "./modules/kube-vip"
 
   cluster_name      = "nprd-apps"
   kubeconfig_path   = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
-  install_metallb   = var.install_metallb
-  metallb_version   = var.metallb_version
-  namespace         = "metallb-system"
-  ip_pool_addresses = try(var.metallb_ip_pools["nprd-apps"].addresses, "")
+  install_kube_vip  = var.install_kube_vip
+  kube_vip_version  = var.kube_vip_version
+  namespace         = "kube-vip"
+  ip_pool_addresses = try(var.kube_vip_ip_pools["nprd-apps"].addresses, "")
 
   depends_on = [
     module.rke2_nprd_apps  # Wait for cluster to be fully ready
@@ -1086,16 +1086,16 @@ module "cert_manager_prd_apps" {
   ]
 }
 
-# MetalLB for PRD Apps Cluster
-module "metallb_prd_apps" {
-  source = "./modules/metallb"
+# Kube-VIP for PRD Apps Cluster
+module "kube_vip_prd_apps" {
+  source = "./modules/kube-vip"
 
   cluster_name      = "prd-apps"
   kubeconfig_path   = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
-  install_metallb   = var.install_metallb
-  metallb_version   = var.metallb_version
-  namespace         = "metallb-system"
-  ip_pool_addresses = try(var.metallb_ip_pools["prd-apps"].addresses, "")
+  install_kube_vip  = var.install_kube_vip
+  kube_vip_version  = var.kube_vip_version
+  namespace         = "kube-vip"
+  ip_pool_addresses = try(var.kube_vip_ip_pools["prd-apps"].addresses, "")
 
   depends_on = [
     module.rke2_prd_apps  # Wait for cluster to be fully ready
@@ -1132,16 +1132,16 @@ module "cert_manager_poc_apps" {
   ]
 }
 
-# MetalLB for POC Apps Cluster
-module "metallb_poc_apps" {
-  source = "./modules/metallb"
+# Kube-VIP for POC Apps Cluster
+module "kube_vip_poc_apps" {
+  source = "./modules/kube-vip"
 
   cluster_name      = "poc-apps"
   kubeconfig_path   = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
-  install_metallb   = var.install_metallb
-  metallb_version   = var.metallb_version
-  namespace         = "metallb-system"
-  ip_pool_addresses = try(var.metallb_ip_pools["poc-apps"].addresses, "")
+  install_kube_vip  = var.install_kube_vip
+  kube_vip_version  = var.kube_vip_version
+  namespace         = "kube-vip"
+  ip_pool_addresses = try(var.kube_vip_ip_pools["poc-apps"].addresses, "")
 
   depends_on = [
     module.rke2_poc_apps  # Wait for cluster to be fully ready
