@@ -312,7 +312,48 @@ spec:
 
 ## TLS/SSL Configuration
 
-### Using cert-manager (Already Installed)
+### Using cert-manager with Gateway API
+
+cert-manager is installed with **gateway-shim** enabled, which automatically provisions TLS certificates for Gateway API resources (similar to how ingress-shim works for Ingress).
+
+**Enabled Controllers:**
+- ✅ **ingress-shim**: For Ingress resources (default)
+- ✅ **gateway-shim**: For Gateway API / Envoy Gateway resources (enabled via Helm values)
+
+#### Automatic Certificate Provisioning
+
+With gateway-shim enabled, cert-manager automatically watches Gateway resources and provisions certificates when TLS is configured:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: production-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Automatic cert provisioning
+spec:
+  gatewayClassName: eg
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wildcard-tls
+        kind: Secret
+        group: ""
+```
+
+cert-manager's gateway-shim will automatically:
+1. Detect the Gateway resource
+2. Create a Certificate resource based on the Gateway's hostnames
+3. Provision the certificate using the ClusterIssuer specified in annotations
+4. Store the certificate in the Secret referenced by `certificateRefs`
+
+#### Manual Certificate Management (Alternative)
+
+You can also manually create Certificate resources:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1

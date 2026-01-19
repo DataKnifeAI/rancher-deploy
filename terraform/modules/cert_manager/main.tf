@@ -39,12 +39,14 @@ output "cluster_name" {
 
 # Deploy cert-manager using Helm
 resource "null_resource" "deploy_cert_manager" {
-  # Trigger recreation when version changes
+  # Trigger recreation when version changes or Helm configuration changes
   triggers = {
     cert_manager_version = var.cert_manager_version
     cluster_name        = var.cluster_name
     kubeconfig_path     = var.kubeconfig_path
     namespace           = var.namespace
+    # Include extraArgs in trigger to force upgrade when gateway-shim is enabled
+    extra_args_config   = "--controllers=*,gateway-shim"
   }
 
   provisioner "local-exec" {
@@ -123,9 +125,11 @@ resource "null_resource" "deploy_cert_manager" {
       if [ "$CERT_MANAGER_CRDS_EXIST" = "true" ] || [ "$CERT_MANAGER_RBAC_EXIST" = "true" ] || [ "$CERT_MANAGER_ROLES_EXIST" = "true" ] || [ "$CERT_MANAGER_WEBHOOKS_EXIST" = "true" ] || [ "$CERT_MANAGER_EXISTS" = "true" ]; then
         if [ "$HELM_RELEASE_EXISTS" = "true" ]; then
           echo "  ✓ cert-manager is already managed by Helm, upgrading..."
+          echo "  Enabling controllers: ingress-shim (default) + gateway-shim (for Gateway API)"
           helm upgrade cert-manager jetstack/cert-manager \
             --namespace ${var.namespace} \
             --set installCRDs=true \
+            --set 'extraArgs[0]=--controllers=*\,gateway-shim' \
             --version "${var.cert_manager_version}" \
             --wait \
             --timeout 10m \
@@ -325,9 +329,11 @@ resource "null_resource" "deploy_cert_manager" {
       # Install cert-manager (either fresh install or after cleanup)
       if ! helm list -n ${var.namespace} 2>/dev/null | grep -q cert-manager; then
         echo "  Installing cert-manager ${var.cert_manager_version}..."
+        echo "  Enabling controllers: ingress-shim (default) + gateway-shim (for Gateway API)"
         helm upgrade --install cert-manager jetstack/cert-manager \
           --namespace ${var.namespace} \
           --set installCRDs=true \
+          --set 'extraArgs[0]=--controllers=*\,gateway-shim' \
           --version "${var.cert_manager_version}" \
           --wait \
           --timeout 10m \
@@ -352,6 +358,18 @@ resource "null_resource" "deploy_cert_manager" {
       echo "Verifying cert-manager installation..."
       kubectl get pods -n ${var.namespace}
       echo ""
+      
+      # Check enabled controllers
+      echo "Checking enabled controllers..."
+      if kubectl get clusterrole cert-manager-controller-ingress-shim &>/dev/null; then
+        echo "  ✓ ingress-shim controller enabled"
+      fi
+      if kubectl get clusterrole cert-manager-controller-gateway-shim &>/dev/null; then
+        echo "  ✓ gateway-shim controller enabled"
+      else
+        echo "  ⚠ gateway-shim controller not found (may need upgrade)"
+      fi
+      echo ""
       echo "=========================================="
       echo "cert-manager Installation Summary"
       echo "=========================================="
@@ -359,9 +377,13 @@ resource "null_resource" "deploy_cert_manager" {
       echo "Namespace: ${var.namespace}"
       echo "Version: ${var.cert_manager_version}"
       echo ""
+      echo "Enabled Controllers:"
+      echo "  ✓ ingress-shim (for Ingress resources)"
+      echo "  ✓ gateway-shim (for Gateway API / Envoy Gateway)"
+      echo ""
       echo "Next steps:"
       echo "  1. Create ClusterIssuer or Issuer for certificate management"
-      echo "  2. Use cert-manager with Gateway API or Ingress for TLS"
+      echo "  2. Use cert-manager with Gateway API (Envoy Gateway) or Ingress for TLS"
       echo "=========================================="
     EOT
 
@@ -380,6 +402,7 @@ resource "null_resource" "verify_cert_manager" {
     kubeconfig_path     = var.kubeconfig_path
     namespace           = var.namespace
     deploy_resource_id  = null_resource.deploy_cert_manager.id
+    extra_args_config   = "--controllers=*,gateway-shim"
   }
 
   provisioner "local-exec" {
