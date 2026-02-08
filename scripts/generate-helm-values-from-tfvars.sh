@@ -39,21 +39,21 @@ extract_value() {
     fi
 }
 
-# Extract TrueNAS configuration
-TRUENAS_HOST=$(extract_value "truenas_host" "")
-TRUENAS_API_KEY=$(extract_value "truenas_api_key" "")
-TRUENAS_DATASET=$(extract_value "truenas_dataset" "")
-TRUENAS_USER=$(extract_value "truenas_user" "rke2")
-TRUENAS_PROTOCOL=$(extract_value "truenas_protocol" "https")
-TRUENAS_PORT=$(extract_value "truenas_port" "443")
-TRUENAS_ALLOW_INSECURE=$(extract_value "truenas_allow_insecure" "false")
-CSI_STORAGE_CLASS_NAME=$(extract_value "csi_storage_class_name" "truenas-nfs")
-CSI_STORAGE_CLASS_DEFAULT=$(extract_value "csi_storage_class_default" "true")
+# Extract Democratic CSI configuration
+TRUENAS_HOST=$(extract_value "democratic_csi_host" "")
+TRUENAS_API_KEY=$(extract_value "democratic_csi_api_key" "")
+TRUENAS_DATASET=$(extract_value "democratic_csi_dataset" "")
+TRUENAS_USER=$(extract_value "democratic_csi_user" "rke2")
+TRUENAS_PROTOCOL=$(extract_value "democratic_csi_protocol" "https")
+TRUENAS_PORT=$(extract_value "democratic_csi_port" "443")
+TRUENAS_ALLOW_INSECURE=$(extract_value "democratic_csi_allow_insecure" "false")
+CSI_STORAGE_CLASS_NAME=$(extract_value "democratic_csi_storage_class_name" "truenas-nfs")
+CSI_STORAGE_CLASS_DEFAULT=$(extract_value "democratic_csi_storage_class_default" "true")
 
 # Validate required values
 if [ -z "$TRUENAS_HOST" ] || [ -z "$TRUENAS_API_KEY" ] || [ -z "$TRUENAS_DATASET" ]; then
-    echo -e "${RED}Error: Missing required TrueNAS configuration in terraform.tfvars${NC}"
-    echo "Required: truenas_host, truenas_api_key, truenas_dataset"
+    echo -e "${RED}Error: Missing required Democratic CSI configuration in terraform.tfvars${NC}"
+    echo "Required: democratic_csi_host, democratic_csi_api_key, democratic_csi_dataset"
     exit 1
 fi
 

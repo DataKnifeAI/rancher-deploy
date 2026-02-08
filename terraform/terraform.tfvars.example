@@ -246,38 +246,40 @@ poc_apps_cluster_aliases    = ["poc.example.com"] # Alias for poc apps cluster a
 rancher_manager_ip = "192.168.1.100"
 
 # ============================================================================
-# TRUENAS / DEMOCRATIC CSI CONFIGURATION
+# DEMOCRATIC CSI CONFIGURATION (community driver: democratic-csi)
 # ============================================================================
-# Configuration for democratic-csi storage driver with TrueNAS
-# These values are used to generate Helm values for democratic-csi installation
 
-# TrueNAS hostname or IP address
-truenas_host = "tn.dataknife.net"
+install_democratic_csi = true
 
-# TrueNAS API key (obtain from TrueNAS UI: System → API Keys → Add)
-# Format: token-id-token-secret (e.g., 1-xxxxxxxxxxxxx)
-truenas_api_key = "your-truenas-api-key-here"
+democratic_csi_host = "truenas.example.com"
+democratic_csi_api_key = "your-truenas-api-key-here"
+democratic_csi_dataset = "/mnt/SAS/RKE2"
+democratic_csi_user = "rke2"
+democratic_csi_protocol = "https"
+democratic_csi_port = 443
+democratic_csi_allow_insecure = false
 
-# TrueNAS dataset path for NFS storage
-truenas_dataset = "/mnt/SAS/RKE2"
+democratic_csi_storage_class_name = "truenas-nfs"
+democratic_csi_storage_class_default = true
 
-# TrueNAS username (for reference/documentation)
-truenas_user = "rke2"
+# ============================================================================
+# TRUENAS CSI CONFIGURATION (official driver: truenas/truenas-csi)
+# ============================================================================
 
-# TrueNAS API protocol (https recommended)
-truenas_protocol = "https"
+install_truenas_csi = false
 
-# TrueNAS API port (443 for HTTPS, 80 for HTTP)
-truenas_port = 443
+truenas_csi_host = "truenas.example.com"
+truenas_csi_api_key = ""
+truenas_csi_pool = "tank"
+truenas_csi_protocol = "https"
+truenas_csi_port = 443
+truenas_csi_allow_insecure = false
 
-# Allow insecure TLS (set to true if using self-signed certificate)
-truenas_allow_insecure = false
-
-# Storage class name for democratic-csi
-csi_storage_class_name = "truenas-nfs"
-
-# Make this storage class the default (only one default allowed per cluster)
-csi_storage_class_default = true
+truenas_csi_storage_class_name = "truenas-csi-nfs"
+truenas_csi_storage_class_default = false
+# truenas_csi_image = "registry.example.com/project/truenas-csi:tag"  # Override for patched image; see docs/TRUENAS_CSI_MULTI_NODE.md
+# truenas_csi_image_pull_secret = ""  # Secret name for private registry
+# truenas_csi_image_pull_secret_file = ""  # Path to local secret YAML (gitignored), e.g. config/harbor-registry-secret.yaml
 
 # ============================================================================
 # ENVOY GATEWAY CONFIGURATION

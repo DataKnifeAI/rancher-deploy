@@ -227,62 +227,145 @@ variable "downstream_cluster_id" {
 }
 
 # ============================================================================
-# TRUENAS / DEMOCRATIC CSI CONFIGURATION
+# DEMOCRATIC CSI CONFIGURATION (community driver: democratic-csi)
 # ============================================================================
 
-variable "truenas_host" {
-  description = "TrueNAS hostname or IP address"
+variable "install_democratic_csi" {
+  description = "Install Democratic CSI with TrueNAS backend"
+  type        = bool
+  default     = true
+}
+
+variable "democratic_csi_host" {
+  description = "TrueNAS hostname or IP for Democratic CSI"
   type        = string
   default     = ""
 }
 
-variable "truenas_api_key" {
-  description = "TrueNAS API key for democratic-csi (obtain from TrueNAS: System → API Keys)"
+variable "democratic_csi_api_key" {
+  description = "TrueNAS API key for Democratic CSI (obtain from TrueNAS: System → API Keys)"
   type        = string
   sensitive   = true
   default     = ""
 }
 
-variable "truenas_dataset" {
-  description = "TrueNAS dataset path for NFS storage (e.g., /mnt/SAS/RKE2)"
+variable "democratic_csi_dataset" {
+  description = "TrueNAS dataset path for NFS (e.g., /mnt/SAS/RKE2)"
   type        = string
   default     = ""
 }
 
-variable "truenas_user" {
-  description = "TrueNAS username for API access"
+variable "democratic_csi_user" {
+  description = "TrueNAS username for API access (reference only)"
   type        = string
   default     = ""
 }
 
-variable "truenas_protocol" {
+variable "democratic_csi_protocol" {
   description = "TrueNAS API protocol (https or http)"
   type        = string
   default     = "https"
 }
 
-variable "truenas_port" {
+variable "democratic_csi_port" {
   description = "TrueNAS API port"
   type        = number
   default     = 443
 }
 
-variable "truenas_allow_insecure" {
-  description = "Allow insecure TLS connections to TrueNAS (for self-signed certs)"
+variable "democratic_csi_allow_insecure" {
+  description = "Allow insecure TLS (self-signed certs)"
   type        = bool
   default     = false
 }
 
-variable "csi_storage_class_name" {
-  description = "Name for the democratic-csi storage class"
+variable "democratic_csi_storage_class_name" {
+  description = "Storage class name for Democratic CSI"
   type        = string
   default     = "truenas-nfs"
 }
 
-variable "csi_storage_class_default" {
-  description = "Make the CSI storage class the default storage class"
+variable "democratic_csi_storage_class_default" {
+  description = "Make Democratic CSI storage class the default"
   type        = bool
   default     = true
+}
+
+# ============================================================================
+# TRUENAS CSI CONFIGURATION (official driver: truenas/truenas-csi)
+# ============================================================================
+
+variable "install_truenas_csi" {
+  description = "Install official TrueNAS CSI driver. Requires TrueNAS SCALE 25.10+."
+  type        = bool
+  default     = false
+}
+
+variable "truenas_csi_host" {
+  description = "TrueNAS hostname or IP for TrueNAS CSI"
+  type        = string
+  default     = ""
+}
+
+variable "truenas_csi_api_key" {
+  description = "TrueNAS API key for TrueNAS CSI (obtain from TrueNAS: System → API Keys)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "truenas_csi_pool" {
+  description = "ZFS pool name for volume creation (e.g., SAS). Volumes are created at pool root."
+  type        = string
+  default     = ""
+}
+
+variable "truenas_csi_protocol" {
+  description = "TrueNAS API protocol (https or http)"
+  type        = string
+  default     = "https"
+}
+
+variable "truenas_csi_port" {
+  description = "TrueNAS API port"
+  type        = number
+  default     = 443
+}
+
+variable "truenas_csi_allow_insecure" {
+  description = "Allow insecure TLS (self-signed certs)"
+  type        = bool
+  default     = false
+}
+
+variable "truenas_csi_storage_class_name" {
+  description = "Storage class name for TrueNAS CSI"
+  type        = string
+  default     = "truenas-csi-nfs"
+}
+
+variable "truenas_csi_storage_class_default" {
+  description = "Make TrueNAS CSI storage class the default"
+  type        = bool
+  default     = false
+}
+
+variable "truenas_csi_image" {
+  description = "CSI driver image. Use a patched image for multi-node scheduling (see docs/TRUENAS_CSI_MULTI_NODE.md)"
+  type        = string
+  default     = "quay.io/truenas_solutions/truenas-csi:latest"
+}
+
+variable "truenas_csi_image_pull_secret" {
+  description = "Name of image pull secret for private registry (e.g., Harbor). If set, secret is copied to truenas-csi namespace and used. Leave empty for public images."
+  type        = string
+  default     = ""
+}
+
+variable "truenas_csi_image_pull_secret_file" {
+  description = "Path to local secret YAML (e.g. config/harbor-registry-secret.yaml). Must be gitignored."
+  type        = string
+  default     = ""
 }
 
 # ============================================================================

@@ -29,6 +29,12 @@ locals {
   downstream_cluster_name = var.downstream_cluster_name != "" ? var.downstream_cluster_name : [
     for name in keys(var.clusters) : name if name != "manager"
   ][0]
+
+  # TrueNAS CSI: ZFS pool name for volume creation (volumes created at pool root)
+  truenas_csi_pool = var.truenas_csi_pool != "" ? var.truenas_csi_pool : "tank"
+
+  # Image pull secrets YAML for CSI when using private registry
+  truenas_csi_image_pull_secrets = var.truenas_csi_image_pull_secret != "" ? "      imagePullSecrets:\n        - name: ${var.truenas_csi_image_pull_secret}" : ""
 }
 
 # ============================================================================
@@ -1891,7 +1897,7 @@ resource "null_resource" "merge_kubeconfigs" {
 # ============================================================================
 
 resource "null_resource" "deploy_democratic_csi_nprd_apps" {
-  count = var.truenas_host != "" && var.truenas_api_key != "" ? 1 : 0
+  count = var.install_democratic_csi && var.democratic_csi_host != "" && var.democratic_csi_api_key != "" ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -1944,27 +1950,27 @@ resource "null_resource" "deploy_democratic_csi_nprd_apps" {
       # Verify storage class
       echo ""
       echo "Verifying storage class..."
-      if kubectl get storageclass ${var.csi_storage_class_name} &>/dev/null; then
-        echo "✓ Storage class '${var.csi_storage_class_name}' created"
+      if kubectl get storageclass ${var.democratic_csi_storage_class_name} &>/dev/null; then
+        echo "✓ Storage class '${var.democratic_csi_storage_class_name}' created"
         
         # Check if it's default
-        IS_DEFAULT=$(kubectl get storageclass ${var.csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
+        IS_DEFAULT=$(kubectl get storageclass ${var.democratic_csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
         if [ "$IS_DEFAULT" = "true" ]; then
-          echo "✓ Storage class '${var.csi_storage_class_name}' is set as default"
-        elif [ "${var.csi_storage_class_default}" = "true" ]; then
+          echo "✓ Storage class '${var.democratic_csi_storage_class_name}' is set as default"
+        elif [ "${var.democratic_csi_storage_class_default}" = "true" ]; then
           echo "Setting storage class as default..."
           # Remove default from any existing default storage class
           EXISTING_DEFAULT=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.csi_storage_class_name}" ]; then
+          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.democratic_csi_storage_class_name}" ]; then
             echo "  Removing default from: $EXISTING_DEFAULT"
             kubectl patch storageclass "$EXISTING_DEFAULT" -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}' || true
           fi
           # Set as default
-          kubectl patch storageclass ${var.csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
+          kubectl patch storageclass ${var.democratic_csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
           echo "✓ Storage class set as default"
         fi
       else
-        echo "⚠ Storage class '${var.csi_storage_class_name}' not found"
+        echo "⚠ Storage class '${var.democratic_csi_storage_class_name}' not found"
         echo "  This may be normal if Helm installation is still in progress"
       fi
       
@@ -2013,17 +2019,17 @@ resource "null_resource" "deploy_democratic_csi_nprd_apps" {
   ]
 
   triggers = {
-    truenas_host              = var.truenas_host
-    truenas_api_key           = sha256(var.truenas_api_key) # Use hash to avoid storing secret
-    truenas_dataset           = var.truenas_dataset
-    csi_storage_class_name    = var.csi_storage_class_name
-    csi_storage_class_default = var.csi_storage_class_default
-    helm_values_file          = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    democratic_csi_host              = var.democratic_csi_host
+    democratic_csi_api_key           = sha256(var.democratic_csi_api_key)
+    democratic_csi_dataset           = var.democratic_csi_dataset
+    democratic_csi_storage_class     = var.democratic_csi_storage_class_name
+    democratic_csi_storage_default   = tostring(var.democratic_csi_storage_class_default)
+    helm_values_file                = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
 
 resource "null_resource" "deploy_democratic_csi_prd_apps" {
-  count = var.truenas_host != "" && var.truenas_api_key != "" ? 1 : 0
+  count = var.install_democratic_csi && var.democratic_csi_host != "" && var.democratic_csi_api_key != "" ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -2076,27 +2082,27 @@ resource "null_resource" "deploy_democratic_csi_prd_apps" {
       # Verify storage class
       echo ""
       echo "Verifying storage class..."
-      if kubectl get storageclass ${var.csi_storage_class_name} &>/dev/null; then
-        echo "✓ Storage class '${var.csi_storage_class_name}' created"
+      if kubectl get storageclass ${var.democratic_csi_storage_class_name} &>/dev/null; then
+        echo "✓ Storage class '${var.democratic_csi_storage_class_name}' created"
         
         # Check if it's default
-        IS_DEFAULT=$(kubectl get storageclass ${var.csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
+        IS_DEFAULT=$(kubectl get storageclass ${var.democratic_csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
         if [ "$IS_DEFAULT" = "true" ]; then
-          echo "✓ Storage class '${var.csi_storage_class_name}' is set as default"
-        elif [ "${var.csi_storage_class_default}" = "true" ]; then
+          echo "✓ Storage class '${var.democratic_csi_storage_class_name}' is set as default"
+        elif [ "${var.democratic_csi_storage_class_default}" = "true" ]; then
           echo "Setting storage class as default..."
           # Remove default from any existing default storage class
           EXISTING_DEFAULT=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.csi_storage_class_name}" ]; then
+          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.democratic_csi_storage_class_name}" ]; then
             echo "  Removing default from: $EXISTING_DEFAULT"
             kubectl patch storageclass "$EXISTING_DEFAULT" -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}' || true
           fi
           # Set as default
-          kubectl patch storageclass ${var.csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
+          kubectl patch storageclass ${var.democratic_csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
           echo "✓ Storage class set as default"
         fi
       else
-        echo "⚠ Storage class '${var.csi_storage_class_name}' not found"
+        echo "⚠ Storage class '${var.democratic_csi_storage_class_name}' not found"
         echo "  This may be normal if Helm installation is still in progress"
       fi
       
@@ -2145,17 +2151,17 @@ resource "null_resource" "deploy_democratic_csi_prd_apps" {
   ]
 
   triggers = {
-    truenas_host              = var.truenas_host
-    truenas_api_key           = sha256(var.truenas_api_key) # Use hash to avoid storing secret
-    truenas_dataset           = var.truenas_dataset
-    csi_storage_class_name    = var.csi_storage_class_name
-    csi_storage_class_default = var.csi_storage_class_default
-    helm_values_file          = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    democratic_csi_host            = var.democratic_csi_host
+    democratic_csi_api_key          = sha256(var.democratic_csi_api_key)
+    democratic_csi_dataset         = var.democratic_csi_dataset
+    democratic_csi_storage_class   = var.democratic_csi_storage_class_name
+    democratic_csi_storage_default = tostring(var.democratic_csi_storage_class_default)
+    helm_values_file              = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
 
 resource "null_resource" "deploy_democratic_csi_poc_apps" {
-  count = var.truenas_host != "" && var.truenas_api_key != "" ? 1 : 0
+  count = var.install_democratic_csi && var.democratic_csi_host != "" && var.democratic_csi_api_key != "" ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -2208,27 +2214,27 @@ resource "null_resource" "deploy_democratic_csi_poc_apps" {
       # Verify storage class
       echo ""
       echo "Verifying storage class..."
-      if kubectl get storageclass ${var.csi_storage_class_name} &>/dev/null; then
-        echo "✓ Storage class '${var.csi_storage_class_name}' created"
+      if kubectl get storageclass ${var.democratic_csi_storage_class_name} &>/dev/null; then
+        echo "✓ Storage class '${var.democratic_csi_storage_class_name}' created"
         
         # Check if it's default
-        IS_DEFAULT=$(kubectl get storageclass ${var.csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
+        IS_DEFAULT=$(kubectl get storageclass ${var.democratic_csi_storage_class_name} -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "")
         if [ "$IS_DEFAULT" = "true" ]; then
-          echo "✓ Storage class '${var.csi_storage_class_name}' is set as default"
-        elif [ "${var.csi_storage_class_default}" = "true" ]; then
+          echo "✓ Storage class '${var.democratic_csi_storage_class_name}' is set as default"
+        elif [ "${var.democratic_csi_storage_class_default}" = "true" ]; then
           echo "Setting storage class as default..."
           # Remove default from any existing default storage class
           EXISTING_DEFAULT=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || echo "")
-          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.csi_storage_class_name}" ]; then
+          if [ -n "$EXISTING_DEFAULT" ] && [ "$EXISTING_DEFAULT" != "${var.democratic_csi_storage_class_name}" ]; then
             echo "  Removing default from: $EXISTING_DEFAULT"
             kubectl patch storageclass "$EXISTING_DEFAULT" -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}' || true
           fi
           # Set as default
-          kubectl patch storageclass ${var.csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
+          kubectl patch storageclass ${var.democratic_csi_storage_class_name} -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}' || true
           echo "✓ Storage class set as default"
         fi
       else
-        echo "⚠ Storage class '${var.csi_storage_class_name}' not found"
+        echo "⚠ Storage class '${var.democratic_csi_storage_class_name}' not found"
         echo "  This may be normal if Helm installation is still in progress"
       fi
       
@@ -2277,12 +2283,392 @@ resource "null_resource" "deploy_democratic_csi_poc_apps" {
   ]
 
   triggers = {
-    truenas_host              = var.truenas_host
-    truenas_api_key           = sha256(var.truenas_api_key) # Use hash to avoid storing secret
-    truenas_dataset           = var.truenas_dataset
-    csi_storage_class_name    = var.csi_storage_class_name
-    csi_storage_class_default = var.csi_storage_class_default
-    helm_values_file          = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    democratic_csi_host            = var.democratic_csi_host
+    democratic_csi_api_key         = sha256(var.democratic_csi_api_key)
+    democratic_csi_dataset         = var.democratic_csi_dataset
+    democratic_csi_storage_class   = var.democratic_csi_storage_class_name
+    democratic_csi_storage_default = tostring(var.democratic_csi_storage_class_default)
+    helm_values_file              = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+  }
+}
+
+# ============================================================================
+# TRUENAS CSI DRIVER DEPLOYMENT (Official driver from truenas/truenas-csi)
+# Requires TrueNAS SCALE 25.10+. Deploys to nprd-apps, prd-apps, poc-apps
+# ============================================================================
+
+resource "null_resource" "deploy_truenas_csi_nprd_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      echo "=========================================="
+      echo "Deploying TrueNAS CSI Driver to NPRD Apps Cluster"
+      echo "=========================================="
+
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access nprd-apps cluster"
+        exit 1
+      fi
+      echo "✓ Cluster access verified"
+
+      MANIFEST=$(mktemp)
+      cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
+${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
+  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
+  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
+  default_pool          = local.truenas_csi_pool
+  nfs_server            = var.truenas_csi_host
+  iscsi_portal          = "${var.truenas_csi_host}:3260"
+  truenas_csi_image     = var.truenas_csi_image
+  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+})}
+TRUENAS_CSI_MANIFEST_END
+
+      kubectl create namespace truenas-csi --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic truenas-api-credentials -n truenas-csi \
+        --from-literal=api-key="$TRUENAS_API_KEY" \
+        --dry-run=client -o yaml | kubectl apply -f -
+      if [ -n "${var.truenas_csi_image_pull_secret}" ]; then
+        if ! kubectl get secret ${var.truenas_csi_image_pull_secret} -n truenas-csi &>/dev/null; then
+          if [ -n "${var.truenas_csi_image_pull_secret_file}" ] && [ -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}" ]; then
+            echo "Applying image pull secret from local file ${var.truenas_csi_image_pull_secret_file}..."
+            kubectl apply -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}"
+          else
+            echo "WARNING: Image pull secret ${var.truenas_csi_image_pull_secret} not found. Set truenas_csi_image_pull_secret_file and ensure the file exists, or create with: kubectl create secret docker-registry ${var.truenas_csi_image_pull_secret} -n truenas-csi --docker-server=REGISTRY --docker-username=USER --docker-password=PASSWORD"
+          fi
+        else
+          echo "✓ Image pull secret ${var.truenas_csi_image_pull_secret} already exists in truenas-csi"
+        fi
+      fi
+      kubectl apply -f "$MANIFEST"
+      rm -f "$MANIFEST"
+
+      echo "Waiting for TrueNAS CSI pods..."
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-controller -n truenas-csi --timeout=5m || true
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-node -n truenas-csi --timeout=5m || true
+
+      echo ""
+      echo "Creating StorageClass ${var.truenas_csi_storage_class_name}..."
+      kubectl apply -f - <<STORAGECLASS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${var.truenas_csi_storage_class_name}
+provisioner: csi.truenas.io
+parameters:
+  protocol: "nfs"
+  pool: "${local.truenas_csi_pool}"
+  compression: "LZ4"
+  nfs.mapAllUser: ""
+  nfs.mapAllGroup: ""
+  nfs.datasetPermissionsMode: "0777"
+  nfs.datasetPermissionsUser: "0"
+  nfs.datasetPermissionsGroup: "0"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+STORAGECLASS
+
+      if [ "${var.truenas_csi_storage_class_default}" = "true" ]; then
+        EXISTING=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
+        if [ -n "$EXISTING" ] && [ "$EXISTING" != "${var.truenas_csi_storage_class_name}" ]; then
+          kubectl patch storageclass "$EXISTING" -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
+        fi
+        kubectl patch storageclass ${var.truenas_csi_storage_class_name} -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
+        echo "✓ Storage class set as default"
+      fi
+
+      echo ""
+      kubectl get pods -n truenas-csi
+      kubectl get storageclass
+      echo "✓ TrueNAS CSI deployment complete"
+    EOT
+    environment = {
+      TRUENAS_API_KEY = var.truenas_csi_api_key
+    }
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_nprd_apps
+  ]
+
+  triggers = {
+    truenas_csi_host              = var.truenas_csi_host
+    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
+    truenas_csi_pool              = var.truenas_csi_pool
+    truenas_csi_image             = var.truenas_csi_image
+    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
+    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
+    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
+    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
+  }
+}
+
+resource "null_resource" "deploy_truenas_csi_prd_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      echo "=========================================="
+      echo "Deploying TrueNAS CSI Driver to PRD Apps Cluster"
+      echo "=========================================="
+
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access prd-apps cluster"
+        exit 1
+      fi
+      echo "✓ Cluster access verified"
+
+      MANIFEST=$(mktemp)
+      cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
+${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
+  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
+  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
+  default_pool          = local.truenas_csi_pool
+  nfs_server            = var.truenas_csi_host
+  iscsi_portal          = "${var.truenas_csi_host}:3260"
+  truenas_csi_image     = var.truenas_csi_image
+  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+})}
+TRUENAS_CSI_MANIFEST_END
+
+      kubectl create namespace truenas-csi --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic truenas-api-credentials -n truenas-csi \
+        --from-literal=api-key="$TRUENAS_API_KEY" \
+        --dry-run=client -o yaml | kubectl apply -f -
+      if [ -n "${var.truenas_csi_image_pull_secret}" ]; then
+        if ! kubectl get secret ${var.truenas_csi_image_pull_secret} -n truenas-csi &>/dev/null; then
+          if [ -n "${var.truenas_csi_image_pull_secret_file}" ] && [ -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}" ]; then
+            echo "Applying image pull secret from local file ${var.truenas_csi_image_pull_secret_file}..."
+            kubectl apply -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}"
+          else
+            echo "WARNING: Image pull secret ${var.truenas_csi_image_pull_secret} not found. Set truenas_csi_image_pull_secret_file and ensure the file exists, or create with: kubectl create secret docker-registry ${var.truenas_csi_image_pull_secret} -n truenas-csi --docker-server=REGISTRY --docker-username=USER --docker-password=PASSWORD"
+          fi
+        else
+          echo "✓ Image pull secret ${var.truenas_csi_image_pull_secret} already exists in truenas-csi"
+        fi
+      fi
+      kubectl apply -f "$MANIFEST"
+      rm -f "$MANIFEST"
+
+      echo "Waiting for TrueNAS CSI pods..."
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-controller -n truenas-csi --timeout=5m || true
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-node -n truenas-csi --timeout=5m || true
+
+      echo ""
+      echo "Creating StorageClass ${var.truenas_csi_storage_class_name}..."
+      kubectl apply -f - <<STORAGECLASS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${var.truenas_csi_storage_class_name}
+provisioner: csi.truenas.io
+parameters:
+  protocol: "nfs"
+  pool: "${local.truenas_csi_pool}"
+  compression: "LZ4"
+  nfs.mapAllUser: ""
+  nfs.mapAllGroup: ""
+  nfs.datasetPermissionsMode: "0777"
+  nfs.datasetPermissionsUser: "0"
+  nfs.datasetPermissionsGroup: "0"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+STORAGECLASS
+
+      if [ "${var.truenas_csi_storage_class_default}" = "true" ]; then
+        EXISTING=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
+        if [ -n "$EXISTING" ] && [ "$EXISTING" != "${var.truenas_csi_storage_class_name}" ]; then
+          kubectl patch storageclass "$EXISTING" -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
+        fi
+        kubectl patch storageclass ${var.truenas_csi_storage_class_name} -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
+        echo "✓ Storage class set as default"
+      fi
+
+      echo ""
+      kubectl get pods -n truenas-csi
+      kubectl get storageclass
+      echo "✓ TrueNAS CSI deployment complete"
+    EOT
+    environment = {
+      TRUENAS_API_KEY = var.truenas_csi_api_key
+    }
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_prd_apps
+  ]
+
+  triggers = {
+    truenas_csi_host              = var.truenas_csi_host
+    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
+    truenas_csi_pool              = var.truenas_csi_pool
+    truenas_csi_image             = var.truenas_csi_image
+    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
+    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
+    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
+    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
+  }
+}
+
+resource "null_resource" "deploy_truenas_csi_poc_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      echo "=========================================="
+      echo "Deploying TrueNAS CSI Driver to POC Apps Cluster"
+      echo "=========================================="
+
+      export KUBECONFIG="$HOME/.kube/poc-apps.yaml"
+
+      if ! kubectl cluster-info &>/dev/null; then
+        echo "ERROR: Cannot access poc-apps cluster"
+        exit 1
+      fi
+      echo "✓ Cluster access verified"
+
+      MANIFEST=$(mktemp)
+      cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
+${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
+  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
+  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
+  default_pool          = local.truenas_csi_pool
+  nfs_server            = var.truenas_csi_host
+  iscsi_portal          = "${var.truenas_csi_host}:3260"
+  truenas_csi_image     = var.truenas_csi_image
+  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+})}
+TRUENAS_CSI_MANIFEST_END
+
+      kubectl create namespace truenas-csi --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic truenas-api-credentials -n truenas-csi \
+        --from-literal=api-key="$TRUENAS_API_KEY" \
+        --dry-run=client -o yaml | kubectl apply -f -
+      if [ -n "${var.truenas_csi_image_pull_secret}" ]; then
+        if ! kubectl get secret ${var.truenas_csi_image_pull_secret} -n truenas-csi &>/dev/null; then
+          if [ -n "${var.truenas_csi_image_pull_secret_file}" ] && [ -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}" ]; then
+            echo "Applying image pull secret from local file ${var.truenas_csi_image_pull_secret_file}..."
+            kubectl apply -f "${path.module}/../${var.truenas_csi_image_pull_secret_file}"
+          else
+            echo "WARNING: Image pull secret ${var.truenas_csi_image_pull_secret} not found. Set truenas_csi_image_pull_secret_file and ensure the file exists, or create with: kubectl create secret docker-registry ${var.truenas_csi_image_pull_secret} -n truenas-csi --docker-server=REGISTRY --docker-username=USER --docker-password=PASSWORD"
+          fi
+        else
+          echo "✓ Image pull secret ${var.truenas_csi_image_pull_secret} already exists in truenas-csi"
+        fi
+      fi
+      kubectl apply -f "$MANIFEST"
+      rm -f "$MANIFEST"
+
+      echo "Waiting for TrueNAS CSI pods..."
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-controller -n truenas-csi --timeout=5m || true
+      kubectl wait --for=condition=ready pod -l app=truenas-csi-node -n truenas-csi --timeout=5m || true
+
+      echo ""
+      echo "Creating StorageClass ${var.truenas_csi_storage_class_name}..."
+      kubectl apply -f - <<STORAGECLASS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${var.truenas_csi_storage_class_name}
+provisioner: csi.truenas.io
+parameters:
+  protocol: "nfs"
+  pool: "${local.truenas_csi_pool}"
+  compression: "LZ4"
+  nfs.mapAllUser: ""
+  nfs.mapAllGroup: ""
+  nfs.datasetPermissionsMode: "0777"
+  nfs.datasetPermissionsUser: "0"
+  nfs.datasetPermissionsGroup: "0"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+STORAGECLASS
+
+      if [ "${var.truenas_csi_storage_class_default}" = "true" ]; then
+        EXISTING=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
+        if [ -n "$EXISTING" ] && [ "$EXISTING" != "${var.truenas_csi_storage_class_name}" ]; then
+          kubectl patch storageclass "$EXISTING" -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
+        fi
+        kubectl patch storageclass ${var.truenas_csi_storage_class_name} -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
+        echo "✓ Storage class set as default"
+      fi
+
+      echo ""
+      kubectl get pods -n truenas-csi
+      kubectl get storageclass
+      echo "✓ TrueNAS CSI deployment complete"
+    EOT
+    environment = {
+      TRUENAS_API_KEY = var.truenas_csi_api_key
+    }
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/poc-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [
+    null_resource.merge_kubeconfigs,
+    module.rke2_poc_apps
+  ]
+
+  triggers = {
+    truenas_csi_host              = var.truenas_csi_host
+    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
+    truenas_csi_pool              = var.truenas_csi_pool
+    truenas_csi_image             = var.truenas_csi_image
+    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
+    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
+    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
+    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
   }
 }
 
