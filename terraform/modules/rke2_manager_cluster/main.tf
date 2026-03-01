@@ -147,7 +147,7 @@ resource "null_resource" "configure_coredns_forwarding" {
       echo "Waiting for CoreDNS to be ready on $PRIMARY_IP..."
       for i in {1..60}; do
         if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$PRIMARY_IP" \
-          'sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml get configmap -n kube-system rke2-coredns-rke2-coredns-config &>/dev/null 2>&1'; then
+          'sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml get configmap -n kube-system rke2-coredns-rke2-coredns &>/dev/null 2>&1'; then
           echo "✓ CoreDNS ConfigMap found at attempt $i"
           break
         fi
@@ -165,7 +165,7 @@ resource "null_resource" "configure_coredns_forwarding" {
         set -e
         
         KUBECTL="sudo /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml"
-        CONFIGMAP_NAME="rke2-coredns-rke2-coredns-config"
+        CONFIGMAP_NAME="rke2-coredns-rke2-coredns"
         NAMESPACE="kube-system"
         INTERNAL_DNS="192.168.1.1"
         

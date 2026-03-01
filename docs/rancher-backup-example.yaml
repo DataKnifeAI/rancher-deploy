@@ -1,0 +1,18 @@
+# One-time full backup of Rancher state (manager cluster).
+# Apply with: kubectl apply -f docs/rancher-backup-example.yaml
+# Requires: Rancher Backup operator installed in cattle-resources-system (see docs/RANCHER_BACKUP.md).
+# Check status: kubectl get backups -n cattle-resources-system
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: rancher-state-backup
+  namespace: cattle-resources-system
+spec:
+  resourceSetName: rancher-resource-set-full
+  # Optional: use a specific storage location (e.g. S3). Omit to use operator default (e.g. PVC).
+  # storageLocation:
+  #   persistentVolume:
+  #     persistentVolumeClaimName: rancher-backup
+  # Optional: recurring backup (uncomment and adjust)
+  # schedule: "@every 24h"
+  # retentionCount: 7

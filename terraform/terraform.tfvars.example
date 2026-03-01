@@ -196,12 +196,19 @@ register_downstream_cluster = true
 rancher_api_token = "token-xxxxx:your-secret-token"
 
 # ============================================================================
-# SSH CONFIGURATION
+# SSH AND ACCESS SECRETS (.keys/ at repo root - see docs/ACCESS_SECRETS.md)
 # ============================================================================
+# Use repo .keys/ for SSH and tokens; do not use host ~/.ssh.
+# Default: .keys/id_rsa and .keys/rancher-api-token. Leave ssh_private_key
+# empty to use .keys/id_rsa. VM recovery: set in .keys/vm_recovery_password
+# or here (sensitive).
 
-# Path to SSH private key for VM access
-# The key should match the public key configured in your Proxmox user account
-ssh_private_key = "~/.ssh/id_rsa"
+# Path to SSH private key (leave empty to use .keys/id_rsa)
+ssh_private_key = ""
+
+# VM recovery password: use .keys/vm_recovery_password file, or set here.
+# Enables Proxmox VM Console (noVNC) login as ubuntu when SSH key is lost.
+# vm_recovery_password = ""
 
 # ============================================================================
 # DOWNSTREAM CLUSTER REGISTRATION

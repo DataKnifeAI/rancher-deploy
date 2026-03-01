@@ -73,6 +73,13 @@ variable "ssh_private_key" {
   type        = string
 }
 
+variable "vm_recovery_password" {
+  description = "Optional password for the ubuntu user (base-level admin recovery). If set, allows console login via Proxmox noVNC when SSH key is lost. Store in a secret manager; only applied at VM creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "gateway" {
   description = "Gateway IP"
   type        = string
@@ -237,8 +244,9 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
     user_account {
       username = "ubuntu"
-      # Add SSH public key for ansible/terraform provisioning
-      keys = [file("${var.ssh_private_key}.pub")]
+      keys     = [file("${var.ssh_private_key}.pub")]
+      # Recovery password: allows Proxmox console login (noVNC) when SSH key is lost
+      password = var.vm_recovery_password != "" ? var.vm_recovery_password : null
     }
 
     dns {

@@ -239,9 +239,9 @@ ${image_pull_secrets}
               path: /healthz
               port: 9808
             initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 10
-            failureThreshold: 5
+            timeoutSeconds: 5
+            periodSeconds: 15
+            failureThreshold: 10
         - name: csi-provisioner
           image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
           args:
@@ -411,9 +411,9 @@ ${image_pull_secrets}
               path: /healthz
               port: 9808
             initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 10
-            failureThreshold: 5
+            timeoutSeconds: 5
+            periodSeconds: 15
+            failureThreshold: 10
         - name: csi-node-driver-registrar
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
           args:

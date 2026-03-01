@@ -119,8 +119,16 @@ variable "install_rancher" {
 }
 
 variable "ssh_private_key" {
-  description = "Path to SSH private key for VM access"
+  description = "Path to SSH private key for VM access. Default: repo .keys/id_rsa (leave empty to use .keys). Do not use host ~/.ssh."
   type        = string
+  default     = ""
+}
+
+variable "vm_recovery_password" {
+  description = "Password for the ubuntu user on all VMs (base-level admin recovery). Enables Proxmox VM Console (noVNC) login as ubuntu when SSH key is lost. Store in a secret manager; only applied at VM creation. Empty = no console password."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 variable "rancher_api_token" {

@@ -1,0 +1,27 @@
+# One-time full backup of Rancher state to RustFS (S3-compatible).
+# Prerequisites:
+#   - Rancher Backup operator installed in cattle-resources-system (see docs/RANCHER_BACKUP.md).
+#   - Secret rancher-backup-rustfs-credentials in cattle-resources-system with accessKey and secretKey.
+#   - Bucket "rke2-backups" (or your bucket) created in RustFS at https://rustfs.dataknife.net:30293
+# Apply: kubectl apply -f docs/rancher-backup-rustfs-example.yaml
+# Check: kubectl get backups -n cattle-resources-system
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: rancher-state-backup-rustfs
+  namespace: cattle-resources-system
+spec:
+  resourceSetName: rancher-resource-set-full
+  storageLocation:
+    s3:
+      credentialSecretName: rancher-backup-rustfs-credentials
+      credentialSecretNamespace: cattle-resources-system
+      bucketName: rke2-backups
+      region: us-east-1
+            # Host:port only (no https://) — operator rejects fully qualified URLs
+      endpoint: rustfs.dataknife.net:30293
+      # Use if the endpoint uses a self-signed or untrusted TLS cert
+      insecureTLSSkipVerify: true
+  # Optional: recurring backup (uncomment and adjust)
+  # schedule: "@every 24h"
+  # retentionCount: 7

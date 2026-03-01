@@ -1,0 +1,16 @@
+# S3 bucket for Rancher Backup operator
+# Copy to terraform.tfvars and set bucket_name (must be globally unique).
+
+bucket_name = "my-company-rancher-backups"
+
+region = "us-east-1"
+
+# Expire old backup versions after 90 days (set to 0 to keep all versions)
+lifecycle_expire_days = 90
+
+# Server-side encryption (recommended)
+enable_encryption = true
+
+# tags = {
+#   Environment = "production"
+# }

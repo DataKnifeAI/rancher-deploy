@@ -19,6 +19,7 @@ Rancher-specific configuration and management:
 - **`test-rancher-api-token.sh`** - Test Rancher API token functionality
 - **`install-system-agent.sh`** - Install Rancher system-agent on downstream cluster nodes
 - **`check-agent-status.sh`** - Check cattle-cluster-agent status and troubleshoot DNS issues
+- **`update-ssh-keys-on-vms.sh`** - Add a new SSH public key to existing VMs using the current key (Terraform does not update keys on existing VMs)
 
 ### GitHub ARC (Actions Runner Controller) Scripts
 

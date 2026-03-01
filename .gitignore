@@ -40,6 +40,9 @@ example.tfvars
 terraform_deploy.log
 logs/
 
+# Access secrets (SSH keys, Rancher token, VM recovery password) - never commit
+.keys/
+
 # Generated Configuration (kubeconfigs, tokens)
 config/
 !config/.gitkeep

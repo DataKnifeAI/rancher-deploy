@@ -366,6 +366,30 @@ else
   fi
 fi
 
+# ============================================================================
+# RANCHER BACKUP OPERATOR (local cluster only - backs up Rancher state)
+# ============================================================================
+echo "Installing Rancher Backup operator..."
+helm repo add rancher-charts https://charts.rancher.io --force-update || true
+helm repo update
+kubectl create namespace cattle-resources-system 2>/dev/null || true
+helm upgrade --install rancher-backup-crd rancher-charts/rancher-backup-crd \
+  --namespace cattle-resources-system \
+  --wait \
+  --timeout 5m \
+  || { echo "WARNING: rancher-backup-crd install failed (chart may need version pin)"; }
+helm upgrade --install rancher-backup rancher-charts/rancher-backup \
+  --namespace cattle-resources-system \
+  --wait \
+  --timeout 5m \
+  || { echo "WARNING: rancher-backup install failed (chart may need version pin)"; }
+if helm list -n cattle-resources-system 2>/dev/null | grep -q rancher-backup; then
+  echo "✓ Rancher Backup operator installed in cattle-resources-system"
+else
+  echo "  Install manually if needed: see docs/RANCHER_BACKUP.md"
+fi
+echo ""
+
 echo "=========================================="
 echo "✓ Rancher Manager Deployment Complete!"
 echo "=========================================="

@@ -276,6 +276,57 @@ Permission denied (publickey).
    ssh -v -i ~/.ssh/id_rsa ubuntu@192.168.1.100
    ```
 
+### Updating SSH key on existing VMs
+
+**Why Terraform doesn't do it:** The Proxmox VM module sets `lifecycle { ignore_changes = [initialization, ...] }`, so cloud-init (including the SSH key) is only applied at first boot. Changing `ssh_private_key` in `terraform.tfvars` and running `terraform apply` will **not** update `authorized_keys` on existing VMs.
+
+**Ways to update:**
+
+1. **Using the current key (recommended)** – From your workstation, add the new public key to every VM using the key that still works:
+   ```bash
+   # Set these
+   CURRENT_KEY=~/.ssh/id_rsa
+   NEW_PUBKEY=~/.ssh/id_rsa_new.pub
+   SSH_USER=ubuntu
+
+   # Get IPs from Terraform (run from repo terraform/ dir) or list them
+   # terraform output -json | jq -r '...' or manually:
+   for ip in 192.168.14.100 192.168.14.101 192.168.14.102 192.168.14.110 192.168.14.111 192.168.14.112 192.168.14.120 192.168.14.121 192.168.14.122 192.168.14.130 192.168.14.131 192.168.14.132; do
+     ssh -i "$CURRENT_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$ip" "mkdir -p ~/.ssh && umask 077 && cat >> ~/.ssh/authorized_keys" < "$NEW_PUBKEY" && echo "OK $ip" || echo "FAIL $ip"
+   done
+   ```
+   Then update `ssh_private_key` in `terraform.tfvars` to the new key and use the new key for future SSH/Terraform.
+
+2. **Using the script** – From repo root:
+   ```bash
+   ./scripts/update-ssh-keys-on-vms.sh ~/.ssh/id_rsa ~/.ssh/id_rsa_new.pub ubuntu 192.168.14.100 192.168.14.101 ...
+   ```
+   See `scripts/update-ssh-keys-on-vms.sh` for usage.
+
+3. **No current key (e.g. key lost)** – Use **host recovery access** (see below).
+
+After all VMs have the new key, set `ssh_private_key` in `terraform.tfvars` to the path of the new private key so future Terraform runs and scripts use it.
+
+### Base-level admin and recovering access when SSH key is lost
+
+**Do we have a base-level admin account?**  
+Yes, if you set the optional **recovery password** in Terraform. The `ubuntu` user is the single OS account on each VM. You can give it a password (used only for recovery) so you can log in via console when the SSH key is lost.
+
+**How to recover access to a VM:**
+
+1. **Proxmox host access** – You always have a way to reach the *host*: the **Proxmox web UI** (and/or SSH to the Proxmox node). From there you can open the **VM console** (noVNC) for any VM. That is your recovery path into the guest.
+
+2. **If you set `vm_recovery_password`** (in `terraform.tfvars`, applied at VM creation):
+   - In Proxmox: select the VM → **Console** (noVNC).
+   - Log in as user **`ubuntu`** with the recovery password.
+   - Then fix SSH: e.g. append a new public key to `~/.ssh/authorized_keys`, or run `scripts/update-ssh-keys-on-vms.sh` from another host once one VM is reachable.
+
+3. **If you did *not* set a recovery password** (default):
+   - Console login as `ubuntu` with a password is not possible (no password was set).
+   - You can still use the Proxmox console to boot the VM into **recovery/single-user mode** (e.g. edit kernel cmdline or use recovery option in the boot loader), then add a new key to `ubuntu`’s `authorized_keys` or set a password from the root shell. This is OS-specific and more invasive; setting `vm_recovery_password` for new VMs is recommended.
+
+**Recommendation:** Set `vm_recovery_password` (and optionally `ssh_backup_public_key_path`) in `terraform.tfvars` for new deployments. Store the recovery password in a secret manager. For **existing** VMs, add the backup key with `scripts/update-ssh-keys-on-vms.sh`; to add a recovery password to an existing ubuntu user you must log in (e.g. with the backup key) and run `sudo passwd ubuntu`.
+
 ### Issue: Timeout connecting to SSH
 
 **Error:**
@@ -665,6 +716,19 @@ VMs → Select VM → Console
 # Monitor cloud-init and system startup
 ```
 
+## Rolling node replacement (replace inaccessible VMs one by one)
+
+To replace VMs you don’t have access to **one at a time** (new VM joins → state syncs → next node): use **drain → Terraform replace → wait for Ready**. See **[ROLLING_NODE_REPLACEMENT.md](ROLLING_NODE_REPLACEMENT.md)** for the procedure and `scripts/replace-node.sh <CLUSTER> <NODE_NAME>`.
+
+## Rebuilding Kubernetes VMs
+
+**Can we rebuild the K8s VMs without losing Rancher and downstream cluster data?**
+
+- **Without backups:** Rebuilding VMs (e.g. destroy + apply) **loses** Rancher state and all cluster (etcd) state. Only **data on TrueNAS-backed PVCs** can be preserved if you keep the TrueNAS datasets and reattach the same storage after recreating clusters.
+- **With backups:** Use RKE2 etcd snapshots and the Rancher Backup operator before rebuilding; then restore after the new VMs are up to recover Rancher and cluster state.
+
+See **[VM_REBUILD_AND_DATA.md](VM_REBUILD_AND_DATA.md)** for where data lives, what survives a rebuild, and how to plan backup/restore.
+
 ## Destroy Issues
 
 ### Issue: `terraform destroy` fails with RBD permission error
@@ -852,6 +916,36 @@ The old system-agent-install.sh script relies on the `/v3/connect/agent` endpoin
 - The `system_agent_install` module in `terraform/modules/` is **deprecated**
 - Use `rancher_downstream_registration` module instead
 - Old module kept for reference only, disabled by default
+
+## TrueNAS CSI errors
+
+### Issue: Liveness probe failed with statuscode: 500
+
+**Symptom:** Events show `Liveness probe failed: HTTP probe failed with statuscode: 500` for `truenas-csi-controller-*` and `truenas-csi-node-*` pods. Pods may restart frequently (high RESTARTS count).
+
+**Root cause:** The CSI driver’s health HTTP server (port 9808, `/healthz`) returns 500 to the Kubernetes liveness probe. The driver’s gRPC `Identity/Probe` and TrueNAS connectivity can still be OK (e.g. controller logs show “TrueNAS ping successful”), so provisioning and mount often work. The 500 can be transient (TrueNAS API slow/unreachable) or a driver healthz quirk.
+
+**Remediation:**
+
+1. **Relax the liveness probe** so transient 500s don’t restart pods. In `terraform/templates/truenas-csi-driver.yaml.tpl`, for both the controller and node `livenessProbe` blocks, increase `failureThreshold` (e.g. from 5 to 10) and optionally `periodSeconds` (e.g. from 10 to 15). Re-apply the CSI manifest (e.g. re-run Terraform or `kubectl apply`).
+2. **Verify TrueNAS API** is stable and reachable from all cluster nodes (firewall, DNS).
+3. **Upgrade the TrueNAS CSI driver** if a newer release fixes healthz behavior.
+
+**Impact:** Volume attach/mount can still succeed; the main effect is unnecessary pod restarts.
+
+### Issue: MountVolume.SetUp failed – applyFSGroup permission denied
+
+**Symptom:** Pod events show `MountVolume.SetUp failed for volume "pvc-..." : applyFSGroup failed for vol .../pvc-...: ... permission denied` (often on a path like `.cursor-server/extensions` or another directory under the mount).
+
+**Root cause:** The pod has `securityContext.fsGroup` set. The kubelet tries to `chown` the mounted volume (or subdirectories) to that group. NFS-backed volumes (TrueNAS CSI with NFS export) often do not support that operation, so `chown` returns permission denied and the mount is reported as failed.
+
+**Remediation:**
+
+1. **Remove or avoid fsGroup** for the workload (e.g. Coder workspace pod spec). Use the same UID the NFS export is owned by, or rely on `supplementalGroups` only if needed.
+2. **Match NFS export ownership:** On TrueNAS, set the export (or dataset) to the UID/GID the container runs as so no ownership change is needed.
+3. **Use a storage class that supports FSGroup** (e.g. RWO block) for that PVC if you must keep fsGroup.
+
+See also: [CLUSTER_REVIEW.md](CLUSTER_REVIEW.md) § TrueNAS CSI errors.
 
 ## Still Having Issues?
 
@@ -1168,6 +1262,10 @@ node:
 This ensures CSI node pods can run on server nodes to handle volume mounts for pods scheduled there.
 
 ## Related Documentation
+
+- [ROLLING_NODE_REPLACEMENT.md](ROLLING_NODE_REPLACEMENT.md) — Replace inaccessible VMs one by one (drain, replace, sync)
+- [VM_REBUILD_AND_DATA.md](VM_REBUILD_AND_DATA.md) — Rebuilding K8s VMs and what data is preserved or lost
+- [RANCHER_BACKUP.md](RANCHER_BACKUP.md) — Rancher Backup operator install and backup Rancher state
 
 - [DNS_CONFIGURATION.md](DNS_CONFIGURATION.md) - Complete DNS configuration and troubleshooting
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough

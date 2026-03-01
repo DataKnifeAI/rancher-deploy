@@ -100,7 +100,7 @@ terraform apply -auto-approve
 2. Cloud-init configures networking with proper DNS
 3. RKE2 installed on all manager nodes (5-10 min)
 4. Rancher deployed via Helm on manager cluster
-5. **Rancher API token auto-created** and saved to `config/.rancher-api-token`
+5. **Rancher API token auto-created** and saved to `.keys/rancher-api-token`
 6. **Terraform uses API token** to register cluster object in Rancher
 7. RKE2 installed on all apps nodes (5-10 min)
 8. Rancher system-agent auto-registers all apps nodes
@@ -133,7 +133,7 @@ The downstream cluster registration uses the **Rancher REST API** directly:
 
 # 1. Read API token from file
 locals {
-  rancher_api_token = file("${path.module}/../config/.rancher-api-token")
+  rancher_api_token = file("${path.module}/../.keys/rancher-api-token")
 }
 
 # 2. Register cluster via API call
@@ -164,7 +164,7 @@ terraform apply
     ↓
 1. deploy-rancher.sh creates API token from local Rancher instance
     ↓
-2. Token saved to: config/.rancher-api-token (persistent)
+2. Token saved to: .keys/rancher-api-token (persistent)
     ↓
 3. null_resource provisioner reads token from file
     ↓
@@ -246,13 +246,13 @@ The API token is automatically created during Rancher deployment:
 
 ```bash
 # The deploy-rancher.sh script automatically creates and saves the token
-ls -la config/.rancher-api-token
+ls -la .keys/rancher-api-token
 
 # If missing, manually create:
 ./scripts/create-rancher-api-token.sh
 ```
 
-**Token file location**: `config/.rancher-api-token` (persisted)
+**Token file location**: `.keys/rancher-api-token` (persisted)
 
 ### Step 2: Enable Downstream Registration
 
@@ -306,7 +306,7 @@ This enables:
 ```bash
 # Automatically created during Rancher deployment
 ./scripts/apply.sh
-# Creates: config/.rancher-api-token (persistent)
+# Creates: .keys/rancher-api-token (persistent)
 ```
 
 **Manual Creation** (If needed):
@@ -327,7 +327,7 @@ This enables:
 1. **deploy-rancher.sh** - Creates API token
    - Authenticates with local Rancher API
    - Creates persistent API token
-   - Saves to `config/.rancher-api-token`
+   - Saves to `.keys/rancher-api-token`
 
 2. **null_resource.register_nprd_cluster** - Registers cluster
    - Reads API token from file
@@ -373,7 +373,7 @@ terraform apply
 │  └─ Deploy Rancher via Helm
 │
 ├─ API Cluster Registration (1 min)
-│  ├─ Read API token from config/.rancher-api-token
+│  ├─ Read API token from .keys/rancher-api-token
 │  ├─ Call Rancher API to create cluster object
 │  ├─ Receive registration URL from API
 │  └─ Make registration credentials available
@@ -437,7 +437,7 @@ kubectl get pods -n kube-system | grep system-agent
 
 1. **API token file is missing**
    ```bash
-   ls -la config/.rancher-api-token
+   ls -la .keys/rancher-api-token
    # If missing, create it:
    ./scripts/create-rancher-api-token.sh
    ```
@@ -501,7 +501,7 @@ kubectl get pods -n kube-system | grep system-agent
    # This happens automatically in terraform
    # But if you need to do it manually:
    curl -X POST https://rancher.example.com/v3/cluster/c-xxxxx/token \
-     -H "Authorization: Bearer $(cat config/.rancher-api-token)" \
+     -H "Authorization: Bearer $(cat .keys/rancher-api-token)" \
      -H "Content-Type: application/json"
    ```
 
@@ -555,7 +555,7 @@ kubectl get pods -n kube-system | grep system-agent
 
 1. **Verify token file exists and is readable**:
    ```bash
-   cat config/.rancher-api-token
+   cat .keys/rancher-api-token
    # Should show: token-xxxxx:yyyyy
    ```
 
@@ -567,7 +567,7 @@ kubectl get pods -n kube-system | grep system-agent
 
 3. **Recreate token**:
    ```bash
-   rm -f config/.rancher-api-token
+   rm -f .keys/rancher-api-token
    ./scripts/create-rancher-api-token.sh
    # Or let Terraform create it:
    terraform apply -auto-approve
@@ -581,7 +581,7 @@ To check cluster registration status from CLI:
 
 ```bash
 # Using Rancher API token
-TOKEN=$(cat config/.rancher-api-token)
+TOKEN=$(cat .keys/rancher-api-token)
 
 # List all clusters
 curl -k -H "Authorization: Bearer $TOKEN" \

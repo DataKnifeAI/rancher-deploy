@@ -1,4 +1,4 @@
-.PHONY: help init plan apply destroy destroy-quick validate fmt clean check-prereqs check-rancher-tools install-kubectl-tools
+.PHONY: help init init-keys plan apply destroy destroy-quick validate fmt clean check-prereqs check-rancher-tools install-kubectl-tools replace-node
 
 # Terraform directory
 TF_DIR := terraform
@@ -9,6 +9,7 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  check-prereqs        - Check for required tools (terraform, curl, ssh, jq)"
+	@echo "  init-keys            - Create .keys/ and SSH key for access/management (do not use host ~/.ssh)"
 	@echo "  check-rancher-tools  - Check for Rancher deployment tools (helm, kubectl)"
 	@echo "  install-kubectl-tools - Install optional kubectx and kubens plugins"
 	@echo ""
@@ -21,13 +22,15 @@ help:
 	@echo "  validate             - Validate Terraform configuration"
 	@echo "  fmt                  - Format Terraform files"
 	@echo "  clean                - Remove Terraform cache and state"
+	@echo "  replace-node         - Replace one VM (drain, replace, sync). Use: make replace-node CLUSTER=manager NODE=rancher-manager-2"
 	@echo "  help                 - Show this help message"
 	@echo ""
 	@echo "Usage:"
 	@echo "  1. make check-prereqs    - Verify tools are installed"
-	@echo "  2. make init             - Initialize Terraform"
-	@echo "  3. make plan             - Preview changes"
-	@echo "  4. make apply            - Deploy infrastructure"
+	@echo "  2. make init-keys        - Create .keys/ and SSH key (then add .keys/rancher-api-token)"
+	@echo "  3. make init             - Initialize Terraform"
+	@echo "  4. make plan             - Preview changes"
+	@echo "  5. make apply            - Deploy infrastructure"
 
 check-prereqs:
 	@echo "Checking prerequisites..."
@@ -57,6 +60,18 @@ check-prereqs:
 	fi; \
 	echo ""; \
 	echo "✓ All required tools found"
+
+init-keys:
+	@./scripts/setup-keys.sh
+
+# Replace one node VM (inaccessible node). Cluster: manager | nprd-apps | prd-apps | poc-apps. Node: e.g. rancher-manager-2, nprd-apps-worker-1
+replace-node:
+	@if [ -z "$(CLUSTER)" ] || [ -z "$(NODE)" ]; then \
+	  echo "Usage: make replace-node CLUSTER=<manager|nprd-apps|prd-apps|poc-apps> NODE=<node-name>"; \
+	  echo "Example: make replace-node CLUSTER=manager NODE=rancher-manager-2"; \
+	  exit 1; \
+	fi; \
+	./scripts/replace-node.sh "$(CLUSTER)" "$(NODE)"
 
 check-rancher-tools:
 	@echo "Checking Rancher deployment tools..."

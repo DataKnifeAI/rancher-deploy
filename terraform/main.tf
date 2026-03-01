@@ -21,6 +21,17 @@ resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
 }
 
 # ============================================================================
+# ACCESS SECRETS (.keys/ at repo root - git-ignored, do not use host ~/.ssh)
+# ============================================================================
+
+locals {
+  keys_dir                     = "${path.root}/../.keys"
+  ssh_private_key_effective    = var.ssh_private_key != "" ? var.ssh_private_key : abspath("${local.keys_dir}/id_rsa")
+  rancher_token_file           = abspath("${local.keys_dir}/rancher-api-token")
+  vm_recovery_password_effective = trimspace(try(file(abspath("${local.keys_dir}/vm_recovery_password")), var.vm_recovery_password))
+}
+
+# ============================================================================
 # LOCAL VALUES FOR CLUSTER CONFIGURATION
 # ============================================================================
 
@@ -64,7 +75,8 @@ module "rancher_manager_primary" {
   domain      = var.clusters["manager"].domain
   vlan_id     = var.clusters["manager"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - primary server (standalone, generates token)
   rke2_enabled       = true
@@ -94,7 +106,7 @@ locals {
 
 resource "null_resource" "fetch_manager_token" {
   provisioner "local-exec" {
-    command = "bash ${path.module}/fetch-token.sh ${var.ssh_private_key} ${local.manager_primary_ip} ${local.manager_token_file}"
+    command = "bash ${path.module}/fetch-token.sh ${local.ssh_private_key_effective} ${local.manager_primary_ip} ${local.manager_token_file}"
   }
 
   # Clean up token file on destroy
@@ -156,7 +168,8 @@ module "rancher_manager_additional" {
   domain      = var.clusters["manager"].domain
   vlan_id     = var.clusters["manager"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - secondary servers (join primary's cluster)
   rke2_enabled       = true
@@ -190,7 +203,7 @@ module "rke2_manager" {
     [split("/", module.rancher_manager_primary.ip_address)[0]],
     [for node in module.rancher_manager_additional : split("/", node.ip_address)[0]]
   )
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   dns_servers          = join(" ", var.clusters["manager"].dns_servers)
 
@@ -212,7 +225,7 @@ locals {
 
 resource "null_resource" "fetch_nprd_apps_token" {
   provisioner "local-exec" {
-    command = "bash ${path.module}/fetch-token.sh ${var.ssh_private_key} ${local.nprd_apps_primary_ip} ${local.nprd_apps_token_file}"
+    command = "bash ${path.module}/fetch-token.sh ${local.ssh_private_key_effective} ${local.nprd_apps_primary_ip} ${local.nprd_apps_token_file}"
   }
 
   depends_on = [
@@ -256,7 +269,8 @@ module "nprd_apps_primary" {
   domain      = var.clusters["nprd-apps"].domain
   vlan_id     = var.clusters["nprd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - apps primary server
   rke2_enabled       = true
@@ -321,7 +335,8 @@ module "nprd_apps_additional" {
   domain      = var.clusters["nprd-apps"].domain
   vlan_id     = var.clusters["nprd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - apps secondary servers
   rke2_enabled       = true
@@ -388,7 +403,8 @@ module "nprd_apps_workers" {
   domain      = var.clusters["nprd-apps"].domain
   vlan_id     = var.clusters["nprd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
@@ -449,14 +465,8 @@ resource "null_resource" "cleanup_tokens_on_destroy" {
     when       = destroy
     on_failure = continue
     command    = <<-EOT
-      CONFIG_DIR="${path.root}/../config"
       echo "Cleaning up generated Rancher tokens and configs..."
-      
-      # Remove Rancher API token
-      if [ -f "$${CONFIG_DIR}/.rancher-api-token" ]; then
-        rm -f "$${CONFIG_DIR}/.rancher-api-token"
-        echo "  ✓ Removed: $${CONFIG_DIR}/.rancher-api-token"
-      fi
+      # Note: .keys/rancher-api-token is user-managed; not removed on destroy.
       
       # Note: Kubeconfig cleanup is handled by merge_kubeconfigs destroy provisioner
       # Individual files and merged config entries are cleaned up there
@@ -505,7 +515,7 @@ module "rke2_nprd_apps" {
       for node in module.nprd_apps_workers : split("/", node.ip_address)[0]
     ] : []
   )
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   dns_servers          = join(" ", var.clusters["nprd-apps"].dns_servers)
 
@@ -529,7 +539,7 @@ locals {
 
 resource "null_resource" "fetch_prd_apps_token" {
   provisioner "local-exec" {
-    command = "bash ${path.module}/fetch-token.sh ${var.ssh_private_key} ${local.prd_apps_primary_ip} ${local.prd_apps_token_file}"
+    command = "bash ${path.module}/fetch-token.sh ${local.ssh_private_key_effective} ${local.prd_apps_primary_ip} ${local.prd_apps_token_file}"
   }
 
   depends_on = [
@@ -573,7 +583,8 @@ module "prd_apps_primary" {
   domain      = var.clusters["prd-apps"].domain
   vlan_id     = var.clusters["prd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - prd-apps primary server
   rke2_enabled       = true
@@ -638,7 +649,8 @@ module "prd_apps_additional" {
   domain      = var.clusters["prd-apps"].domain
   vlan_id     = var.clusters["prd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - prd-apps secondary servers
   rke2_enabled       = true
@@ -705,7 +717,8 @@ module "prd_apps_workers" {
   domain      = var.clusters["prd-apps"].domain
   vlan_id     = var.clusters["prd-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
@@ -752,7 +765,7 @@ module "rke2_prd_apps" {
       for node in module.prd_apps_workers : split("/", node.ip_address)[0]
     ] : []
   )
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   dns_servers          = join(" ", var.clusters["prd-apps"].dns_servers)
 
@@ -776,7 +789,7 @@ locals {
 
 resource "null_resource" "fetch_poc_apps_token" {
   provisioner "local-exec" {
-    command = "bash ${path.module}/fetch-token.sh ${var.ssh_private_key} ${local.poc_apps_primary_ip} ${local.poc_apps_token_file}"
+    command = "bash ${path.module}/fetch-token.sh ${local.ssh_private_key_effective} ${local.poc_apps_primary_ip} ${local.poc_apps_token_file}"
   }
 
   depends_on = [
@@ -820,7 +833,8 @@ module "poc_apps_primary" {
   domain      = var.clusters["poc-apps"].domain
   vlan_id     = var.clusters["poc-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - poc-apps primary server
   rke2_enabled       = true
@@ -885,7 +899,8 @@ module "poc_apps_additional" {
   domain      = var.clusters["poc-apps"].domain
   vlan_id     = var.clusters["poc-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - poc-apps secondary servers
   rke2_enabled       = true
@@ -952,7 +967,8 @@ module "poc_apps_workers" {
   domain      = var.clusters["poc-apps"].domain
   vlan_id     = var.clusters["poc-apps"].vlan_id
 
-  ssh_private_key = var.ssh_private_key
+  ssh_private_key      = local.ssh_private_key_effective
+  vm_recovery_password = local.vm_recovery_password_effective
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
@@ -999,7 +1015,7 @@ module "rke2_poc_apps" {
       for node in module.poc_apps_workers : split("/", node.ip_address)[0]
     ] : []
   )
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   dns_servers          = join(" ", var.clusters["poc-apps"].dns_servers)
 
@@ -1169,10 +1185,10 @@ resource "null_resource" "create_nprd_apps_cluster" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating nprd-apps cluster object in Rancher..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1213,10 +1229,10 @@ resource "null_resource" "create_prd_apps_cluster" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating prd-apps cluster object in Rancher..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1257,10 +1273,10 @@ resource "null_resource" "create_poc_apps_cluster" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Creating poc-apps cluster object in Rancher..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1312,10 +1328,10 @@ resource "null_resource" "fetch_nprd_apps_cluster_id" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching nprd-apps cluster ID from Rancher API..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1357,10 +1373,10 @@ resource "null_resource" "fetch_prd_apps_cluster_id" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching prd-apps cluster ID from Rancher API..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1402,10 +1418,10 @@ resource "null_resource" "fetch_poc_apps_cluster_id" {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] Fetching poc-apps cluster ID from Rancher API..."
       
       # Read API token from file
-      API_TOKEN=$(cat "${path.root}/../config/.rancher-api-token")
+      API_TOKEN=$(cat "${local.rancher_token_file}")
       
       if [ -z "$${API_TOKEN}" ]; then
-        echo "ERROR: API token file not found at ${path.root}/../config/.rancher-api-token"
+        echo "ERROR: API token file not found at ${local.rancher_token_file}"
         exit 1
       fi
       
@@ -1476,9 +1492,9 @@ module "rancher_downstream_registration_nprd_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = local.rancher_token_file
   cluster_id           = trimspace(data.local_file.nprd_apps_cluster_id[0].content)
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   kubeconfig_path      = "~/.kube/nprd-apps.yaml"
 
@@ -1508,9 +1524,9 @@ module "rancher_downstream_registration_prd_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = local.rancher_token_file
   cluster_id           = trimspace(data.local_file.prd_apps_cluster_id[0].content)
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   kubeconfig_path      = "~/.kube/prd-apps.yaml"
 
@@ -1540,9 +1556,9 @@ module "rancher_downstream_registration_poc_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = local.rancher_token_file
   cluster_id           = trimspace(data.local_file.poc_apps_cluster_id[0].content)
-  ssh_private_key_path = var.ssh_private_key
+  ssh_private_key_path = local.ssh_private_key_effective
   ssh_user             = "ubuntu"
   kubeconfig_path      = "~/.kube/poc-apps.yaml"
 
@@ -1589,10 +1605,10 @@ module "rancher_downstream_registration_poc_apps" {
 #   source = "./modules/system_agent_install"
 #   
 #   rancher_url            = "https://${var.rancher_hostname}"
-#   rancher_token_file     = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+#   rancher_token_file     = local.rancher_token_file
 #   cluster_id             = "c-7c2vb"
 #   install_script_path    = "${path.module}/../scripts/install-system-agent.sh"
-#   ssh_private_key_path   = var.ssh_private_key
+#   ssh_private_key_path   = local.ssh_private_key_effective
 #   ssh_user               = "ubuntu"
 #   
 #   cluster_nodes = {
