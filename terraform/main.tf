@@ -50,6 +50,30 @@ locals {
   apps_rke2_node_labels = local.truenas_csi_pool != "" ? [
     "topology.truenas.io/pool=${local.truenas_csi_pool}"
   ] : []
+
+  # Primary workers use IPs/VM IDs immediately after control-plane nodes; large workers follow primary workers.
+  # large_worker_count defaults to 0 (opt-in).
+  cluster_worker_slot_offset = { for k, c in var.clusters : k => c.node_count }
+
+  cluster_large_worker_count = {
+    for k, c in var.clusters : k => k == "manager" ? 0 : coalesce(c.large_worker_count, 0)
+  }
+
+  cluster_large_worker_slot_offset = {
+    for k, c in var.clusters : k => local.cluster_worker_slot_offset[k] + c.worker_count
+  }
+
+  cluster_large_worker_cpu = {
+    for k, c in var.clusters : k => k == "manager" ? 0 : coalesce(c.large_worker_cpu_cores, 8)
+  }
+
+  cluster_large_worker_memory_mb = {
+    for k, c in var.clusters : k => k == "manager" ? 0 : coalesce(c.large_worker_memory_mb, 32768)
+  }
+
+  cluster_large_worker_disk_gb = {
+    for k, c in var.clusters : k => k == "manager" ? 0 : coalesce(c.large_worker_disk_size_gb, 100)
+  }
 }
 
 # ============================================================================
@@ -387,10 +411,10 @@ module "nprd_apps_workers" {
   for_each = var.clusters["nprd-apps"].worker_count > 0 ? {
     for i in range(1, var.clusters["nprd-apps"].worker_count + 1) :
     "nprd-apps-worker-${i}" => {
-      vm_id      = var.vm_id_start_nprd_apps + var.clusters["nprd-apps"].node_count + i - 1
+      vm_id      = var.vm_id_start_nprd_apps + local.cluster_worker_slot_offset["nprd-apps"] + i - 1
       hostname   = "nprd-apps-worker-${i}"
-      ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + var.clusters["nprd-apps"].node_count + i - 1}/24"
-      node_index = var.clusters["nprd-apps"].node_count + i - 1
+      ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_worker_slot_offset["nprd-apps"] + i - 1}/24"
+      node_index = local.cluster_worker_slot_offset["nprd-apps"] + i - 1
       # All VMs deploy on pve1
       proxmox_node = var.proxmox_node
     }
@@ -442,6 +466,73 @@ module "nprd_apps_workers" {
   depends_on = [
     module.nprd_apps_primary,
     module.nprd_apps_additional, # CRITICAL: Workers must wait for all control nodes to be ready
+    data.local_file.nprd_apps_token
+  ]
+}
+
+# ============================================================================
+# NPRD APPS CLUSTER - LARGE WORKER NODES (RKE2 Agent Mode)
+# Separate opt-in pool from primary workers; defaults 0 nodes (sizing 8 vCPU / 32 GiB / 100 GB when enabled)
+# ============================================================================
+
+module "nprd_apps_large_workers" {
+  source = "./modules/proxmox_vm"
+
+  for_each = local.cluster_large_worker_count["nprd-apps"] > 0 ? {
+    for i in range(1, local.cluster_large_worker_count["nprd-apps"] + 1) :
+    "nprd-apps-large-worker-${i}" => {
+      vm_id      = var.vm_id_start_nprd_apps + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
+      hostname   = "nprd-apps-large-worker-${i}"
+      ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1}/24"
+      node_index = local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
+      proxmox_node = var.proxmox_node
+    }
+  } : {}
+
+  vm_name               = each.value.hostname
+  vm_id                 = each.value.vm_id
+  proxmox_node          = each.value.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].file_name
+  datastore_id          = var.clusters["nprd-apps"].storage
+
+  cpu_cores    = local.cluster_large_worker_cpu["nprd-apps"]
+  cpu_type     = var.vm_cpu_type
+  memory_mb    = local.cluster_large_worker_memory_mb["nprd-apps"]
+  disk_size_gb = local.cluster_large_worker_disk_gb["nprd-apps"]
+
+  hostname    = each.value.hostname
+  ip_address  = each.value.ip_address
+  gateway     = var.clusters["nprd-apps"].gateway
+  dns_servers = var.clusters["nprd-apps"].dns_servers
+  domain      = var.clusters["nprd-apps"].domain
+  vlan_id     = var.clusters["nprd-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  rke2_enabled       = true
+  rke2_version       = var.rke2_version
+  is_rke2_server     = false
+  rke2_is_primary    = false
+  rke2_server_token  = try(trimspace(data.local_file.nprd_apps_token[0].content), "")
+  rke2_server_ip     = local.nprd_apps_primary_ip
+  cluster_hostname   = var.nprd_apps_cluster_hostname
+  cluster_primary_ip = var.nprd_apps_cluster_primary_ip
+  cluster_aliases    = var.nprd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
+
+  register_with_rancher      = true
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip
+  rancher_registration_token = ""
+  rancher_ca_checksum        = ""
+
+  depends_on = [
+    module.nprd_apps_primary,
+    module.nprd_apps_additional,
+    module.nprd_apps_workers,
     data.local_file.nprd_apps_token
   ]
 }
@@ -534,6 +625,9 @@ module "rke2_nprd_apps" {
     # Worker nodes (if any)
     var.clusters["nprd-apps"].worker_count > 0 ? [
       for node in module.nprd_apps_workers : split("/", node.ip_address)[0]
+    ] : [],
+    local.cluster_large_worker_count["nprd-apps"] > 0 ? [
+      for node in module.nprd_apps_large_workers : split("/", node.ip_address)[0]
     ] : []
   )
   ssh_private_key_path = var.ssh_private_key
@@ -544,6 +638,7 @@ module "rke2_nprd_apps" {
     module.nprd_apps_primary,
     module.nprd_apps_additional,
     module.nprd_apps_workers, # Always include (empty if worker_count = 0)
+    module.nprd_apps_large_workers,
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
 }
@@ -713,10 +808,10 @@ module "prd_apps_workers" {
   for_each = var.clusters["prd-apps"].worker_count > 0 ? {
     for i in range(1, var.clusters["prd-apps"].worker_count + 1) :
     "prd-apps-worker-${i}" => {
-      vm_id      = var.vm_id_start_prd_apps + var.clusters["prd-apps"].node_count + i - 1
+      vm_id      = var.vm_id_start_prd_apps + local.cluster_worker_slot_offset["prd-apps"] + i - 1
       hostname   = "prd-apps-worker-${i}"
-      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + var.clusters["prd-apps"].node_count + i - 1}/24"
-      node_index = var.clusters["prd-apps"].node_count + i - 1
+      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_worker_slot_offset["prd-apps"] + i - 1}/24"
+      node_index = local.cluster_worker_slot_offset["prd-apps"] + i - 1
       # All VMs deploy on pve1
       proxmox_node = var.proxmox_node
     }
@@ -773,6 +868,72 @@ module "prd_apps_workers" {
 }
 
 # ============================================================================
+# PRD APPS CLUSTER - LARGE WORKER NODES (RKE2 Agent Mode)
+# ============================================================================
+
+module "prd_apps_large_workers" {
+  source = "./modules/proxmox_vm"
+
+  for_each = local.cluster_large_worker_count["prd-apps"] > 0 ? {
+    for i in range(1, local.cluster_large_worker_count["prd-apps"] + 1) :
+    "prd-apps-large-worker-${i}" => {
+      vm_id      = var.vm_id_start_prd_apps + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
+      hostname   = "prd-apps-large-worker-${i}"
+      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1}/24"
+      node_index = local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
+      proxmox_node = var.proxmox_node
+    }
+  } : {}
+
+  vm_name               = each.value.hostname
+  vm_id                 = each.value.vm_id
+  proxmox_node          = each.value.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].file_name
+  datastore_id          = var.clusters["prd-apps"].storage
+
+  cpu_cores    = local.cluster_large_worker_cpu["prd-apps"]
+  cpu_type     = var.vm_cpu_type
+  memory_mb    = local.cluster_large_worker_memory_mb["prd-apps"]
+  disk_size_gb = local.cluster_large_worker_disk_gb["prd-apps"]
+
+  hostname    = each.value.hostname
+  ip_address  = each.value.ip_address
+  gateway     = var.clusters["prd-apps"].gateway
+  dns_servers = var.clusters["prd-apps"].dns_servers
+  domain      = var.clusters["prd-apps"].domain
+  vlan_id     = var.clusters["prd-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  rke2_enabled       = true
+  rke2_version       = var.rke2_version
+  is_rke2_server     = false
+  rke2_is_primary    = false
+  rke2_server_token  = try(trimspace(data.local_file.prd_apps_token[0].content), "")
+  rke2_server_ip     = local.prd_apps_primary_ip
+  cluster_hostname   = var.prd_apps_cluster_hostname
+  cluster_primary_ip = var.prd_apps_cluster_primary_ip
+  cluster_aliases    = var.prd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
+
+  register_with_rancher      = true
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip
+  rancher_registration_token = ""
+  rancher_ca_checksum        = ""
+
+  depends_on = [
+    module.prd_apps_primary,
+    module.prd_apps_additional,
+    module.prd_apps_workers,
+    data.local_file.prd_apps_token
+  ]
+}
+
+# ============================================================================
 # PRD APPS CLUSTER - VERIFICATION
 # Waits for all prd-apps nodes to be ready
 # Only starts after Rancher is deployed on manager cluster
@@ -790,6 +951,9 @@ module "rke2_prd_apps" {
     # Worker nodes (if any)
     var.clusters["prd-apps"].worker_count > 0 ? [
       for node in module.prd_apps_workers : split("/", node.ip_address)[0]
+    ] : [],
+    local.cluster_large_worker_count["prd-apps"] > 0 ? [
+      for node in module.prd_apps_large_workers : split("/", node.ip_address)[0]
     ] : []
   )
   ssh_private_key_path = var.ssh_private_key
@@ -800,6 +964,7 @@ module "rke2_prd_apps" {
     module.prd_apps_primary,
     module.prd_apps_additional,
     module.prd_apps_workers,  # Always include (empty if worker_count = 0)
+    module.prd_apps_large_workers,
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
 }
@@ -969,10 +1134,10 @@ module "poc_apps_workers" {
   for_each = var.clusters["poc-apps"].worker_count > 0 ? {
     for i in range(1, var.clusters["poc-apps"].worker_count + 1) :
     "poc-apps-worker-${i}" => {
-      vm_id      = var.vm_id_start_poc_apps + var.clusters["poc-apps"].node_count + i - 1
+      vm_id      = var.vm_id_start_poc_apps + local.cluster_worker_slot_offset["poc-apps"] + i - 1
       hostname   = "poc-apps-worker-${i}"
-      ip_address = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + var.clusters["poc-apps"].node_count + i - 1}/24"
-      node_index = var.clusters["poc-apps"].node_count + i - 1
+      ip_address = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_worker_slot_offset["poc-apps"] + i - 1}/24"
+      node_index = local.cluster_worker_slot_offset["poc-apps"] + i - 1
       # All VMs deploy on pve1
       proxmox_node = var.proxmox_node
     }
@@ -1029,6 +1194,72 @@ module "poc_apps_workers" {
 }
 
 # ============================================================================
+# POC APPS CLUSTER - LARGE WORKER NODES (RKE2 Agent Mode)
+# ============================================================================
+
+module "poc_apps_large_workers" {
+  source = "./modules/proxmox_vm"
+
+  for_each = local.cluster_large_worker_count["poc-apps"] > 0 ? {
+    for i in range(1, local.cluster_large_worker_count["poc-apps"] + 1) :
+    "poc-apps-large-worker-${i}" => {
+      vm_id      = var.vm_id_start_poc_apps + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
+      hostname   = "poc-apps-large-worker-${i}"
+      ip_address = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1}/24"
+      node_index = local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
+      proxmox_node = var.proxmox_node
+    }
+  } : {}
+
+  vm_name               = each.value.hostname
+  vm_id                 = each.value.vm_id
+  proxmox_node          = each.value.proxmox_node
+  cloud_image_datastore = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].datastore_id
+  cloud_image_file_name = proxmox_virtual_environment_download_file.ubuntu_cloud_image[each.value.proxmox_node].file_name
+  datastore_id          = var.clusters["poc-apps"].storage
+
+  cpu_cores    = local.cluster_large_worker_cpu["poc-apps"]
+  cpu_type     = var.vm_cpu_type
+  memory_mb    = local.cluster_large_worker_memory_mb["poc-apps"]
+  disk_size_gb = local.cluster_large_worker_disk_gb["poc-apps"]
+
+  hostname    = each.value.hostname
+  ip_address  = each.value.ip_address
+  gateway     = var.clusters["poc-apps"].gateway
+  dns_servers = var.clusters["poc-apps"].dns_servers
+  domain      = var.clusters["poc-apps"].domain
+  vlan_id     = var.clusters["poc-apps"].vlan_id
+
+  ssh_private_key = var.ssh_private_key
+
+  rke2_enabled       = true
+  rke2_version       = var.rke2_version
+  is_rke2_server     = false
+  rke2_is_primary    = false
+  rke2_server_token  = try(trimspace(data.local_file.poc_apps_token[0].content), "")
+  rke2_server_ip     = local.poc_apps_primary_ip
+  cluster_hostname   = var.poc_apps_cluster_hostname
+  cluster_primary_ip = var.poc_apps_cluster_primary_ip
+  cluster_aliases    = var.poc_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
+
+  register_with_rancher      = true
+  rancher_hostname           = var.rancher_hostname
+  rancher_ingress_ip         = var.rancher_manager_ip
+  rancher_registration_token = ""
+  rancher_ca_checksum        = ""
+
+  depends_on = [
+    module.poc_apps_primary,
+    module.poc_apps_additional,
+    module.poc_apps_workers,
+    data.local_file.poc_apps_token
+  ]
+}
+
+# ============================================================================
 # POC APPS CLUSTER - VERIFICATION
 # Waits for all poc-apps nodes to be ready
 # Only starts after Rancher is deployed on manager cluster
@@ -1046,6 +1277,9 @@ module "rke2_poc_apps" {
     # Worker nodes (if any)
     var.clusters["poc-apps"].worker_count > 0 ? [
       for node in module.poc_apps_workers : split("/", node.ip_address)[0]
+    ] : [],
+    local.cluster_large_worker_count["poc-apps"] > 0 ? [
+      for node in module.poc_apps_large_workers : split("/", node.ip_address)[0]
     ] : []
   )
   ssh_private_key_path = var.ssh_private_key
@@ -1056,6 +1290,7 @@ module "rke2_poc_apps" {
     module.poc_apps_primary,
     module.poc_apps_additional,
     module.poc_apps_workers,  # Always include (empty if worker_count = 0)
+    module.poc_apps_large_workers,
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
 }
@@ -1177,12 +1412,15 @@ locals {
     [split("/", module.poc_apps_primary.ip_address)[0]],
     [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
+    [for n in module.poc_apps_large_workers : split("/", n.ip_address)[0]],
     [split("/", module.nprd_apps_primary.ip_address)[0]],
     [for n in module.nprd_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.nprd_apps_workers : split("/", n.ip_address)[0]],
+    [for n in module.nprd_apps_large_workers : split("/", n.ip_address)[0]],
     [split("/", module.prd_apps_primary.ip_address)[0]],
     [for n in module.prd_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.prd_apps_workers : split("/", n.ip_address)[0]],
+    [for n in module.prd_apps_large_workers : split("/", n.ip_address)[0]],
     [split("/", module.rancher_manager_primary.ip_address)[0]],
     [for n in module.rancher_manager_additional : split("/", n.ip_address)[0]],
   ))
@@ -1768,7 +2006,11 @@ module "rancher_downstream_registration_nprd_apps" {
     },
     var.clusters["nprd-apps"].worker_count > 0 ? {
       for i in range(1, var.clusters["nprd-apps"].worker_count + 1) :
-      "nprd-apps-worker-${i}" => "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + var.clusters["nprd-apps"].node_count + i - 1}"
+      "nprd-apps-worker-${i}" => "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_worker_slot_offset["nprd-apps"] + i - 1}"
+    } : {},
+    local.cluster_large_worker_count["nprd-apps"] > 0 ? {
+      for i in range(1, local.cluster_large_worker_count["nprd-apps"] + 1) :
+      "nprd-apps-large-worker-${i}" => "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1}"
     } : {}
   )
 
@@ -1800,7 +2042,11 @@ module "rancher_downstream_registration_prd_apps" {
     },
     var.clusters["prd-apps"].worker_count > 0 ? {
       for i in range(1, var.clusters["prd-apps"].worker_count + 1) :
-      "prd-apps-worker-${i}" => "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + var.clusters["prd-apps"].node_count + i - 1}"
+      "prd-apps-worker-${i}" => "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_worker_slot_offset["prd-apps"] + i - 1}"
+    } : {},
+    local.cluster_large_worker_count["prd-apps"] > 0 ? {
+      for i in range(1, local.cluster_large_worker_count["prd-apps"] + 1) :
+      "prd-apps-large-worker-${i}" => "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1}"
     } : {}
   )
 
@@ -1832,7 +2078,11 @@ module "rancher_downstream_registration_poc_apps" {
     },
     var.clusters["poc-apps"].worker_count > 0 ? {
       for i in range(1, var.clusters["poc-apps"].worker_count + 1) :
-      "poc-apps-worker-${i}" => "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + var.clusters["poc-apps"].node_count + i - 1}"
+      "poc-apps-worker-${i}" => "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_worker_slot_offset["poc-apps"] + i - 1}"
+    } : {},
+    local.cluster_large_worker_count["poc-apps"] > 0 ? {
+      for i in range(1, local.cluster_large_worker_count["poc-apps"] + 1) :
+      "poc-apps-large-worker-${i}" => "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1}"
     } : {}
   )
 

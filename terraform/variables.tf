@@ -42,20 +42,25 @@ variable "clusters" {
   type = map(object({
     name                = string
     node_count          = number # Server nodes (control plane + etcd)
-    worker_count        = number # Worker nodes (optional, default: 0)
+    worker_count        = number # Primary worker nodes (optional, default: 0)
     cpu_cores           = number # Server CPU cores
     memory_mb           = number # Server memory
     disk_size_gb        = number # Server disk
-    worker_cpu_cores    = number # Worker CPU cores (optional, defaults to server value)
-    worker_memory_mb    = number # Worker memory (optional, defaults to server value)
-    worker_disk_size_gb = number # Worker disk (optional, defaults to server value)
-    domain              = string
-    ip_subnet           = string
-    ip_start_octet      = number # Starting IP octet (e.g., 100 for 192.168.1.100)
-    gateway             = string
-    dns_servers         = list(string)
-    storage             = string
-    vlan_id             = number # VLAN ID for network interface
+    worker_cpu_cores    = number # Primary worker CPU cores (optional, defaults to server value)
+    worker_memory_mb    = number # Primary worker memory (optional, defaults to server value)
+    worker_disk_size_gb = number # Primary worker disk (optional, defaults to server value)
+    # Large workers: separate pool (defaults 2 nodes @ 8 vCPU / 32 GiB / 100 GB when unset); set 0 to disable
+    large_worker_count        = optional(number, null)
+    large_worker_cpu_cores    = optional(number, null)
+    large_worker_memory_mb    = optional(number, null)
+    large_worker_disk_size_gb = optional(number, null)
+    domain         = string
+    ip_subnet      = string
+    ip_start_octet = number # Starting IP octet (e.g., 100 for 192.168.1.100)
+    gateway        = string
+    dns_servers    = list(string)
+    storage        = string
+    vlan_id        = number # VLAN ID for network interface
   }))
 }
 
