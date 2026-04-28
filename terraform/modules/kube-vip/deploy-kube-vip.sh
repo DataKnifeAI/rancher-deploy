@@ -101,7 +101,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["services", "services/status", "nodes"]
-  verbs: ["list","get","watch"]
+  verbs: ["get","list","watch","update","patch"]
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
   verbs: ["list", "get", "create", "update"]
