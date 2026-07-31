@@ -1,81 +1,59 @@
-# Documentation Index
+# Documentation index
 
-Complete documentation for the Rancher Deploy project.
+Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 
-## Core Documentation
+## Start here
 
-### Deployment Guides
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment walkthrough
-- **[CLOUD_IMAGE_SETUP.md](CLOUD_IMAGE_SETUP.md)** - Cloud image provisioning and VM configuration
-- **[MODULES_AND_AUTOMATION.md](MODULES_AND_AUTOMATION.md)** - Terraform modules, variables, and automation details
+1. [../README.md](../README.md) — landing page, quickstart
+2. [ARCHITECTURE.md](ARCHITECTURE.md) — clusters, flow, add-ons
+3. [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — full deploy walkthrough
+4. [API_TOKEN_AND_PERMISSIONS.md](API_TOKEN_AND_PERMISSIONS.md) — Proxmox API token
+5. [DNS_CONFIGURATION.md](DNS_CONFIGURATION.md) — required DNS records
+6. [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) — `.keys/`, SSH recovery via kubectl
 
-### Rancher Configuration
-- **[RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md)** - How API tokens are created automatically
-- **[RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md)** - Automatic downstream cluster registration
+## Core
 
-### Network & DNS
-- **[DNS_CONFIGURATION.md](DNS_CONFIGURATION.md)** - Complete DNS configuration guide (DNS records and DNS server configuration)
+| Doc | Topic |
+|-----|--------|
+| [MODULES_AND_AUTOMATION.md](MODULES_AND_AUTOMATION.md) | Terraform modules and automation |
+| [CLOUD_IMAGE_SETUP.md](CLOUD_IMAGE_SETUP.md) | Ubuntu cloud image / VM provisioning |
+| [PROXMOX_AGENT_SETUP.md](PROXMOX_AGENT_SETUP.md) | qemu-guest-agent |
+| [RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md) | Downstream registration |
+| [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) | Rancher API tokens |
+| [OPS_NOTES.md](OPS_NOTES.md) | Short operational truths |
 
-### Storage
-- **[DEMOCRATIC_CSI_TRUENAS_SETUP.md](DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - Complete TrueNAS storage setup guide (installation, permissions, secrets, troubleshooting)
-- **[STORAGE_CLASS_DEFAULT.md](STORAGE_CLASS_DEFAULT.md)** - Storage class default configuration
+## Storage
 
-### Database Management
-- **[CLOUDNATIVEPG_SETUP.md](CLOUDNATIVEPG_SETUP.md)** - CloudNativePG operator setup and PostgreSQL cluster management
+| Doc | Topic |
+|-----|--------|
+| [DEMOCRATIC_CSI_TRUENAS_SETUP.md](DEMOCRATIC_CSI_TRUENAS_SETUP.md) | Democratic CSI + TrueNAS |
+| [STORAGE_CLASS_DEFAULT.md](STORAGE_CLASS_DEFAULT.md) | Default storage class |
+| [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) | Democratic → official TrueNAS CSI |
+| [TRUENAS_CSI_MIGRATION_PRIORITY.md](TRUENAS_CSI_MIGRATION_PRIORITY.md) | Migration ordering |
+| [TRUENAS_CSI_MULTI_NODE.md](TRUENAS_CSI_MULTI_NODE.md) | Multi-node / patched image notes |
 
-### CI/CD
-- **[GITHUB_ARC_SETUP.md](GITHUB_ARC_SETUP.md)** - GitHub Actions Runner Controller setup with Fleet integration
+## Platform add-ons
 
-### Infrastructure
-- **[API_TOKEN_AND_PERMISSIONS.md](API_TOKEN_AND_PERMISSIONS.md)** - Proxmox API token creation and permissions
-- **[PROXMOX_AGENT_SETUP.md](PROXMOX_AGENT_SETUP.md)** - Proxmox guest agent configuration
+| Doc | Topic |
+|-----|--------|
+| [GATEWAY_API_SETUP.md](GATEWAY_API_SETUP.md) | Envoy Gateway / Gateway API |
+| [METALLB_SETUP.md](METALLB_SETUP.md) | MetalLB (**legacy** — prefer kube-vip) |
+| [CLOUDNATIVEPG_SETUP.md](CLOUDNATIVEPG_SETUP.md) | CloudNativePG |
+| [GITHUB_ARC_SETUP.md](GITHUB_ARC_SETUP.md) | GitHub Actions Runner Controller |
+| [CONTROL_PLANE_SCHEDULABILITY.md](CONTROL_PLANE_SCHEDULABILITY.md) | Control-plane taints / scheduling |
 
-### Troubleshooting
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+## Troubleshooting
 
-## Reference Documentation
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) for lost SSH keys
 
-### Gateway API & Ingress
-- **[GATEWAY_API_SETUP.md](GATEWAY_API_SETUP.md)** - Gateway API setup with Envoy Gateway
+## Assets
 
-## Quick Links
+- [assets/rancher-deploy-hero.png](assets/rancher-deploy-hero.png) — README hero graphic
 
-### Getting Started
-1. [Deployment Guide](DEPLOYMENT_GUIDE.md) - Start here for first-time deployment
-2. [API Token Setup](API_TOKEN_AND_PERMISSIONS.md) - Required before deployment
-3. [DNS Configuration](DNS_CONFIGURATION.md) - Required DNS records
+## Contributing docs
 
-### Storage Setup
-1. [TrueNAS Storage Setup](DEMOCRATIC_CSI_TRUENAS_SETUP.md) - Complete storage guide (includes permissions, secrets, troubleshooting)
-
-### Database Management
-1. [CloudNativePG Setup](CLOUDNATIVEPG_SETUP.md) - PostgreSQL cluster management with CloudNativePG
-
-### Troubleshooting
-1. [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues
-2. [Rancher Downstream Management](RANCHER_DOWNSTREAM_MANAGEMENT.md) - Cluster registration issues
-
-## Documentation Structure
-
-```
-docs/
-├── Core Documentation/
-│   ├── Deployment guides
-│   ├── Rancher configuration
-│   ├── Network & DNS
-│   ├── Storage (TrueNAS/Democratic CSI)
-│   └── Gateway API & Ingress
-├── Reference Documentation/
-│   ├── Infrastructure components
-│   └── Analysis & Planning
-└── Troubleshooting
-```
-
-## Contributing
-
-When adding new documentation:
-1. Place in `docs/` folder
-2. Update this README.md
-3. Update main [README.md](../README.md) if it's a core feature
-4. Use clear, descriptive filenames
-5. Include examples and troubleshooting sections
+1. Add files under `docs/`
+2. Link them from this index
+3. Link from the root README only if they are core entry points
+4. Prefer accurate variable names from `terraform/variables.tf` / `terraform.tfvars.example`

@@ -405,7 +405,7 @@ rancher_password = "your-secure-bootstrap-password"
 rancher_hostname = "rancher.example.com"
 
 # Existing (SSH)
-ssh_private_key = "~/.ssh/id_rsa"
+ssh_private_key = "../.keys/id_rsa"  # public key from "${ssh_private_key}.pub"
 ```
 
 ## Deployment Steps
@@ -503,7 +503,7 @@ clusters = {
 ### SSH Connection Fails
 ```bash
 # Verify SSH key
-ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+ssh -i .keys/id_rsa ubuntu@192.168.1.100
 
 # Check if cloud-init is complete
 cloud-init status
@@ -607,7 +607,7 @@ curl -k https://rancher.example.com/health
 ## Security Notes
 
 - **API Token**: Stored in tfvars (add to .gitignore!)
-- **SSH Key**: Referenced from ~/.ssh/ (ensure 600 permissions)
+- **SSH Key**: Referenced via `ssh_private_key` (repo convention `.keys/`; ensure 600 permissions)
 - **Rancher Password**: Defined in tfvars (change in UI immediately after login)
 - **Ingress TLS**: Automatically provisioned with Let's Encrypt
 

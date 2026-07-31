@@ -79,3 +79,6 @@ helm-values/democratic-csi-truenas.yaml
 *.swp
 *~
 .DS_Store
+
+# Deploy keys (SSH)
+.keys/

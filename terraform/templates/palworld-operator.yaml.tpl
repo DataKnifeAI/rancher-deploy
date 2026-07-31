@@ -1,0 +1,870 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+    control-plane: controller-manager
+  name: palworld-operator-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: palworldservers.palworld.dataknife.ai
+spec:
+  group: palworld.dataknife.ai
+  names:
+    kind: PalworldServer
+    listKind: PalworldServerList
+    plural: palworldservers
+    shortNames:
+    - ps
+    - palworld
+    singular: palworldserver
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.connectionAddress
+      name: Address
+      type: string
+    - jsonPath: .status.connectionPort
+      name: Port
+      type: integer
+    - jsonPath: .status.runningVersion
+      name: Version
+      type: string
+    - jsonPath: .status.updateAvailable
+      name: Update
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PalworldServer is the Schema for the palworldservers API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              PalworldServerSpec defines the desired state of a Palworld dedicated game server.
+              Default image is the official Pocketpair package (ghcr.io/pocketpairjp/palserver).
+              Settings map to PalWorldSettings.ini / CLI args (official) or community-image
+              environment variables. See docs/PALWORLD_SERVER.md and
+              https://docs.palworldgame.com/settings-and-operation/configuration/
+            properties:
+              adminPasswordSecretRef:
+                description: |-
+                  AdminPasswordSecretRef points to a Secret key used as ADMIN_PASSWORD.
+                  Required for bring-your-own credentials; optional when generateSecrets is true
+                  (defaults to credentials Secret key admin-password).
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
+              community:
+                description: Community configures community server browser listing.
+                properties:
+                  enabled:
+                    default: false
+                    description: Enabled shows the server in the community browser
+                      (use with a password).
+                    type: boolean
+                  publicIP:
+                    description: PublicIP overrides auto-detected public IP (often
+                      set to gateway.address).
+                    type: string
+                  publicPort:
+                    description: PublicPort overrides advertised public port (usually
+                      gamePort).
+                    format: int32
+                    type: integer
+                type: object
+              credentialsSecretName:
+                description: |-
+                  CredentialsSecretName overrides the auto-generated Secret name when
+                  generateSecrets is true. Default: {metadata.name}-secrets.
+                type: string
+              crossplayPlatforms:
+                description: CrossplayPlatforms lists allowed platforms, e.g. "(Steam,Xbox,PS5,Mac)".
+                type: string
+              dedicatedServerName:
+                description: |-
+                  DedicatedServerName pins the world folder under SaveGames/0 via
+                  GameUserSettings.ini ([/Script/Pal.PalGameLocalSettings]). Prefer setting
+                  this after the first boot (REST worldguid), or leave empty and let the
+                  operator learn it from REST and seed it before Recreate rolls / auto-updates.
+                type: string
+              gamePort:
+                default: 8211
+                description: GamePort is the primary UDP game port.
+                format: int32
+                maximum: 65535
+                minimum: 1024
+                type: integer
+              gateway:
+                description: Gateway configures Envoy Gateway exposure (required).
+                properties:
+                  address:
+                    description: Address is the external IP assigned to this server
+                      (Kube-VIP or MetalLB).
+                    pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}$
+                    type: string
+                  className:
+                    default: envoy
+                    description: ClassName is the GatewayClass used for the Envoy
+                      Gateway controller.
+                    type: string
+                  envoyProxyName:
+                    description: |-
+                      EnvoyProxyName overrides the EnvoyProxy resource name.
+                      Default: game-{base-name}-kubevip.
+                    type: string
+                  externalTrafficPolicy:
+                    default: Cluster
+                    description: ExternalTrafficPolicy for the Envoy LoadBalancer
+                      service.
+                    enum:
+                    - Cluster
+                    - Local
+                    type: string
+                  gatewayName:
+                    description: |-
+                      GatewayName overrides the Gateway resource name.
+                      Default: {base-name}-gateway where base-name strips a trailing "-server" suffix.
+                    type: string
+                required:
+                - address
+                type: object
+              generateSecrets:
+                description: |-
+                  GenerateSecrets when true creates an Opaque Secret with random strong
+                  passwords for keys server-password (join) and admin-password (RCON/admin)
+                  if the Secret is missing or those keys are empty. Existing non-empty keys
+                  are never overwritten. Secret name defaults to {metadata.name}-secrets
+                  (override with credentialsSecretName). When false/omitted, provide
+                  adminPasswordSecretRef and serverPasswordSecretRef yourself (bring-your-own).
+                type: boolean
+              imagePullPolicy:
+                default: IfNotPresent
+                description: ImagePullPolicy for the game server container.
+                type: string
+              imagePullSecrets:
+                description: ImagePullSecrets for private registries.
+                items:
+                  description: |-
+                    LocalObjectReference contains enough information to let you locate the
+                    referenced object inside the same namespace.
+                  properties:
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              maxPlayers:
+                default: 4
+                description: |-
+                  MaxPlayers is the maximum number of simultaneous players (1–32).
+                  When spec.resources is unset, pod CPU/memory are auto-selected from this value.
+                format: int32
+                maximum: 32
+                minimum: 1
+                type: integer
+              multithreading:
+                default: true
+                description: Multithreading enables multi-threaded server mode (~4
+                  threads useful).
+                type: boolean
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector pins the game server pod to specific nodes.
+                type: object
+              queryPort:
+                default: 27015
+                description: QueryPort is the Steam query UDP port.
+                format: int32
+                maximum: 65535
+                minimum: 1024
+                type: integer
+              rcon:
+                description: RCON configures remote administration.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled toggles RCON. Default true for graceful shutdown
+                      support.
+                    type: boolean
+                  port:
+                    default: 25575
+                    description: Port is the RCON TCP listen port.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1024
+                    type: integer
+                type: object
+              resources:
+                description: Resources overrides auto-selected CPU/memory. When unset,
+                  tiers derive from maxPlayers.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              restAPI:
+                description: RESTAPI configures the Palworld REST API.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled toggles the REST API.
+                    type: boolean
+                  exposeViaGateway:
+                    default: false
+                    description: |-
+                      ExposeViaGateway when true creates a TCPRoute for the REST port.
+                      Default false — keep admin API internal.
+                    type: boolean
+                  port:
+                    default: 8212
+                    description: Port is the REST API TCP listen port.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1024
+                    type: integer
+                type: object
+              serverDescription:
+                description: ServerDescription is shown in the server browser.
+                type: string
+              serverImage:
+                default: ghcr.io/pocketpairjp/palserver:latest
+                description: |-
+                  ServerImage is the Palworld dedicated server container image.
+                  Defaults to the official Pocketpair image. Override with a Harbor mirror
+                  or a community image (e.g. thijsvanloef/palworld-server-docker) if needed.
+                type: string
+              serverName:
+                description: ServerName is the display name for the dedicated server.
+                type: string
+              serverPasswordSecretRef:
+                description: |-
+                  ServerPasswordSecretRef points to a Secret key used as SERVER_PASSWORD.
+                  Required for bring-your-own credentials; optional when generateSecrets is true
+                  (defaults to credentials Secret key server-password).
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
+              storageClassName:
+                description: StorageClassName selects the StorageClass for the saves
+                  PVC.
+                type: string
+              storageSize:
+                default: 50Gi
+                description: |-
+                  StorageSize is the PVC capacity for world saves (official mount:
+                  /pal/Package/Pal/Saved; community image typically /palworld).
+                type: string
+              terminationGracePeriodSeconds:
+                default: 60
+                description: TerminationGracePeriodSeconds allows graceful RCON save
+                  on stop.
+                format: int64
+                type: integer
+              update:
+                description: |-
+                  Update configures opt-in auto-update of the official Pocketpair image tag.
+                  Independent of updateOnBoot (community SteamCMD). See docs/PALWORLD_SERVER.md.
+                properties:
+                  applySchedule:
+                    description: |-
+                      ApplySchedule is an optional standard 5-field cron for the maintenance window
+                      when an image roll may be applied. Evaluated in timeZone (default UTC).
+                      The cron must match the current minute for apply to proceed (e.g.
+                      "0 4 * * 1-5" = 04:00 UTC Mon–Fri; "*/15 4-6 * * *" = every 15m from 04:00–06:45).
+                      When unset, updates apply whenever idle/safe (subject to onlyWhenEmpty).
+                    type: string
+                  autoUpdateImage:
+                    description: |-
+                      AutoUpdateImage when true periodically checks for newer Pocketpair palserver
+                      version tags and patches spec.serverImage to repo:vX.Y.Z.W (never floating
+                      :latest after an update). Default false — opt-in only.
+                    type: boolean
+                  checkInterval:
+                    default: 6h
+                    description: |-
+                      CheckInterval is how often to query the registry for newer tags when
+                      checkSchedule is unset. Go duration (e.g. "1h", "6h"). Default "6h".
+                      Ignored when checkSchedule is set.
+                    type: string
+                  checkSchedule:
+                    description: |-
+                      CheckSchedule is an optional standard 5-field cron (min hour dom month dow)
+                      that controls when GHCR tags may be polled. Evaluated in timeZone (default UTC).
+                      Example: "0 */6 * * *" (top of every 6th hour). When set, checkInterval is unused.
+                    type: string
+                  imageRepository:
+                    default: ghcr.io/pocketpairjp/palserver
+                    description: |-
+                      ImageRepository is the OCI repository used when listing tags and pinning
+                      updated images. Default: ghcr.io/pocketpairjp/palserver
+                    type: string
+                  notifyLeadTime:
+                    description: |-
+                      NotifyLeadTime is deprecated in favor of notifySchedule. When
+                      notifySchedule is empty, treated as a single-stage schedule
+                      [notifyLeadTime] (e.g. "2m"). Ignored when notifySchedule is set.
+                    type: string
+                  notifyMessage:
+                    description: |-
+                      NotifyMessage is an optional announce prefix/template. Empty uses staged
+                      defaults that include time remaining. Placeholders: {version}, {image},
+                      {remaining} (humanized duration until planned apply).
+                    type: string
+                  notifyPlayers:
+                    description: |-
+                      NotifyPlayers when true sends an in-game broadcast via official REST
+                      POST /v1/api/announce before rolling the Deployment. Requires REST enabled
+                      and admin credentials. (Pocketpair has deprecated RCON in favor of REST;
+                      this operator uses announce only — not RCON Broadcast.)
+                    type: boolean
+                  notifySchedule:
+                    description: |-
+                      NotifySchedule is durations before plannedApplyTime when REST announce
+                      messages should fire (e.g. ["60m","30m","15m","5m","1m","30s","10s"]).
+                      Reconcile is non-blocking: each pass sends due stages and requeues until
+                      the next boundary. The "10s" stage runs a short in-reconcile countdown.
+                      When empty: if notifyLeadTime is set, that single duration is used
+                      (backward compatible); otherwise the default multi-stage schedule above.
+                    items:
+                      type: string
+                    type: array
+                  onlyWhenEmpty:
+                    default: true
+                    description: |-
+                      OnlyWhenEmpty when true (default) defers applying an image bump while the
+                      REST metrics endpoint reports currentplayernum > 0.
+                    type: boolean
+                  timeZone:
+                    default: UTC
+                    description: |-
+                      TimeZone is an IANA timezone name for checkSchedule / applySchedule
+                      (e.g. "America/Los_Angeles"). Default "UTC".
+                    type: string
+                type: object
+              updateOnBoot:
+                default: true
+                description: |-
+                  UpdateOnBoot updates/installs server files on container start.
+                  Relevant primarily for community SteamCMD-based images; the official
+                  Pocketpair image is versioned via the image tag.
+                type: boolean
+            required:
+            - gateway
+            type: object
+          status:
+            description: PalworldServerStatus defines the observed state of PalworldServer.
+            properties:
+              announcedNotifyStages:
+                description: |-
+                  AnnouncedNotifyStages lists notifySchedule stage keys already broadcast
+                  for the current PendingUpdateImage (e.g. "60m", "10s") so reconcile
+                  does not re-announce.
+                items:
+                  type: string
+                type: array
+              conditions:
+                description: Conditions represent the latest available observations.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              connectionAddress:
+                description: ConnectionAddress is the IP clients should use.
+                type: string
+              connectionPort:
+                description: ConnectionPort is the UDP game port clients should use.
+                format: int32
+                type: integer
+              credentialsGenerated:
+                description: |-
+                  CredentialsGenerated is true when spec.generateSecrets created or manages
+                  the credentials Secret (passwords are not written into status).
+                type: boolean
+              credentialsSecretName:
+                description: |-
+                  CredentialsSecretName is the Secret that holds join/admin passwords.
+                  Never contains plaintext passwords — use kubectl to read Secret data.
+                type: string
+              dedicatedServerName:
+                description: |-
+                  DedicatedServerName is the observed/learned world pin (REST worldguid).
+                  Prefer also setting spec.dedicatedServerName for GitOps durability.
+                type: string
+              desiredImage:
+                description: |-
+                  DesiredImage is the container image the Deployment should run
+                  (typically equals spec.serverImage after reconcile).
+                type: string
+              lastAnnounceTime:
+                description: LastAnnounceTime is when REST /v1/api/announce last succeeded
+                  for a pending update.
+                format: date-time
+                type: string
+              lastImageCheckTime:
+                description: LastImageCheckTime is when the registry was last queried
+                  for tags.
+                format: date-time
+                type: string
+              latestAvailableVersion:
+                description: |-
+                  LatestAvailableVersion is the newest vX.Y.Z.W tag seen in the configured
+                  image repository (when auto-update checks run or status was refreshed).
+                type: string
+              message:
+                description: Message is a human-readable status detail.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the last reconciled generation.
+                format: int64
+                type: integer
+              pendingUpdateImage:
+                description: |-
+                  PendingUpdateImage is the image queued for apply after the notify schedule
+                  / maintenance-window gates. Cleared when applied or canceled.
+                type: string
+              phase:
+                description: Phase is Pending, Running, or Failed.
+                type: string
+              plannedApplyTime:
+                description: |-
+                  PlannedApplyTime is when the pending image bump should apply (T=0).
+                  Stage announces are scheduled relative to this instant.
+                format: date-time
+                type: string
+              playerCount:
+                description: PlayerCount is the last observed currentplayernum from
+                  REST metrics.
+                format: int32
+                type: integer
+              ready:
+                description: Ready is true when the game server pod is ready.
+                type: boolean
+              runningVersion:
+                description: RunningVersion is the game version reported by REST /v1/api/info
+                  when Ready.
+                type: string
+              updateAvailable:
+                description: |-
+                  UpdateAvailable is true when LatestAvailableVersion is newer than the
+                  pinned/running version.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+  name: palworld-operator-controller-manager
+  namespace: palworld-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+  name: palworld-operator-leader-election-role
+  namespace: palworld-operator-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: palworld-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - persistentvolumeclaims
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.envoyproxy.io
+  resources:
+  - envoyproxies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - tcproutes
+  - udproutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - palworld.dataknife.ai
+  resources:
+  - palworldservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - palworld.dataknife.ai
+  resources:
+  - palworldservers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - palworld.dataknife.ai
+  resources:
+  - palworldservers/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+  name: palworld-operator-leader-election-rolebinding
+  namespace: palworld-operator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: palworld-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: palworld-operator-controller-manager
+  namespace: palworld-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+  name: palworld-operator-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: palworld-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: palworld-operator-controller-manager
+  namespace: palworld-operator-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: palworld-operator
+    control-plane: controller-manager
+  name: palworld-operator-controller-manager
+  namespace: palworld-operator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: palworld-operator
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: palworld-operator
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        command:
+        - /manager
+        image: ${palworld_operator_image}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 10m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+${image_pull_secrets}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: palworld-operator-controller-manager
+      terminationGracePeriodSeconds: 10

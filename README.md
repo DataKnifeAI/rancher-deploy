@@ -1,308 +1,106 @@
-# Rancher Cluster on Proxmox
+# rancher-deploy
 
-Deploy a complete Rancher management cluster and non-production apps cluster on Proxmox using Terraform with Ubuntu 24.04 cloud images, RKE2 Kubernetes, and automated Rancher installation.
+![Proxmox → Terraform → Rancher](docs/assets/rancher-deploy-hero.png)
 
-## Features
+Terraform automation that builds a Rancher management plane and hybrid RKE2 app clusters on Proxmox — Ubuntu cloud images, RKE2 bootstrap, Rancher, storage, and common operators in one apply.
 
-- ✅ **Full Automation**: From VMs to Rancher in a single `terraform apply`
-- ✅ **Cloud Image Provisioning**: Ubuntu 24.04 LTS cloud images with automatic downloads
-- ✅ **Modern Provider**: bpg/proxmox v0.90 (1.7K+ GitHub stars, 130+ contributors)
-- ✅ **RKE2 Kubernetes**: Automated RKE2 installation and cluster bootstrapping
-- ✅ **Rancher Deployment**: Helm-based Rancher installation with cert-manager
-- ✅ **High Availability**: 3-node manager + hybrid apps clusters (3 servers + workers each) with HA Rancher
-- ✅ **Cloud-Init Integration**: Automated networking, DNS, hostnames
-- ✅ **Proxmox Guest Agent**: Automatic installation for better VM management
-- ✅ **TrueNAS Storage**: Automated democratic-csi deployment with TrueNAS NFS
-- ✅ **Comprehensive Docs**: Setup guides, variable management, troubleshooting
-- ✅ **Secure Configuration**: API token auth, gitignore patterns, tfvars templates
+## What this deploys
 
-## What's Deployed
+| Cluster | Role | Default VM IDs | Default IPs (example) |
+|---------|------|----------------|------------------------|
+| **manager** | RKE2 + Rancher control plane (3 servers) | 401–403 | `192.168.1.100–102` |
+| **nprd-apps** | Non-prod (3 servers + 3 workers) | 410–415 | `192.168.1.110–115` |
+| **prd-apps** | Production (3 servers + 3 workers) | 420–425 | `192.168.1.120–125` |
+| **poc-apps** | POC / test (3 servers + 3 workers) | 430–435 | `192.168.1.130–135` |
 
-- **Rancher Manager**: 3 VMs (401-403) with RKE2 + Rancher control plane - 80GB disk each
-  - VM ID range: 40x (401-403)
-  - IP range: 192.168.1.100-102
-- **NPRD Apps Cluster**: Hybrid architecture for non-production workloads
-  - 3 Server nodes (410-412) - Control plane + etcd - 80GB disk each
-  - 3 Worker nodes (413-415) - Application workloads - 80GB disk each
-  - VM ID range: 41x (410-415)
-  - IP range: 192.168.1.110-115 (servers: .110-112, workers: .113-115)
-- **PRD Apps Cluster**: Hybrid architecture for production workloads
-  - 3 Server nodes (420-422) - Control plane + etcd - 80GB disk each
-  - 3 Worker nodes (423-425) - Application workloads - 80GB disk each
-  - VM ID range: 42x (420-425)
-  - IP range: 192.168.1.120-125 (servers: .120-122, workers: .123-125)
-- **POC Apps Cluster**: Hybrid architecture for proof of concept/testing workloads
-  - 3 Server nodes (430-432) - Control plane + etcd - 80GB disk each
-  - 3 Worker nodes (433-435) - Application workloads - 80GB disk each
-  - VM ID range: 43x (430-435)
-  - IP range: 192.168.1.130-135 (servers: .130-132, workers: .133-135)
-- **Storage**: 
-  - VM storage: Dedicated volumes (local-vm-zfs) on pve1 (all VMs deploy on pve1)
-  - Persistent storage: TrueNAS NFS via democratic-csi (automated on nprd-apps, prd-apps, and poc-apps clusters)
-- **Network**: Static IPs, DNS configured via cloud-init (192.168.1.1 upstream resolver)
-- **Kubernetes**: RKE2 clusters automatically bootstrapped and configured
-- **Rancher**: Helm-deployed with cert-manager, Ingress, and bootstrap password
-- **Storage Class**: TrueNAS NFS storage class (automatically created on nprd-apps, prd-apps, and poc-apps clusters if configured)
+Also automated when enabled in `terraform.tfvars`:
 
-## Requirements
+- **cert-manager** + **Rancher** on the manager cluster
+- Downstream registration into Rancher
+- **Democratic CSI** (TrueNAS NFS) and/or official **TrueNAS CSI** on app clusters
+- **Envoy Gateway** + **kube-vip** LoadBalancer IPs on app clusters
+- Operators: CloudNativePG, MongoDB Community, OpenSearch, GitHub ARC
+- Optional **Palworld operator** (default: **prd-apps** only)
 
-### Local System Requirements
+Topology detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Your workstation/CI runner executing Terraform must have:
+## Prerequisites
 
-- **Terraform**: v1.5 or later
-- **Git**: For version control and cloning this repository
-- **SSH Client**: For VM authentication and access
-- **curl**: For API testing and Proxmox verification
-- **bash or zsh**: Shell environment (recommended for AI-assistant compatibility)
-- **Internet access**: To download cloud images, RKE2, and Rancher
-- **Git credentials**: Access to GitHub (public repository, no auth required)
-
-**Optional but helpful:**
-- `kubectl`: For post-deployment cluster management (can be retrieved from kubeconfig)
-- `helm`: For manual Rancher customization (installed automatically during deployment)
-- `jq`: For parsing JSON in scripts and debugging
-
-### Proxmox Cluster Requirements
-
-Your Proxmox VE cluster must have:
-
-- **Proxmox VE 8.0+** with API token access
-- **Resources**: 30 vCPU cores, 60GB RAM, 900GB storage minimum (for manager + 3 apps clusters)
-- **Storage**: SSD/NVMe datastore (`local-vm-zfs` or similar) with qcow2 support
-- **Networking**: VLAN 14 support, DHCP/static IP capability, internet access
-- **DNS**: Access to 192.168.1.1 (local) or 1.1.1.1 (fallback)
-- **API Token**: Required permissions listed in [API_TOKEN_AND_PERMISSIONS.md](docs/API_TOKEN_AND_PERMISSIONS.md)
-
-### Network Requirements
-
-**From local system:**
-- Proxmox API (`https://<proxmox-ip>:8006`) and SSH
-- Internet: github.com, get.rke2.io, cloud-images.ubuntu.com, docker.io, quay.io
-
-**From Proxmox VMs:**
-- Internet for RKE2 installer and container images
-- Local DNS/Gateway (192.168.1.1 or equivalent)
-
-### DNS Requirements
-
-Rancher requires DNS records pointing to all 3 manager nodes for HA. DNS is configured at the node level via `/etc/resolv.conf` - CoreDNS automatically inherits node DNS configuration. See [DNS_CONFIGURATION_GUIDE.md](docs/DNS_CONFIGURATION_GUIDE.md) for complete DNS setup and [DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md) for required DNS records.
-
-### Supported Platforms
-
-#### Proxmox Versions
-- ✅ Proxmox VE 8.x (tested, recommended)
-- ✅ Proxmox VE 9.x (tested, recommended)
-
-#### Operating Systems
-- ✅ Ubuntu 24.04 LTS (default, cloud image)
-- ⚠️ Other Ubuntu versions supported (change cloud image URL in terraform.tfvars)
-
-#### RKE2 Versions
-- ✅ v1.34.3+rke2r1 (tested stable, default)
-- ✅ Any specific RKE2 release tag (change `rke2_version` in terraform.tfvars)
-- ❌ "latest" tag (not supported - must use specific version)
-
-#### Other
-- ✅ RKE2 v1.32+
-- ✅ Rancher v2.7.x and v2.8.x
-- ✅ containerd runtime
-- ✅ QEMU/KVM hypervisor
-
-### Unsupported
-
-- Single-node Proxmox, non-QEMU hypervisors, bare metal
-- Cloud deployments (Azure, AWS, GCP)
-- Kubernetes upgrades, multi-cluster federation, Windows VMs
-
-## Quick Start
-
-### 1. Create Proxmox API Token
-
-If you haven't already created an API token, follow the guide at [docs/API_TOKEN_AND_PERMISSIONS.md](docs/API_TOKEN_AND_PERMISSIONS.md). You'll need:
-- **proxmox_api_url**: Your Proxmox endpoint
-- **proxmox_api_user**: Usually `root@pam`
-- **proxmox_api_token_id**: Token name (e.g., `terraform`)
-- **proxmox_api_token_secret**: Token secret (generated by Proxmox)
-
-### 2. Prepare Configuration
+- Terraform ≥ 1.5, `curl`, `ssh`, `jq`
+- Proxmox VE 8/9 with an API token ([docs/API_TOKEN_AND_PERMISSIONS.md](docs/API_TOKEN_AND_PERMISSIONS.md))
+- SSH key pair for VM access (repo convention: `.keys/`, gitignored)
+- DNS for Rancher / cluster hostnames ([docs/DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md))
+- Optional: `kubectl`, `helm` for day-2 ops
 
 ```bash
-cd /home/lee/git/rancher-deploy/terraform
-cp terraform.tfvars.example terraform.tfvars
+make check-prereqs
+make check-rancher-tools   # optional
 ```
 
-Edit `terraform.tfvars` with your values:
-```hcl
-proxmox_api_url          = "https://pve.example.com:8006/api2/json"
-proxmox_api_user         = "root@pam"
-proxmox_api_token_id     = "terraform-token"
-proxmox_api_token_secret = "your-secret-token"
-proxmox_node             = "pve"
-rke2_version             = "v1.34.3+rke2r1"  # IMPORTANT: use actual version, not "latest"
-rancher_hostname         = "rancher.example.com"
-rancher_password         = "your-secure-password"
-
-# Optional: TrueNAS storage (automatically deploys democratic-csi if configured)
-truenas_host             = "tn.example.com"
-truenas_api_key          = "your-truenas-api-key"
-truenas_dataset          = "/mnt/pool/dataset"
-```
-
-See `terraform/variables.tf` for all available options.
-
-### 3. Deploy Infrastructure + Kubernetes
-
-From the root directory:
+## Quick start
 
 ```bash
-# Deploy with automatic logging (recommended)
-./scripts/apply.sh
+# 1. Deploy key (example — keep private keys out of git)
+mkdir -p .keys
+ssh-keygen -t ed25519 -f .keys/id_rsa -N "" -C "rancher-deploy"
 
-# Or manually from terraform directory
-cd terraform
-terraform init
-terraform plan
-terraform apply -auto-approve
+# 2. Configure
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# Edit Proxmox API, SSH path, Rancher hostname/password, DNS, storage, etc.
+# ssh_private_key = "/absolute/or/relative/path/to/.keys/id_rsa"
+# Public key is read from "${ssh_private_key}.pub"
+
+# 3. Deploy
+make init
+make plan
+make apply                 # wraps ./scripts/apply.sh (logged)
+# or: ./scripts/apply.sh
 ```
 
-**Note**: `apply.sh` enables debug logging, saves to `terraform/terraform-<timestamp>.log`, deploys everything in ~35-40 minutes.
-
-**⚠️ Important**:
-- RKE2 version must be specific release (e.g., `v1.34.3+rke2r1`), not "latest"
-- Ports 9345 (server) and 6443 (API) configured automatically
-- If TrueNAS is configured, democratic-csi will be automatically deployed at the end of the plan
-
-### 4. Verify Deployment
+Verify:
 
 ```bash
-# Check manager Kubernetes cluster
-export KUBECONFIG=~/.kube/rancher-manager.yaml
-kubectl get nodes
-kubectl get pods -n kube-system
-
-# Check nprd-apps cluster
-export KUBECONFIG=~/.kube/nprd-apps.yaml
-kubectl get nodes
-kubectl get pods -n kube-system
-
-# Check prd-apps cluster
-export KUBECONFIG=~/.kube/prd-apps.yaml
-kubectl get nodes
-kubectl get pods -n kube-system
-
-# Check poc-apps cluster
-export KUBECONFIG=~/.kube/poc-apps.yaml
-kubectl get nodes
-kubectl get pods -n kube-system
-
-# Check storage class (if TrueNAS configured - available on apps clusters)
-kubectl get storageclass
-
-# Access Rancher
-terraform output rancher_url
-# Open in browser, login with:
-# Username: admin
-# Password: <from rancher_password in tfvars>
+export KUBECONFIG=~/.kube/rancher-manager.yaml && kubectl get nodes
+export KUBECONFIG=~/.kube/nprd-apps.yaml && kubectl get nodes
+export KUBECONFIG=~/.kube/prd-apps.yaml && kubectl get nodes
+export KUBECONFIG=~/.kube/poc-apps.yaml && kubectl get nodes
 ```
+
+Destroy: `make destroy` or `./scripts/destroy.sh`.
+
+Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 
 ## Documentation
 
-Complete documentation is available in the [docs/](docs/) folder. See [docs/README.md](docs/README.md) for full index.
+**[docs/README.md](docs/README.md)** — full index.
 
-### Quick Links
+| Topic | Doc |
+|-------|-----|
+| Architecture | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Deployment | [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) |
+| SSH keys & recovery | [SSH_AND_ACCESS.md](docs/SSH_AND_ACCESS.md) |
+| DNS | [DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md) |
+| TrueNAS / Democratic CSI | [DEMOCRATIC_CSI_TRUENAS_SETUP.md](docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md) |
+| TrueNAS CSI migration | [TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md) |
+| Troubleshooting | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| Ops notes | [OPS_NOTES.md](docs/OPS_NOTES.md) |
 
-**Getting Started:**
-- **[docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Complete deployment walkthrough
-- **[docs/API_TOKEN_AND_PERMISSIONS.md](docs/API_TOKEN_AND_PERMISSIONS.md)** - Proxmox API token setup
-- **[docs/DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md)** - Required DNS records
-
-**Storage:**
-- **[docs/TRUENAS_STORAGE_SETUP.md](docs/TRUENAS_STORAGE_SETUP.md)** - Complete TrueNAS storage setup (automated via Terraform)
-- **[docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md](docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - Detailed democratic-csi with TrueNAS configuration guide
-
-**Configuration:**
-- **[docs/RANCHER_DOWNSTREAM_MANAGEMENT.md](docs/RANCHER_DOWNSTREAM_MANAGEMENT.md)** - Automatic cluster registration
-- **[docs/CLOUD_IMAGE_SETUP.md](docs/CLOUD_IMAGE_SETUP.md)** - Cloud image provisioning
-- **[docs/MODULES_AND_AUTOMATION.md](docs/MODULES_AND_AUTOMATION.md)** - Terraform modules and automation
-
-**Troubleshooting:**
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-
-## Project Structure
+## Project layout
 
 ```
-.
-├── scripts/                      # Helper scripts
-│   ├── apply.sh                  # Deploy with automatic logging
-│   ├── destroy.sh                # Destroy infrastructure
-│   ├── create-rancher-api-token.sh # Create API token manually
-│   ├── test-rancher-api-token.sh # Test API connectivity
-│   ├── generate-helm-values-from-tfvars.sh # Generate Helm values from Terraform
-│   ├── install-democratic-csi.sh # Manual democratic-csi installation
-│   └── update-dns-servers.sh     # Update DNS on existing VMs
-├── helm-values/                  # Helm chart values
-│   ├── democratic-csi-truenas.yaml # Generated (gitignored)
-│   └── *.example                 # Example templates
-├── README.md                     # This file
-├── CHANGELOG.md                  # Version history
-├── CODE_OF_CONDUCT.md            # Community guidelines
-├── CONTRIBUTING.md               # Development guidelines
-├── docs/                         # Complete documentation
-│   ├── README.md                 # Documentation index
-│   ├── DEPLOYMENT_GUIDE.md       # Complete deployment walkthrough
-│   ├── TRUENAS_STORAGE_SETUP.md  # TrueNAS storage setup (consolidated)
-│   └── ...                       # See docs/README.md for full list
-└── terraform/                    # Terraform configuration
-    ├── main.tf                   # Cluster definitions + democratic-csi deployment
-    ├── provider.tf               # Provider configuration
-    ├── variables.tf              # Variables (includes TrueNAS config)
-    ├── outputs.tf               # Outputs (includes TrueNAS config)
-    ├── terraform.tfvars.example  # Config template
-    ├── terraform.tfvars         # Your config (gitignored)
-    ├── fetch-token.sh            # RKE2 token helper
-    └── modules/
-        ├── proxmox_vm/           # VM creation module
-        ├── rke2_manager_cluster/ # Manager verification
-        └── rke2_downstream_cluster/ # Apps verification
+├── Makefile                 # init / plan / apply / destroy helpers
+├── scripts/                 # apply.sh, destroy.sh, CSI/ARC helpers
+├── docs/                    # guides + assets/
+├── helm-values/             # examples (generated values are gitignored)
+├── config/                  # local tokens / secrets (gitignored)
+├── .keys/                   # deploy SSH keys (gitignored)
+└── terraform/               # root module + modules/ + environments/
 ```
 
-## Key Features
+## Secrets
 
-### Reliable VM Creation
-
-The deployment uses the **bpg/proxmox Terraform provider** (v0.90) with:
-- ✅ Exponential backoff retry logic for API calls
-- ✅ Proper task completion verification
-- ✅ Comprehensive error handling
-- ✅ Full Proxmox VE 8.x and 9.x support
-
-### Automated Configuration
-
-Each VM is automatically configured with:
-- Cloud-init for OS customization
-- Network settings (VLAN 14, static IP, DNS)
-- Proxmox guest agent (qemu-guest-agent) for better VM management
-
-### Storage Integration
-
-- **TrueNAS Integration**: If configured in `terraform.tfvars`, democratic-csi is automatically deployed to nprd-apps, prd-apps, and poc-apps clusters
-- **Storage Class**: Created automatically on all apps clusters at the end of Terraform plan
-- **Secrets Management**: TrueNAS API keys stored in `terraform.tfvars` (gitignored)
-- **Helm Values**: Auto-generated from Terraform variables
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and code standards. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history, features, and major changes.
+Never commit `terraform.tfvars`, `.keys/`, `config/*`, or generated Helm values with API keys. Examples and templates are tracked; live credentials are not.
 
 ## License
 
-This project is licensed under the MIT License.
-
----
-
-**Built with Claude Haiku 4.5** - This project was developed using Claude Haiku 4.5, an AI assistant optimized for code generation and infrastructure automation.
+MIT — see project license files. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -415,6 +415,46 @@ variable "github_arc_controller_version" {
 }
 
 # ============================================================================
+# PALWORLD OPERATOR CONFIGURATION
+# ============================================================================
+
+variable "install_palworld_operator_nprd" {
+  description = "Install Palworld operator on nprd-apps (kubectl manifests from Harbor image)"
+  type        = bool
+  default     = false
+}
+
+variable "install_palworld_operator_prd" {
+  description = "Install Palworld operator on prd-apps (kubectl manifests from Harbor image)"
+  type        = bool
+  default     = true
+}
+
+variable "install_palworld_operator_poc" {
+  description = "Install Palworld operator on poc-apps (kubectl manifests from Harbor image)"
+  type        = bool
+  default     = false
+}
+
+variable "palworld_operator_image" {
+  description = "Palworld operator image (Harbor). Prefer digest pin; Harbor currently only publishes :latest besides ad-hoc tags."
+  type        = string
+  default     = "harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b"
+}
+
+variable "palworld_operator_image_pull_secret" {
+  description = "Name of image pull secret for private registry (e.g. Harbor). Applied into palworld-operator-system."
+  type        = string
+  default     = "harbor-registry-secret"
+}
+
+variable "palworld_operator_image_pull_secret_file" {
+  description = "Path to local secret YAML (e.g. config/harbor-registry-secret.yaml). Must be gitignored. Namespace in the file is rewritten to palworld-operator-system."
+  type        = string
+  default     = "config/harbor-registry-secret.yaml"
+}
+
+# ============================================================================
 # KUBE-VIP CONFIGURATION
 # ============================================================================
 

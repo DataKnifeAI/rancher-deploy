@@ -6,7 +6,7 @@ Complete guide for deploying Rancher clusters on Proxmox using Terraform.
 
 - **Proxmox VE 8.0+** with API token access
 - **Terraform 1.5+** installed
-- **SSH key** for VM authentication (`~/.ssh/id_rsa` recommended)
+- **SSH key** for VM authentication (repo convention: `.keys/id_rsa` + `.keys/id_rsa.pub`; see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md))
 - **Shell environment**: `bash` or `zsh` (recommended; if using Fish shell, switch to `zsh` for better compatibility with automation scripts and AI tools)
 - **Network access** to Proxmox API and GitHub (for RKE2 downloads)
 - **Available resources**: 30 vCPU cores, 60GB RAM, 900GB disk space (for manager + 3 apps clusters)
@@ -29,22 +29,19 @@ proxmox_api_token_id     = "terraform-token"
 proxmox_api_token_secret = "your-token-secret"
 proxmox_node             = "pve"  # Your Proxmox node name
 
-# VM configuration
-ssh_private_key = "~/.ssh/id_rsa"
-ssh_public_key  = "~/.ssh/id_rsa.pub"
-
-# RKE2 version (IMPORTANT: must be actual released version)
-rke2_version = "v1.34.3+rke2r1"  # Check https://github.com/rancher/rke2/tags
+# SSH — private key path; public key is read from "${ssh_private_key}.pub"
+ssh_private_key = "../.keys/id_rsa"   # or absolute path to .keys/id_rsa
 
 # Rancher configuration
 rancher_hostname = "rancher.example.com"
 rancher_password = "your-secure-password"
+rancher_version  = "v2.13.1"
 install_rancher  = true  # Deploys Rancher automatically in single apply
 ```
 
 **Critical: RKE2 Version**
-- Use specific version tags like `v1.34.3+rke2r1`
-- Do NOT use "latest" - it will fail (not a downloadable release)
+- RKE2 version is pinned in `terraform/main.tf` (currently `v1.34.3+rke2r1`)
+- Do NOT use a `"latest"` tag for RKE2 — it is not a downloadable release
 - Check available versions at https://github.com/rancher/rke2/tags
 
 ### 2. Deploy with Logging
@@ -213,7 +210,7 @@ If deployment hangs at `wait_for_rke2` (4+ minutes):
 
 ```bash
 # SSH to manager-1 VM
-ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+ssh -i .keys/id_rsa ubuntu@192.168.1.100
 
 # Check RKE2 status
 sudo systemctl status rke2-server
@@ -237,7 +234,7 @@ Should show: `rke2_version = "v1.34.3+rke2r1"` (not "latest")
 
 **View installation logs:**
 ```bash
-ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+ssh -i .keys/id_rsa ubuntu@192.168.1.100
 sudo journalctl -u rke2-server | grep -E "INFO|ERROR"
 ```
 
@@ -253,7 +250,7 @@ terraform apply -auto-approve
 
 **Verify cloud-init network configuration:**
 ```bash
-ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+ssh -i .keys/id_rsa ubuntu@192.168.1.100
 ip addr show
 cat /etc/netplan/01-netcfg.yaml
 cloud-init query

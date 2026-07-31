@@ -1,5 +1,7 @@
 # MetalLB Load Balancer Setup Guide
 
+> **Status (2026):** This guide is **legacy**. Current Terraform installs **kube-vip** (`install_kube_vip`, `kube_vip_ip_pools` in `terraform.tfvars.example`), not MetalLB. Use this doc only for older clusters or cleanup (`scripts/remove-metallb.sh`). Prefer kube-vip for new deployments.
+
 **Last Updated**: January 2025
 
 ## Overview

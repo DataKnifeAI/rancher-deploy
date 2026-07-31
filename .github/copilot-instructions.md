@@ -153,7 +153,7 @@ fi
 ### Documentation (`docs/`)
 Core documentation for users and developers:
 - `DEPLOYMENT_GUIDE.md` - Complete deployment guide with logging instructions
-- `DNS_CONFIGURATION_GUIDE.md` - Complete DNS configuration guide (node-level DNS approach)
+- `DNS_CONFIGURATION.md` - Complete DNS configuration guide (node-level DNS approach)
 - `DNS_CONFIGURATION.md` - DNS records required for Rancher
 - `TROUBLESHOOTING.md` - Common issues and solutions
 - `CLOUD_IMAGE_SETUP.md` - Cloud image provisioning details
@@ -615,7 +615,7 @@ terraform state show <resource>  # Show resource details
 
 ### For Users
 1. Start: [README.md](../README.md)
-2. DNS Setup: [DNS_CONFIGURATION_GUIDE.md](../docs/DNS_CONFIGURATION_GUIDE.md)
+2. DNS Setup: [DNS_CONFIGURATION.md](../docs/DNS_CONFIGURATION.md)
 3. DNS Records: [DNS_CONFIGURATION.md](../docs/DNS_CONFIGURATION.md)
 4. Deploy: [DEPLOYMENT_GUIDE.md](../docs/DEPLOYMENT_GUIDE.md)
 5. Cloud Images: [CLOUD_IMAGE_SETUP.md](../docs/CLOUD_IMAGE_SETUP.md)
@@ -624,7 +624,7 @@ terraform state show <resource>  # Show resource details
 
 ### For Developers
 1. Review: [MODULES_AND_AUTOMATION.md](../docs/MODULES_AND_AUTOMATION.md)
-2. DNS Architecture: [DNS_CONFIGURATION_GUIDE.md](../docs/DNS_CONFIGURATION_GUIDE.md)
+2. DNS Architecture: [DNS_CONFIGURATION.md](../docs/DNS_CONFIGURATION.md)
 3. Cloud Images: [CLOUD_IMAGE_SETUP.md](../docs/CLOUD_IMAGE_SETUP.md)
 4. Deploy: [DEPLOYMENT_GUIDE.md](../docs/DEPLOYMENT_GUIDE.md)
 5. Debug: [TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md)
