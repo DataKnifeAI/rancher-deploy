@@ -199,9 +199,10 @@ rancher_api_token = "token-xxxxx:your-secret-token"
 # SSH CONFIGURATION
 # ============================================================================
 
-# Path to SSH private key for VM access
-# The key should match the public key configured in your Proxmox user account
-ssh_private_key = "~/.ssh/id_rsa"
+# Path to SSH private key for VM access (public key = "${ssh_private_key}.pub")
+# Repo convention: keep the deploy pair under .keys/ (gitignored). Example:
+#   mkdir -p .keys && ssh-keygen -t ed25519 -f .keys/id_rsa -N "" -C "rancher-deploy"
+ssh_private_key = "../.keys/id_rsa"
 
 # ============================================================================
 # DOWNSTREAM CLUSTER REGISTRATION
@@ -347,6 +348,25 @@ cloudnativepg_operator_version = "1.28.0"
 # GitHub Actions Runner Controller (ARC) Helm chart version (default: 0.13.1)
 # Check latest version: https://github.com/actions/actions-runner-controller/releases
 github_arc_controller_version = "0.13.1"
+
+# ============================================================================
+# PALWORLD OPERATOR CONFIGURATION
+# ============================================================================
+# Installed via kubectl manifests (CRD + RBAC + Deployment), not Helm.
+# Live today: prd-apps only (namespace palworld-operator-system). Does not manage
+# PalworldServer game CRs (e.g. game-servers/palworld-server).
+#
+# Harbor currently publishes :latest (plus ad-hoc tags); pin the live digest below.
+# Digest matches prd imageID as of 2026-07-31:
+#   harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b
+
+install_palworld_operator_nprd = false
+install_palworld_operator_prd  = true
+install_palworld_operator_poc  = false
+
+palworld_operator_image = "harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b"
+palworld_operator_image_pull_secret      = "harbor-registry-secret"
+palworld_operator_image_pull_secret_file = "config/harbor-registry-secret.yaml"
 
 # ============================================================================
 # NOTES FOR PRODUCTION

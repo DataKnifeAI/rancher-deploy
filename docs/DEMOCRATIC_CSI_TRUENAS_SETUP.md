@@ -204,18 +204,21 @@ curl -k -X DELETE \
 
 Democratic CSI is **automatically deployed** at the end of your Terraform plan if TrueNAS is configured:
 
-1. **Configure TrueNAS in Terraform** (`terraform/terraform.tfvars`):
+1. **Configure Democratic CSI / TrueNAS in Terraform** (`terraform/terraform.tfvars`):
    ```hcl
-   truenas_host = "192.168.9.10"
-   truenas_api_key = "your-api-key-here"
-   truenas_dataset = "/mnt/SAS/RKE2"
-   truenas_user = "rke2"
-   truenas_protocol = "https"
-   truenas_port = 443
-   truenas_allow_insecure = true
-   csi_storage_class_name = "truenas-nfs"
-   csi_storage_class_default = true
+   install_democratic_csi           = true
+   democratic_csi_host              = "truenas.example.com"
+   democratic_csi_api_key           = "your-api-key-here"
+   democratic_csi_dataset           = "/mnt/SAS/RKE2"
+   democratic_csi_user              = "rke2"
+   democratic_csi_protocol          = "https"
+   democratic_csi_port              = 443
+   democratic_csi_allow_insecure    = false
+   democratic_csi_storage_class_name    = "truenas-nfs"
+   democratic_csi_storage_class_default = true
    ```
+
+   > Older docs used `truenas_*` / `csi_*` names. Current variables are `democratic_csi_*` (see `terraform/variables.tf`). For the official TrueNAS CSI driver, use `install_truenas_csi` / `truenas_csi_*` instead — see [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md).
 
 2. **Generate Helm values from Terraform variables**:
    ```bash
@@ -267,17 +270,18 @@ Helm installation uses generated values
 
 #### Terraform Variables
 
-All TrueNAS variables are defined in `terraform/variables.tf`:
+All Democratic CSI variables are defined in `terraform/variables.tf`:
 
-- `truenas_host` - TrueNAS hostname
-- `truenas_api_key` - API key (sensitive)
-- `truenas_dataset` - Dataset path
-- `truenas_user` - Username
-- `truenas_protocol` - Protocol (https/http)
-- `truenas_port` - API port
-- `truenas_allow_insecure` - Allow self-signed certs
-- `csi_storage_class_name` - Storage class name
-- `csi_storage_class_default` - Make it default
+- `install_democratic_csi` - Enable install on apps clusters
+- `democratic_csi_host` - TrueNAS hostname
+- `democratic_csi_api_key` - API key (sensitive)
+- `democratic_csi_dataset` - Dataset path (e.g. `/mnt/SAS/RKE2`)
+- `democratic_csi_user` - Username (reference)
+- `democratic_csi_protocol` - Protocol (https/http)
+- `democratic_csi_port` - API port
+- `democratic_csi_allow_insecure` - Allow self-signed certs
+- `democratic_csi_storage_class_name` - Storage class name (default `truenas-nfs`)
+- `democratic_csi_storage_class_default` - Make it default
 
 #### Updating Configuration
 

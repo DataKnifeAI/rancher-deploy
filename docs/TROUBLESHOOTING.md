@@ -245,36 +245,38 @@ Permission denied (publickey).
 
 **Solutions:**
 
-1. **Verify SSH key path:**
+1. **Verify SSH key path** (repo convention is `.keys/`, gitignored):
    ```bash
-   ls -la ~/.ssh/id_rsa
+   ls -la .keys/id_rsa .keys/id_rsa.pub
    ```
 
 2. **Check key in Terraform config:**
-   ```bash
-   # In terraform.tfvars:
-   ssh_private_key = "~/.ssh/id_rsa"  # Correct path?
+   ```hcl
+   # In terraform.tfvars — must match the key injected on VMs:
+   ssh_private_key = "/path/to/rancher-deploy/.keys/id_rsa"
+   # Public key is loaded from "${ssh_private_key}.pub" (no separate var)
    ```
 
 3. **Verify public key in VM:**
    ```bash
-   # Via Proxmox console:
-   cat ~/.ssh/authorized_keys
-   # Should contain your public key
+   # Via Proxmox console, or if kubectl works see SSH_AND_ACCESS.md recovery:
+   cat /home/ubuntu/.ssh/authorized_keys
    ```
 
 4. **Check SSH permissions:**
    ```bash
    # In VM:
-   ls -la ~/.ssh/authorized_keys
-   chmod 600 ~/.ssh/authorized_keys
-   chmod 700 ~/.ssh
+   ls -la /home/ubuntu/.ssh/authorized_keys
+   chmod 600 /home/ubuntu/.ssh/authorized_keys
+   chmod 700 /home/ubuntu/.ssh
    ```
 
 5. **Try with verbose output:**
    ```bash
-   ssh -v -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+   ssh -v -i .keys/id_rsa ubuntu@192.168.1.100
    ```
+
+6. **Lost key but kubectl still works:** inject `.keys/id_rsa.pub` via `kubectl debug` — see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
 
 ### Issue: Timeout connecting to SSH
 
@@ -499,7 +501,7 @@ curl: (7) Failed to connect to get.rke2.io port 443: Connection refused
 
 1. **Check SSH into VM and verify installation:**
    ```bash
-   ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+   ssh -i .keys/id_rsa ubuntu@192.168.1.100
    sudo systemctl status rke2-server
    sudo journalctl -u rke2-server -n 50
    ```
@@ -537,7 +539,7 @@ curl: (7) Failed to connect to get.rke2.io port 443: Connection refused
 
 1. **SSH to manager-1 and check RKE2 status:**
    ```bash
-   ssh -i ~/.ssh/id_rsa ubuntu@192.168.1.100
+   ssh -i .keys/id_rsa ubuntu@192.168.1.100
    sudo systemctl status rke2-server
    sudo systemctl start rke2-server  # if not running
    ```
@@ -969,15 +971,14 @@ TrueNAS NFS service may only be bound to specific IP addresses. If CSI tries to 
 3. **Update Terraform configuration with correct IP:**
    ```hcl
    # terraform/terraform.tfvars
-   truenas_host = "192.168.9.10"  # Use IP that NFS service is bound to
+   democratic_csi_host = "192.168.9.10"  # Use IP that NFS service is bound to
    ```
 
 4. **Regenerate Helm values and upgrade CSI:**
    ```bash
-   cd /home/lee/git/rancher-deploy
    ./scripts/generate-helm-values-from-tfvars.sh
    
-   # Upgrade both clusters
+   # Upgrade apps clusters as needed
    export KUBECONFIG=~/.kube/nprd-apps.yaml
    helm upgrade democratic-csi democratic-csi/democratic-csi \
      --namespace democratic-csi \

@@ -238,7 +238,7 @@ clusters = {
 rancher_version    = "v2.7.7"
 rancher_password   = "your-secure-password"
 rancher_hostname   = "rancher.example.com"
-ssh_private_key    = "~/.ssh/id_rsa"
+ssh_private_key    = "../.keys/id_rsa"  # .pub sibling injected via cloud-init
 ```
 
 ### 3. Initialize Terraform
