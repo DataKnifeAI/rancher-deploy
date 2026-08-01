@@ -120,7 +120,7 @@ variable "unattended_upgrades_trigger" {
 }
 
 variable "enable_os_patch" {
-  description = "When true, run day-2 apt update/upgrade on all known RKE2 node IPs via SSH. Default false — enable deliberately before apply."
+  description = "When true, run day-2 apt update/upgrade on all known RKE2 node IPs via SSH. Default false — enable deliberately before apply. Mutually exclusive with enable_rke2_upgrade (separate change windows)."
   type        = bool
   default     = false
 }
@@ -138,7 +138,7 @@ variable "os_patch_trigger" {
 }
 
 variable "enable_rke2_upgrade" {
-  description = "When true, run day-2 in-place RKE2 upgrade on all known node IPs to var.rke2_version (rolling SSH installer). Default false — dangerous on live clusters; prefer drained rolling windows."
+  description = "When true, run day-2 in-place RKE2 upgrade on all known node IPs to var.rke2_version (rolling SSH installer). Default false — dangerous on live clusters; prefer drained rolling windows. Mutually exclusive with enable_os_patch (separate change windows)."
   type        = bool
   default     = false
 }

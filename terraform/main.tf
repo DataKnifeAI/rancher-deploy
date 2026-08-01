@@ -1166,6 +1166,7 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
 # ============================================================================
 # DAY-2: UNATTENDED-UPGRADES (default on) + OS PATCH / RKE2 UPGRADE (gated, default off)
 # Collects all known RKE2 guest IPs.
+# OS patch and RKE2 upgrade are mutually exclusive (runbook: separate change windows).
 # ============================================================================
 
 locals {
@@ -1220,6 +1221,13 @@ resource "null_resource" "os_patch_nodes" {
     ips     = join(",", local.all_rke2_node_ips)
   }
 
+  lifecycle {
+    precondition {
+      condition     = !var.enable_rke2_upgrade
+      error_message = "Do not enable enable_os_patch and enable_rke2_upgrade in the same apply. Run RKE2 upgrades first (separate window), then OS patch — see docs/UPGRADE_PLAN.md."
+    }
+  }
+
   provisioner "local-exec" {
     command = <<-EOT
       bash "${path.root}/../scripts/patch-os-nodes.sh" \
@@ -1248,6 +1256,13 @@ resource "null_resource" "rke2_upgrade_nodes" {
     ips     = join(",", local.all_rke2_node_ips)
   }
 
+  lifecycle {
+    precondition {
+      condition     = !var.enable_os_patch
+      error_message = "Do not enable enable_os_patch and enable_rke2_upgrade in the same apply. Run RKE2 upgrades first (separate window), then OS patch — see docs/UPGRADE_PLAN.md."
+    }
+  }
+
   provisioner "local-exec" {
     command = <<-EOT
       bash "${path.root}/../scripts/upgrade-rke2-nodes.sh" \
@@ -1257,12 +1272,15 @@ resource "null_resource" "rke2_upgrade_nodes" {
     EOT
   }
 
+  # Intentionally does NOT depend on os_patch_nodes — OS patch and RKE2 upgrade
+  # are mutually exclusive (lifecycle preconditions). Both serialize after
+  # unattended-upgrades so apt/dpkg work does not overlap the RKE2 installer.
   depends_on = [
     module.rke2_manager,
     module.rke2_nprd_apps,
     module.rke2_prd_apps,
     module.rke2_poc_apps,
-    null_resource.os_patch_nodes,
+    null_resource.unattended_upgrades_nodes,
   ]
 }
 
