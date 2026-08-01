@@ -14,8 +14,9 @@ Short operational truths that do not belong in the README.
 
 ## LoadBalancer
 
-- Current Terraform path installs **kube-vip** (`install_kube_vip`, `kube_vip_ip_pools`).
+- Current Terraform path installs **kube-vip** (`install_kube_vip`, `kube_vip_ip_pools`). kube-vip replaced MetalLB for LoadBalancer services.
 - **MetalLB** docs and `scripts/remove-metallb.sh` remain for cleanup of older installs. Prefer kube-vip for new work.
+- After MetalLB removal, orphan `*.metallb.io` CRDs (e.g. `communities`, `configurationstates`, `servicebgpstatuses`, `servicel2statuses`) may remain on nprd/prd/poc. Clear them with `./scripts/remove-metallb.sh` (uses `~/.kube/{nprd,prd,poc}-apps.yaml`).
 
 ## Palworld operator
 
