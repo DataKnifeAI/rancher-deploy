@@ -26,6 +26,8 @@ Short operational truths that do not belong in the README.
 
 This repo creates guest VMs; it does **not** manage Proxmox host bonds/bridges. For live migrations and storage traffic, keep host-side migration/storage networks correct in Proxmox (dedicated bridge/VLAN, `migration:` settings in datacenter config if used). Fix host networking in Proxmox — not in this Terraform root — when migrations are slow or pinned to the wrong NIC.
 
+Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`/`bond2`, local ZFS vs Ceph RBD vs TrueNAS CSI): [../examples/homelab/index.html](../examples/homelab/index.html).
+
 ## Secrets hygiene
 
 | Path | Purpose |

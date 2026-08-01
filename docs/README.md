@@ -51,6 +51,11 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 
 - [assets/rancher-deploy-hero.png](assets/rancher-deploy-hero.png) — README hero graphic
 
+## Examples
+
+- [../examples/homelab/index.html](../examples/homelab/index.html) — example homelab topology (Proxmox, bonds/bridges, storage, Rancher/RKE2 guests); open in a browser
+- [../examples/README.md](../examples/README.md) — examples index
+
 ## Contributing docs
 
 1. Add files under `docs/`

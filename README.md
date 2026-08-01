@@ -84,6 +84,7 @@ Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 | TrueNAS CSI migration | [TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md) |
 | Troubleshooting | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Ops notes | [OPS_NOTES.md](docs/OPS_NOTES.md) |
+| Example homelab diagram | [examples/homelab/index.html](examples/homelab/index.html) |
 
 ## Project layout
 
@@ -91,6 +92,7 @@ Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 ├── Makefile                 # init / plan / apply / destroy helpers
 ├── scripts/                 # apply.sh, destroy.sh, CSI/ARC helpers
 ├── docs/                    # guides + assets/
+├── examples/                # reference diagrams (e.g. homelab topology)
 ├── helm-values/             # examples (generated values are gitignored)
 ├── config/                  # local tokens / secrets (gitignored)
 ├── .keys/                   # deploy SSH keys (gitignored)
