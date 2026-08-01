@@ -167,6 +167,10 @@ install_rancher = true
 
 rancher_version = "v2.13.1"
 
+# RKE2 pin for NEW node bootstrap (does not upgrade existing nodes by itself)
+rke2_version = "v1.34.3+rke2r1"
+
+
 # Initial admin password (change immediately after first login!)
 rancher_password = "change-me-to-secure-password"
 
@@ -281,6 +285,17 @@ truenas_csi_storage_class_default = false
 # truenas_csi_image = "registry.example.com/project/truenas-csi:tag"  # Override for patched image; see docs/TRUENAS_CSI_MULTI_NODE.md
 # truenas_csi_image_pull_secret = ""  # Secret name for private registry
 # truenas_csi_image_pull_secret_file = ""  # Path to local secret YAML (gitignored), e.g. config/harbor-registry-secret.yaml
+
+# ============================================================================
+# RKE2 HARBOR / PRIVATE REGISTRY CRI (node containerd)
+# ============================================================================
+# Written to every RKE2 node during bootstrap (/etc/rancher/rke2/{harbor-ca.crt,registries.yaml}).
+# Files live under gitignored config/. Missing files = skip (no plan failure).
+# Apps nodes also get node-label topology.truenas.io/pool=<truenas_csi_pool> from truenas_csi_pool above.
+# Example registries template: terraform/templates/rke2-registries.yaml.example
+
+rke2_registry_ca_file     = "config/harbor-ca.crt"
+rke2_registries_yaml_file = "config/rke2-registries.yaml"
 
 # ============================================================================
 # ENVOY GATEWAY CONFIGURATION

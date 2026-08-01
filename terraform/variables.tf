@@ -101,6 +101,15 @@ variable "rancher_version" {
   default     = "v2.7.7"
 }
 
+
+variable "rke2_version" {
+  description = "RKE2 version pin for new node bootstrap (INSTALL_RKE2_VERSION). Changing this alone does not upgrade existing nodes."
+  type        = string
+  default     = "v1.34.3+rke2r1"
+}
+
+
+
 variable "rancher_password" {
   description = "Rancher admin password"
   type        = string
@@ -369,6 +378,22 @@ variable "truenas_csi_image_pull_secret_file" {
 }
 
 # ============================================================================
+# RKE2 HARBOR / PRIVATE REGISTRY CRI (node-level containerd config)
+# ============================================================================
+
+variable "rke2_registry_ca_file" {
+  description = "Path (repo-relative or absolute) to Harbor/private registry CA PEM written to /etc/rancher/rke2/harbor-ca.crt. Gitignored under config/. Empty or missing file skips."
+  type        = string
+  default     = "config/harbor-ca.crt"
+}
+
+variable "rke2_registries_yaml_file" {
+  description = "Path to RKE2 registries.yaml (mirrors/configs for CRI). Gitignored under config/. See terraform/templates/rke2-registries.yaml.example. Empty or missing file skips."
+  type        = string
+  default     = "config/rke2-registries.yaml"
+}
+
+# ============================================================================
 # ENVOY GATEWAY CONFIGURATION
 # ============================================================================
 
@@ -473,7 +498,7 @@ variable "kube_vip_version" {
 variable "kube_vip_ip_pools" {
   description = "IP address pools for Kube-VIP LoadBalancer services per cluster"
   type = map(object({
-    addresses = string  # e.g., "192.168.14.150-192.168.14.251"
+    addresses = string # e.g., "192.168.14.150-192.168.14.251"
   }))
   default = {
     "nprd-apps" = {

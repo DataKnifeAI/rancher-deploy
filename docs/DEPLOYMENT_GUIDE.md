@@ -227,10 +227,12 @@ watch 'sudo ls -la /var/lib/rancher/rke2/server/node-token'
 
 **Check version is correct:**
 ```bash
-grep "rke2_version" terraform/main.tf
+grep -E '^(rke2_version|rancher_version)' terraform/terraform.tfvars terraform/terraform.tfvars.example
+# Module wiring should reference the variable (not a literal "latest"):
+grep 'rke2_version' terraform/main.tf | head
 ```
 
-Should show: `rke2_version = "v1.34.3+rke2r1"` (not "latest")
+Pin RKE2 with `rke2_version` (default `v1.34.3+rke2r1` for this change set). Changing the pin alone only affects **new** VMs. See [OPS_NOTES.md](OPS_NOTES.md) for Harbor CRI / topology labels.
 
 **View installation logs:**
 ```bash
@@ -238,13 +240,7 @@ ssh -i .keys/id_rsa ubuntu@192.168.1.100
 sudo journalctl -u rke2-server | grep -E "INFO|ERROR"
 ```
 
-**Redeploy with correct version:**
-```bash
-# Update terraform/main.tf with correct version
-cd terraform
-rm -f terraform.tfstate*
-terraform apply -auto-approve
-```
+**Do not** wipe `terraform.tfstate` to “fix” a version — set `rke2_version` for new nodes and upgrade existing nodes deliberately.
 
 ### Network Issues
 

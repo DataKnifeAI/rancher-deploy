@@ -1,0 +1,15 @@
+# Example RKE2 / containerd registries config (no registry auth).
+# Copy to config/rke2-registries.yaml (gitignored) and point tls.ca_file at the
+# CA written to the node as /etc/rancher/rke2/harbor-ca.crt.
+#
+# Also place the PEM at config/harbor-ca.crt (gitignored).
+# See docs/OPS_NOTES.md (Harbor CRI).
+
+mirrors:
+  "harbor.example.com":
+    endpoint:
+      - "https://harbor.example.com"
+configs:
+  "harbor.example.com":
+    tls:
+      ca_file: "/etc/rancher/rke2/harbor-ca.crt"

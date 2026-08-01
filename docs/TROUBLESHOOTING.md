@@ -234,6 +234,21 @@ Error: VM already exists
 2. Check firewall rules (Proxmox or upstream)
 3. Verify routing between network segments
 
+## Proxmox provider: illegal base64 / skipped RKE2 bootstrap
+
+**Error (example):**
+```
+error: illegal base64 data at input byte …
+```
+often during/after `proxmox_virtual_environment_vm` create when the provider re-reads cloud-init SSH keys.
+
+**What happens:** The VM may already exist in Proxmox while the old in-resource `remote-exec` never ran — so RKE2 / Harbor CRI / node-labels are missing.
+
+**Mitigations in this repo:**
+1. SSH pubkey is passed with `trimspace(file(...))` (trailing newlines corrupt base64).
+2. RKE2 install is a separate `null_resource.rke2_bootstrap` in `modules/proxmox_vm` — re-run `terraform apply` (targeted if needed) once the VM is up and SSH works; do not recreate a healthy VM for this alone.
+3. Manual fallback: copy Harbor files from a sibling (`/etc/rancher/rke2/registries.yaml`, `harbor-ca.crt`), restart `rke2-agent`/`rke2-server`, and `kubectl label node … topology.truenas.io/pool=<pool>`. See [OPS_NOTES.md](OPS_NOTES.md).
+
 ## SSH/Connection Issues
 
 ### Issue: "Permission denied (publickey)"
