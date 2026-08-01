@@ -19,7 +19,7 @@ Related: [OPS_NOTES.md](OPS_NOTES.md) (pin summary), [DEPLOYMENT_GUIDE.md](DEPLO
 
 | Step | Action | Done |
 |------|--------|------|
-| 0.1 | Merge **#14** (`feat/rke2-bootstrap-harbor-topology`) — `rke2_version` var, Harbor CRI, topology labels, resilient bootstrap | [ ] |
+| 0.1 | Merge **#14** (`feat/rke2-bootstrap-harbor-topology`) — `rke2_version` var, optional registries.yaml (LE Harbor, no custom CA), topology labels, resilient bootstrap | [ ] |
 | 0.2 | Merge/rebase **#15** (`feat/rancher-rke2-os-upgrades`) — default pins + `enable_rke2_upgrade` / `enable_os_patch` (both default **false**); `enable_unattended_upgrades` defaults **true** (security-only, no auto-reboot) | [ ] |
 | 0.3 | In live `terraform/terraform.tfvars`, **do not** leave final pins active for the first apply after merge | [ ] |
 
