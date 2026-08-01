@@ -17,8 +17,8 @@ Short operational truths that do not belong in the README.
 
 | Pin | Variable | Default (as of 2026-07) | Notes |
 |-----|----------|-------------------------|--------|
-| RKE2 | `rke2_version` | `v1.34.9+rke2r1` | New nodes only unless `enable_rke2_upgrade=true` |
-| Rancher | `rancher_version` | `v2.14.3` | Stable chart; **minor upgrades must step** latest patch of current minor first (e.g. `v2.13.1` → `v2.13.7` → `v2.14.3`) |
+| RKE2 | `rke2_version` | `v1.36.2+rke2r1` | New nodes only unless `enable_rke2_upgrade=true`. Needs Rancher 2.15+ (2.14.x max certified RKE2 is 1.35) |
+| Rancher | `rancher_version` | `v2.15.0` | Stable chart with K8s/RKE2 1.36 support; **minor upgrades must step** latest patch of current minor first (e.g. `v2.14.3` → `v2.14.4` → `v2.15.0`) |
 | OS patch | `enable_os_patch` | `false` | SSH `apt update/upgrade` via `scripts/patch-os-nodes.sh`; optional `os_patch_reboot` |
 
 **Apply path (when ready — not automatic):**

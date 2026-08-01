@@ -165,12 +165,14 @@ cert_manager_version = "v1.13.0"
 # Set to false to deploy manager and apps clusters without Rancher
 install_rancher = true
 
-rancher_version = "v2.14.3"
-# Live upgrade path if currently on 2.13.x: first set v2.13.7 and apply Rancher only,
-# then set v2.14.3 (Rancher supported minor stepping).
+rancher_version = "v2.15.0"
+# Live upgrade path (Rancher minor stepping): latest patch of current minor → next minor.
+# Example from 2.14.3: first set v2.14.4 and apply Rancher only, then set v2.15.0.
+# Rancher 2.14.x only certifies RKE2 through 1.35; 1.36 needs Rancher 2.15+.
 
-# RKE2 pin for NEW node bootstrap (and for enable_rke2_upgrade day-2). Latest 1.34.x for Rancher 2.13+/2.14.
-rke2_version = "v1.34.9+rke2r1"
+# RKE2 pin for NEW node bootstrap (and for enable_rke2_upgrade day-2).
+# Latest stable 1.36.x (v1.36.3+rke2r1 still RC-only as of pin date).
+rke2_version = "v1.36.2+rke2r1"
 
 # Day-2 OS package patch (Ubuntu 24.04). Default off — set true + bump os_patch_trigger to run.
 enable_os_patch   = false
