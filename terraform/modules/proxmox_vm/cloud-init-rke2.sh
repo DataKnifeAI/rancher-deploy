@@ -11,8 +11,101 @@ log() {
 
 log "=== RKE2 Installation Script Starting ==="
 
-# Skip checks if already installed
+# Write optional registries.yaml when Terraform passes a base64 payload.
+# Harbor uses public Let's Encrypt certs — no custom CA install.
+# Safe to re-run; restarts containerd-backed rke2 service only when the file changes.
+configure_rke2_harbor_cri() {
+  if [ -z "${RKE2_REGISTRIES_YAML_B64:-}" ]; then
+    log "ⓘ registries.yaml skipped (none provided; optional for mirrors only)"
+    return 0
+  fi
+
+  mkdir -p /etc/rancher/rke2
+  CHANGED=0
+
+  TMP_REG=$(mktemp)
+  if echo "${RKE2_REGISTRIES_YAML_B64}" | base64 -d > "$TMP_REG" 2>/dev/null && [ -s "$TMP_REG" ]; then
+    if [ ! -f /etc/rancher/rke2/registries.yaml ] || ! cmp -s "$TMP_REG" /etc/rancher/rke2/registries.yaml; then
+      install -m 0600 "$TMP_REG" /etc/rancher/rke2/registries.yaml
+      CHANGED=1
+      log "✓ Wrote /etc/rancher/rke2/registries.yaml"
+    else
+      log "✓ /etc/rancher/rke2/registries.yaml already up to date"
+    fi
+  else
+    log "⚠ Failed to decode RKE2_REGISTRIES_YAML_B64"
+  fi
+  rm -f "$TMP_REG"
+
+  if [ "$CHANGED" -eq 1 ] && [ -f /usr/local/bin/rke2 ]; then
+    if systemctl is-active --quiet rke2-agent 2>/dev/null; then
+      log "Restarting rke2-agent to pick up registries.yaml..."
+      systemctl restart rke2-agent || log "⚠ rke2-agent restart failed"
+    elif systemctl is-active --quiet rke2-server 2>/dev/null; then
+      log "Restarting rke2-server to pick up registries.yaml..."
+      systemctl restart rke2-server || log "⚠ rke2-server restart failed"
+    fi
+  fi
+}
+
+# Append node-label entries to an existing RKE2 config.yaml (idempotent).
+# Sets RKE2_NODE_LABELS_CHANGED=1 when config.yaml was modified (caller may restart).
+RKE2_NODE_LABELS_CHANGED=0
+append_rke2_node_labels() {
+  CONFIG_FILE="${1:-/etc/rancher/rke2/config.yaml}"
+  if [ -z "${RKE2_NODE_LABELS:-}" ]; then
+    return 0
+  fi
+  if [ ! -f "$CONFIG_FILE" ]; then
+    log "⚠ Cannot append node-label: $CONFIG_FILE missing"
+    return 0
+  fi
+
+  if ! grep -q '^node-label:' "$CONFIG_FILE"; then
+    echo "node-label:" >> "$CONFIG_FILE"
+    RKE2_NODE_LABELS_CHANGED=1
+  fi
+
+  IFS=',' read -ra LABELS_ARRAY <<< "${RKE2_NODE_LABELS}"
+  for LABEL in "${LABELS_ARRAY[@]}"; do
+    [ -z "$LABEL" ] && continue
+    if grep -qF "  - ${LABEL}" "$CONFIG_FILE"; then
+      continue
+    fi
+    # Insert after the node-label: key
+    if grep -q '^node-label:' "$CONFIG_FILE"; then
+      sed -i "/^node-label:/a\\  - ${LABEL}" "$CONFIG_FILE"
+      log "✓ Added node-label: ${LABEL}"
+      RKE2_NODE_LABELS_CHANGED=1
+    fi
+  done
+}
+
+# Restart the active RKE2 unit so config.yaml node-label changes take effect.
+restart_rke2_for_config() {
+  if systemctl is-active --quiet rke2-agent 2>/dev/null; then
+    log "Restarting rke2-agent to pick up config.yaml changes..."
+    systemctl restart rke2-agent || log "⚠ rke2-agent restart failed"
+  elif systemctl is-active --quiet rke2-server 2>/dev/null; then
+    log "Restarting rke2-server to pick up config.yaml changes..."
+    systemctl restart rke2-server || log "⚠ rke2-server restart failed"
+  else
+    log "⚠ No active rke2-server/agent unit to restart after config change"
+  fi
+}
+
+configure_rke2_harbor_cri
+
+# Skip full install if already installed (registries.yaml above still runs)
 if [ -f /usr/local/bin/rke2 ]; then
+  RKE2_NODE_LABELS_CHANGED=0
+  if [ -f /etc/rancher/rke2/config.yaml ]; then
+    append_rke2_node_labels /etc/rancher/rke2/config.yaml
+  fi
+  # New node-label entries in config.yaml need a service restart (like registries).
+  if [ "$RKE2_NODE_LABELS_CHANGED" -eq 1 ]; then
+    restart_rke2_for_config
+  fi
   log "RKE2 already installed, skipping installation"
   exit 0
 fi
@@ -269,6 +362,7 @@ EOF
       echo "  - $ALIAS" >> /etc/rancher/rke2/config.yaml
     done
   fi
+  append_rke2_node_labels /etc/rancher/rke2/config.yaml
   # Replace placeholders with actual values
   sed -i "s|SERVER_IP_PLACEHOLDER|${SERVER_IP}|g" /etc/rancher/rke2/config.yaml
   sed -i "s|SERVER_TOKEN_PLACEHOLDER|${SERVER_TOKEN}|g" /etc/rancher/rke2/config.yaml
@@ -291,6 +385,7 @@ EOF
       echo "  - $ALIAS" >> /etc/rancher/rke2/config.yaml
     done
   fi
+  append_rke2_node_labels /etc/rancher/rke2/config.yaml
   log "✓ RKE2 primary config created at /etc/rancher/rke2/config.yaml"
 fi
 
@@ -420,6 +515,7 @@ cat > /etc/rancher/rke2/config.yaml <<EOF
 server: https://${SERVER_IP}:9345
 token: ${SERVER_TOKEN}
 EOF
+append_rke2_node_labels /etc/rancher/rke2/config.yaml
 log "✓ RKE2 agent config.yaml created at /etc/rancher/rke2/config.yaml"
 
 # Export environment variables for installer (RKE2 installer may read these, but config.yaml takes precedence)

@@ -1,0 +1,11 @@
+# Example RKE2 / containerd registries config (mirrors only; no registry auth).
+# Copy to config/rke2-registries.yaml (gitignored) if you need pull-through mirrors.
+#
+# Harbor serves a public Let's Encrypt cert — do not set tls.ca_file.
+# Omit this file entirely when mirrors are not needed.
+# See docs/OPS_NOTES.md (Harbor / registries).
+
+mirrors:
+  "harbor.example.com":
+    endpoint:
+      - "https://harbor.example.com"

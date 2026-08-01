@@ -35,6 +35,21 @@ locals {
 
   # Image pull secrets YAML for CSI when using private registry
   truenas_csi_image_pull_secrets = var.truenas_csi_image_pull_secret != "" ? "      imagePullSecrets:\n        - name: ${var.truenas_csi_image_pull_secret}" : ""
+
+  # Optional registries.yaml for CRI mirrors (gitignored under config/). Empty b64 skips.
+  # Harbor uses Let's Encrypt — no custom registry CA is installed on nodes.
+  rke2_registries_yaml_path = var.rke2_registries_yaml_file != "" ? (
+    startswith(var.rke2_registries_yaml_file, "/") ? var.rke2_registries_yaml_file : abspath("${path.root}/../${var.rke2_registries_yaml_file}")
+  ) : ""
+  rke2_registries_yaml_b64 = (
+    local.rke2_registries_yaml_path != "" && fileexists(local.rke2_registries_yaml_path)
+  ) ? filebase64(local.rke2_registries_yaml_path) : ""
+
+  # Apps clusters use TrueNAS CSI — set topology label at RKE2 join time.
+  # Manager nodes do not use this CSI path and stay unlabeled.
+  apps_rke2_node_labels = local.truenas_csi_pool != "" ? [
+    "topology.truenas.io/pool=${local.truenas_csi_pool}"
+  ] : []
 }
 
 # ============================================================================
@@ -53,7 +68,7 @@ module "rancher_manager_primary" {
   datastore_id          = var.clusters["manager"].storage
 
   cpu_cores    = var.clusters["manager"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["manager"].memory_mb
   disk_size_gb = var.clusters["manager"].disk_size_gb
 
@@ -68,7 +83,7 @@ module "rancher_manager_primary" {
 
   # RKE2 configuration - primary server (standalone, generates token)
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = true # NEW: marks this as primary node
   rke2_server_token  = ""   # Primary generates its own token
@@ -76,6 +91,10 @@ module "rancher_manager_primary" {
   cluster_hostname   = var.manager_cluster_hostname
   cluster_primary_ip = var.manager_cluster_primary_ip
   cluster_aliases    = var.manager_cluster_aliases
+
+  # Optional registries.yaml; manager has no TrueNAS CSI topology label
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = []
 
   depends_on = [
     proxmox_virtual_environment_download_file.ubuntu_cloud_image
@@ -145,7 +164,7 @@ module "rancher_manager_additional" {
   datastore_id          = var.clusters["manager"].storage
 
   cpu_cores    = var.clusters["manager"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["manager"].memory_mb
   disk_size_gb = var.clusters["manager"].disk_size_gb
 
@@ -160,7 +179,7 @@ module "rancher_manager_additional" {
 
   # RKE2 configuration - secondary servers (join primary's cluster)
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = false                                                        # NEW: marks this as secondary node
   rke2_server_token  = try(trimspace(data.local_file.manager_token[0].content), "") # Token fetched locally from primary
@@ -168,6 +187,9 @@ module "rancher_manager_additional" {
   cluster_hostname   = var.manager_cluster_hostname
   cluster_primary_ip = var.manager_cluster_primary_ip
   cluster_aliases    = var.manager_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = []
 
   # CRITICAL: Only build after primary is ready AND token is fetched
   depends_on = [
@@ -245,7 +267,7 @@ module "nprd_apps_primary" {
   datastore_id          = var.clusters["nprd-apps"].storage
 
   cpu_cores    = var.clusters["nprd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].disk_size_gb
 
@@ -260,7 +282,7 @@ module "nprd_apps_primary" {
 
   # RKE2 configuration - apps primary server
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = true
   rke2_server_token  = ""
@@ -268,6 +290,9 @@ module "nprd_apps_primary" {
   cluster_primary_ip = var.nprd_apps_cluster_primary_ip
   cluster_aliases    = var.nprd_apps_cluster_aliases
   rke2_server_ip     = ""
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -310,7 +335,7 @@ module "nprd_apps_additional" {
   datastore_id          = var.clusters["nprd-apps"].storage
 
   cpu_cores    = var.clusters["nprd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].disk_size_gb
 
@@ -325,7 +350,7 @@ module "nprd_apps_additional" {
 
   # RKE2 configuration - apps secondary servers
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.nprd_apps_token[0].content), "") # Token fetched locally from nprd-apps primary
@@ -333,6 +358,9 @@ module "nprd_apps_additional" {
   cluster_hostname   = var.nprd_apps_cluster_hostname
   cluster_primary_ip = var.nprd_apps_cluster_primary_ip
   cluster_aliases    = var.nprd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -377,7 +405,7 @@ module "nprd_apps_workers" {
 
   # Use worker-specific resources if provided, otherwise use server defaults
   cpu_cores    = var.clusters["nprd-apps"].worker_cpu_cores > 0 ? var.clusters["nprd-apps"].worker_cpu_cores : var.clusters["nprd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["nprd-apps"].worker_memory_mb > 0 ? var.clusters["nprd-apps"].worker_memory_mb : var.clusters["nprd-apps"].memory_mb
   disk_size_gb = var.clusters["nprd-apps"].worker_disk_size_gb > 0 ? var.clusters["nprd-apps"].worker_disk_size_gb : var.clusters["nprd-apps"].disk_size_gb
 
@@ -392,7 +420,7 @@ module "nprd_apps_workers" {
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = false # Worker nodes run in agent mode
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.nprd_apps_token[0].content), "") # Token from apps primary
@@ -400,6 +428,9 @@ module "nprd_apps_workers" {
   cluster_hostname   = var.nprd_apps_cluster_hostname
   cluster_primary_ip = var.nprd_apps_cluster_primary_ip
   cluster_aliases    = var.nprd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -562,7 +593,7 @@ module "prd_apps_primary" {
   datastore_id          = var.clusters["prd-apps"].storage
 
   cpu_cores    = var.clusters["prd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].disk_size_gb
 
@@ -577,7 +608,7 @@ module "prd_apps_primary" {
 
   # RKE2 configuration - prd-apps primary server
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = true
   rke2_server_token  = ""
@@ -585,6 +616,9 @@ module "prd_apps_primary" {
   cluster_primary_ip = var.prd_apps_cluster_primary_ip
   cluster_aliases    = var.prd_apps_cluster_aliases
   rke2_server_ip     = ""
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -627,7 +661,7 @@ module "prd_apps_additional" {
   datastore_id          = var.clusters["prd-apps"].storage
 
   cpu_cores    = var.clusters["prd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].disk_size_gb
 
@@ -642,7 +676,7 @@ module "prd_apps_additional" {
 
   # RKE2 configuration - prd-apps secondary servers
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.prd_apps_token[0].content), "") # Token fetched locally from prd-apps primary
@@ -650,6 +684,9 @@ module "prd_apps_additional" {
   cluster_hostname   = var.prd_apps_cluster_hostname
   cluster_primary_ip = var.prd_apps_cluster_primary_ip
   cluster_aliases    = var.prd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -694,7 +731,7 @@ module "prd_apps_workers" {
 
   # Use worker-specific resources if provided, otherwise use server defaults
   cpu_cores    = var.clusters["prd-apps"].worker_cpu_cores > 0 ? var.clusters["prd-apps"].worker_cpu_cores : var.clusters["prd-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["prd-apps"].worker_memory_mb > 0 ? var.clusters["prd-apps"].worker_memory_mb : var.clusters["prd-apps"].memory_mb
   disk_size_gb = var.clusters["prd-apps"].worker_disk_size_gb > 0 ? var.clusters["prd-apps"].worker_disk_size_gb : var.clusters["prd-apps"].disk_size_gb
 
@@ -709,7 +746,7 @@ module "prd_apps_workers" {
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = false # Worker nodes run in agent mode
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.prd_apps_token[0].content), "") # Token from prd-apps primary
@@ -717,6 +754,9 @@ module "prd_apps_workers" {
   cluster_hostname   = var.prd_apps_cluster_hostname
   cluster_primary_ip = var.prd_apps_cluster_primary_ip
   cluster_aliases    = var.prd_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -809,7 +849,7 @@ module "poc_apps_primary" {
   datastore_id          = var.clusters["poc-apps"].storage
 
   cpu_cores    = var.clusters["poc-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["poc-apps"].memory_mb
   disk_size_gb = var.clusters["poc-apps"].disk_size_gb
 
@@ -824,7 +864,7 @@ module "poc_apps_primary" {
 
   # RKE2 configuration - poc-apps primary server
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = true
   rke2_server_token  = ""
@@ -832,6 +872,9 @@ module "poc_apps_primary" {
   cluster_primary_ip = var.poc_apps_cluster_primary_ip
   cluster_aliases    = var.poc_apps_cluster_aliases
   rke2_server_ip     = ""
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -874,7 +917,7 @@ module "poc_apps_additional" {
   datastore_id          = var.clusters["poc-apps"].storage
 
   cpu_cores    = var.clusters["poc-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["poc-apps"].memory_mb
   disk_size_gb = var.clusters["poc-apps"].disk_size_gb
 
@@ -889,7 +932,7 @@ module "poc_apps_additional" {
 
   # RKE2 configuration - poc-apps secondary servers
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = true
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.poc_apps_token[0].content), "") # Token fetched locally from poc-apps primary
@@ -897,6 +940,9 @@ module "poc_apps_additional" {
   cluster_hostname   = var.poc_apps_cluster_hostname
   cluster_primary_ip = var.poc_apps_cluster_primary_ip
   cluster_aliases    = var.poc_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -941,7 +987,7 @@ module "poc_apps_workers" {
 
   # Use worker-specific resources if provided, otherwise use server defaults
   cpu_cores    = var.clusters["poc-apps"].worker_cpu_cores > 0 ? var.clusters["poc-apps"].worker_cpu_cores : var.clusters["poc-apps"].cpu_cores
-  cpu_type      = var.vm_cpu_type
+  cpu_type     = var.vm_cpu_type
   memory_mb    = var.clusters["poc-apps"].worker_memory_mb > 0 ? var.clusters["poc-apps"].worker_memory_mb : var.clusters["poc-apps"].memory_mb
   disk_size_gb = var.clusters["poc-apps"].worker_disk_size_gb > 0 ? var.clusters["poc-apps"].worker_disk_size_gb : var.clusters["poc-apps"].disk_size_gb
 
@@ -956,7 +1002,7 @@ module "poc_apps_workers" {
 
   # RKE2 configuration - worker nodes (agent mode, NOT server mode)
   rke2_enabled       = true
-  rke2_version       = "v1.34.3+rke2r1"
+  rke2_version       = var.rke2_version
   is_rke2_server     = false # Worker nodes run in agent mode
   rke2_is_primary    = false
   rke2_server_token  = try(trimspace(data.local_file.poc_apps_token[0].content), "") # Token from poc-apps primary
@@ -964,6 +1010,9 @@ module "poc_apps_workers" {
   cluster_hostname   = var.poc_apps_cluster_hostname
   cluster_primary_ip = var.poc_apps_cluster_primary_ip
   cluster_aliases    = var.poc_apps_cluster_aliases
+
+  rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
+  rke2_node_labels         = local.apps_rke2_node_labels
 
   # Rancher registration - system-agent installation
   register_with_rancher      = true # Enable system-agent for automatic Rancher registration
@@ -1012,6 +1061,108 @@ module "rke2_poc_apps" {
 }
 
 # ============================================================================
+# TRUENAS TOPOLOGY LABELS (apps clusters)
+# Ensures existing nodes get topology.truenas.io/pool=<pool> after kubeconfig is ready.
+# New nodes also receive the label via RKE2 node-label in proxmox_vm bootstrap.
+# Manager cluster is intentionally skipped (no TrueNAS CSI workload path).
+# ============================================================================
+
+resource "null_resource" "label_nprd_apps_truenas_topology" {
+  triggers = {
+    pool           = local.truenas_csi_pool
+    cluster_module = module.rke2_nprd_apps.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+      KUBECONFIG="${pathexpand("~/.kube/nprd-apps.yaml")}"
+      POOL="${local.truenas_csi_pool}"
+      echo "Labeling nprd-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
+      for i in $$(seq 1 60); do
+        if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: nprd-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
+      kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
+      echo "✓ nprd-apps TrueNAS topology labels applied"
+    EOT
+  }
+
+  depends_on = [module.rke2_nprd_apps]
+}
+
+resource "null_resource" "label_prd_apps_truenas_topology" {
+  triggers = {
+    pool           = local.truenas_csi_pool
+    cluster_module = module.rke2_prd_apps.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+      KUBECONFIG="${pathexpand("~/.kube/prd-apps.yaml")}"
+      POOL="${local.truenas_csi_pool}"
+      echo "Labeling prd-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
+      for i in $$(seq 1 60); do
+        if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: prd-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
+      kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
+      echo "✓ prd-apps TrueNAS topology labels applied"
+    EOT
+  }
+
+  depends_on = [module.rke2_prd_apps]
+}
+
+resource "null_resource" "label_poc_apps_truenas_topology" {
+  triggers = {
+    pool           = local.truenas_csi_pool
+    cluster_module = module.rke2_poc_apps.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+      KUBECONFIG="${pathexpand("~/.kube/poc-apps.yaml")}"
+      POOL="${local.truenas_csi_pool}"
+      echo "Labeling poc-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
+      for i in $$(seq 1 60); do
+        if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: poc-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
+      kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
+      echo "✓ poc-apps TrueNAS topology labels applied"
+    EOT
+  }
+
+  depends_on = [module.rke2_poc_apps]
+}
+
 # ENVOY GATEWAY DEPLOYMENT - DOWNSTREAM CLUSTERS
 # Installs Envoy Gateway and Gateway API CRDs on downstream clusters
 # ============================================================================
@@ -1021,14 +1172,14 @@ module "envoy_gateway_nprd_apps" {
   source = "./modules/envoy_gateway"
 
   cluster_name          = "nprd-apps"
-  kubeconfig_path       = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path       = "~/.kube/nprd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_envoy_gateway = var.install_envoy_gateway
   gateway_api_version   = var.gateway_api_version
   envoy_gateway_version = var.envoy_gateway_version
   namespace             = "envoy-gateway-system"
 
   depends_on = [
-    module.rke2_nprd_apps  # Wait for cluster to be fully ready
+    module.rke2_nprd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1036,13 +1187,13 @@ module "envoy_gateway_nprd_apps" {
 module "cert_manager_nprd_apps" {
   source = "./modules/cert_manager"
 
-  cluster_name        = "nprd-apps"
-  kubeconfig_path     = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cluster_name         = "nprd-apps"
+  kubeconfig_path      = "~/.kube/nprd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   cert_manager_version = var.cert_manager_version
   namespace            = "cert-manager"
 
   depends_on = [
-    module.rke2_nprd_apps  # Wait for cluster to be fully ready
+    module.rke2_nprd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1051,14 +1202,14 @@ module "kube_vip_nprd_apps" {
   source = "./modules/kube-vip"
 
   cluster_name      = "nprd-apps"
-  kubeconfig_path   = "~/.kube/nprd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path   = "~/.kube/nprd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_kube_vip  = var.install_kube_vip
   kube_vip_version  = var.kube_vip_version
   namespace         = "kube-vip"
   ip_pool_addresses = try(var.kube_vip_ip_pools["nprd-apps"].addresses, "")
 
   depends_on = [
-    module.rke2_nprd_apps  # Wait for cluster to be fully ready
+    module.rke2_nprd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1067,14 +1218,14 @@ module "envoy_gateway_prd_apps" {
   source = "./modules/envoy_gateway"
 
   cluster_name          = "prd-apps"
-  kubeconfig_path       = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path       = "~/.kube/prd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_envoy_gateway = var.install_envoy_gateway
   gateway_api_version   = var.gateway_api_version
   envoy_gateway_version = var.envoy_gateway_version
   namespace             = "envoy-gateway-system"
 
   depends_on = [
-    module.rke2_prd_apps  # Wait for cluster to be fully ready
+    module.rke2_prd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1082,13 +1233,13 @@ module "envoy_gateway_prd_apps" {
 module "cert_manager_prd_apps" {
   source = "./modules/cert_manager"
 
-  cluster_name        = "prd-apps"
-  kubeconfig_path     = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cluster_name         = "prd-apps"
+  kubeconfig_path      = "~/.kube/prd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   cert_manager_version = var.cert_manager_version
   namespace            = "cert-manager"
 
   depends_on = [
-    module.rke2_prd_apps  # Wait for cluster to be fully ready
+    module.rke2_prd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1097,14 +1248,14 @@ module "kube_vip_prd_apps" {
   source = "./modules/kube-vip"
 
   cluster_name      = "prd-apps"
-  kubeconfig_path   = "~/.kube/prd-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path   = "~/.kube/prd-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_kube_vip  = var.install_kube_vip
   kube_vip_version  = var.kube_vip_version
   namespace         = "kube-vip"
   ip_pool_addresses = try(var.kube_vip_ip_pools["prd-apps"].addresses, "")
 
   depends_on = [
-    module.rke2_prd_apps  # Wait for cluster to be fully ready
+    module.rke2_prd_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1113,14 +1264,14 @@ module "envoy_gateway_poc_apps" {
   source = "./modules/envoy_gateway"
 
   cluster_name          = "poc-apps"
-  kubeconfig_path       = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path       = "~/.kube/poc-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_envoy_gateway = var.install_envoy_gateway
   gateway_api_version   = var.gateway_api_version
   envoy_gateway_version = var.envoy_gateway_version
   namespace             = "envoy-gateway-system"
 
   depends_on = [
-    module.rke2_poc_apps  # Wait for cluster to be fully ready
+    module.rke2_poc_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1128,13 +1279,13 @@ module "envoy_gateway_poc_apps" {
 module "cert_manager_poc_apps" {
   source = "./modules/cert_manager"
 
-  cluster_name        = "poc-apps"
-  kubeconfig_path     = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  cluster_name         = "poc-apps"
+  kubeconfig_path      = "~/.kube/poc-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   cert_manager_version = var.cert_manager_version
   namespace            = "cert-manager"
 
   depends_on = [
-    module.rke2_poc_apps  # Wait for cluster to be fully ready
+    module.rke2_poc_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -1143,14 +1294,14 @@ module "kube_vip_poc_apps" {
   source = "./modules/kube-vip"
 
   cluster_name      = "poc-apps"
-  kubeconfig_path   = "~/.kube/poc-apps.yaml"  # Path where rke2_downstream_cluster module creates kubeconfig
+  kubeconfig_path   = "~/.kube/poc-apps.yaml" # Path where rke2_downstream_cluster module creates kubeconfig
   install_kube_vip  = var.install_kube_vip
   kube_vip_version  = var.kube_vip_version
   namespace         = "kube-vip"
   ip_pool_addresses = try(var.kube_vip_ip_pools["poc-apps"].addresses, "")
 
   depends_on = [
-    module.rke2_poc_apps  # Wait for cluster to be fully ready
+    module.rke2_poc_apps # Wait for cluster to be fully ready
   ]
 }
 
@@ -2019,12 +2170,12 @@ resource "null_resource" "deploy_democratic_csi_nprd_apps" {
   ]
 
   triggers = {
-    democratic_csi_host              = var.democratic_csi_host
-    democratic_csi_api_key           = sha256(var.democratic_csi_api_key)
-    democratic_csi_dataset           = var.democratic_csi_dataset
-    democratic_csi_storage_class     = var.democratic_csi_storage_class_name
-    democratic_csi_storage_default   = tostring(var.democratic_csi_storage_class_default)
-    helm_values_file                = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    democratic_csi_host            = var.democratic_csi_host
+    democratic_csi_api_key         = sha256(var.democratic_csi_api_key)
+    democratic_csi_dataset         = var.democratic_csi_dataset
+    democratic_csi_storage_class   = var.democratic_csi_storage_class_name
+    democratic_csi_storage_default = tostring(var.democratic_csi_storage_class_default)
+    helm_values_file               = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
 
@@ -2152,11 +2303,11 @@ resource "null_resource" "deploy_democratic_csi_prd_apps" {
 
   triggers = {
     democratic_csi_host            = var.democratic_csi_host
-    democratic_csi_api_key          = sha256(var.democratic_csi_api_key)
+    democratic_csi_api_key         = sha256(var.democratic_csi_api_key)
     democratic_csi_dataset         = var.democratic_csi_dataset
     democratic_csi_storage_class   = var.democratic_csi_storage_class_name
     democratic_csi_storage_default = tostring(var.democratic_csi_storage_class_default)
-    helm_values_file              = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    helm_values_file               = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
 
@@ -2288,7 +2439,7 @@ resource "null_resource" "deploy_democratic_csi_poc_apps" {
     democratic_csi_dataset         = var.democratic_csi_dataset
     democratic_csi_storage_class   = var.democratic_csi_storage_class_name
     democratic_csi_storage_default = tostring(var.democratic_csi_storage_class_default)
-    helm_values_file              = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
+    helm_values_file               = filemd5("${path.root}/../scripts/generate-helm-values-from-tfvars.sh")
   }
 }
 
@@ -2318,13 +2469,13 @@ resource "null_resource" "deploy_truenas_csi_nprd_apps" {
       MANIFEST=$(mktemp)
       cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
 ${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
-  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
-  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
-  default_pool          = local.truenas_csi_pool
-  nfs_server            = var.truenas_csi_host
-  iscsi_portal          = "${var.truenas_csi_host}:3260"
-  truenas_csi_image     = var.truenas_csi_image
-  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+    truenas_url        = "wss://${var.truenas_csi_host}/api/current"
+    truenas_insecure   = var.truenas_csi_allow_insecure ? "true" : "false"
+    default_pool       = local.truenas_csi_pool
+    nfs_server         = var.truenas_csi_host
+    iscsi_portal       = "${var.truenas_csi_host}:3260"
+    truenas_csi_image  = var.truenas_csi_image
+    image_pull_secrets = local.truenas_csi_image_pull_secrets
 })}
 TRUENAS_CSI_MANIFEST_END
 
@@ -2387,39 +2538,39 @@ STORAGECLASS
       kubectl get storageclass
       echo "✓ TrueNAS CSI deployment complete"
     EOT
-    environment = {
-      TRUENAS_API_KEY = var.truenas_csi_api_key
-    }
-  }
+environment = {
+  TRUENAS_API_KEY = var.truenas_csi_api_key
+}
+}
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
+provisioner "local-exec" {
+  when       = destroy
+  on_failure = continue
+  command    = <<-EOT
       export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
       kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
       kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
       echo "✓ TrueNAS CSI removed"
     EOT
-  }
+}
 
-  depends_on = [
-    null_resource.merge_kubeconfigs,
-    module.rke2_nprd_apps
-  ]
+depends_on = [
+  null_resource.merge_kubeconfigs,
+  module.rke2_nprd_apps
+]
 
-  triggers = {
-    truenas_csi_host              = var.truenas_csi_host
-    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
-    truenas_csi_pool              = var.truenas_csi_pool
-    truenas_csi_image             = var.truenas_csi_image
-    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
-    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
-    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
-    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
-    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
-    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
-  }
+triggers = {
+  truenas_csi_host                   = var.truenas_csi_host
+  truenas_csi_api_key                = sha256(var.truenas_csi_api_key)
+  truenas_csi_pool                   = var.truenas_csi_pool
+  truenas_csi_image                  = var.truenas_csi_image
+  truenas_csi_image_pull_secret      = var.truenas_csi_image_pull_secret
+  truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+  truenas_csi_storage_class          = var.truenas_csi_storage_class_name
+  truenas_csi_storage_default        = tostring(var.truenas_csi_storage_class_default)
+  template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+  storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
+}
 }
 
 resource "null_resource" "deploy_truenas_csi_prd_apps" {
@@ -2443,13 +2594,13 @@ resource "null_resource" "deploy_truenas_csi_prd_apps" {
       MANIFEST=$(mktemp)
       cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
 ${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
-  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
-  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
-  default_pool          = local.truenas_csi_pool
-  nfs_server            = var.truenas_csi_host
-  iscsi_portal          = "${var.truenas_csi_host}:3260"
-  truenas_csi_image     = var.truenas_csi_image
-  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+    truenas_url        = "wss://${var.truenas_csi_host}/api/current"
+    truenas_insecure   = var.truenas_csi_allow_insecure ? "true" : "false"
+    default_pool       = local.truenas_csi_pool
+    nfs_server         = var.truenas_csi_host
+    iscsi_portal       = "${var.truenas_csi_host}:3260"
+    truenas_csi_image  = var.truenas_csi_image
+    image_pull_secrets = local.truenas_csi_image_pull_secrets
 })}
 TRUENAS_CSI_MANIFEST_END
 
@@ -2512,39 +2663,39 @@ STORAGECLASS
       kubectl get storageclass
       echo "✓ TrueNAS CSI deployment complete"
     EOT
-    environment = {
-      TRUENAS_API_KEY = var.truenas_csi_api_key
-    }
-  }
+environment = {
+  TRUENAS_API_KEY = var.truenas_csi_api_key
+}
+}
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
+provisioner "local-exec" {
+  when       = destroy
+  on_failure = continue
+  command    = <<-EOT
       export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
       kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
       kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
       echo "✓ TrueNAS CSI removed"
     EOT
-  }
+}
 
-  depends_on = [
-    null_resource.merge_kubeconfigs,
-    module.rke2_prd_apps
-  ]
+depends_on = [
+  null_resource.merge_kubeconfigs,
+  module.rke2_prd_apps
+]
 
-  triggers = {
-    truenas_csi_host              = var.truenas_csi_host
-    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
-    truenas_csi_pool              = var.truenas_csi_pool
-    truenas_csi_image             = var.truenas_csi_image
-    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
-    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
-    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
-    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
-    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
-    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
-  }
+triggers = {
+  truenas_csi_host                   = var.truenas_csi_host
+  truenas_csi_api_key                = sha256(var.truenas_csi_api_key)
+  truenas_csi_pool                   = var.truenas_csi_pool
+  truenas_csi_image                  = var.truenas_csi_image
+  truenas_csi_image_pull_secret      = var.truenas_csi_image_pull_secret
+  truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+  truenas_csi_storage_class          = var.truenas_csi_storage_class_name
+  truenas_csi_storage_default        = tostring(var.truenas_csi_storage_class_default)
+  template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+  storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
+}
 }
 
 resource "null_resource" "deploy_truenas_csi_poc_apps" {
@@ -2568,13 +2719,13 @@ resource "null_resource" "deploy_truenas_csi_poc_apps" {
       MANIFEST=$(mktemp)
       cat << 'TRUENAS_CSI_MANIFEST_END' > "$MANIFEST"
 ${templatefile("${path.module}/templates/truenas-csi-driver.yaml.tpl", {
-  truenas_url           = "wss://${var.truenas_csi_host}/api/current"
-  truenas_insecure      = var.truenas_csi_allow_insecure ? "true" : "false"
-  default_pool          = local.truenas_csi_pool
-  nfs_server            = var.truenas_csi_host
-  iscsi_portal          = "${var.truenas_csi_host}:3260"
-  truenas_csi_image     = var.truenas_csi_image
-  image_pull_secrets    = local.truenas_csi_image_pull_secrets
+    truenas_url        = "wss://${var.truenas_csi_host}/api/current"
+    truenas_insecure   = var.truenas_csi_allow_insecure ? "true" : "false"
+    default_pool       = local.truenas_csi_pool
+    nfs_server         = var.truenas_csi_host
+    iscsi_portal       = "${var.truenas_csi_host}:3260"
+    truenas_csi_image  = var.truenas_csi_image
+    image_pull_secrets = local.truenas_csi_image_pull_secrets
 })}
 TRUENAS_CSI_MANIFEST_END
 
@@ -2637,39 +2788,39 @@ STORAGECLASS
       kubectl get storageclass
       echo "✓ TrueNAS CSI deployment complete"
     EOT
-    environment = {
-      TRUENAS_API_KEY = var.truenas_csi_api_key
-    }
-  }
+environment = {
+  TRUENAS_API_KEY = var.truenas_csi_api_key
+}
+}
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
+provisioner "local-exec" {
+  when       = destroy
+  on_failure = continue
+  command    = <<-EOT
       export KUBECONFIG="$HOME/.kube/poc-apps.yaml"
       kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
       kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
       echo "✓ TrueNAS CSI removed"
     EOT
-  }
+}
 
-  depends_on = [
-    null_resource.merge_kubeconfigs,
-    module.rke2_poc_apps
-  ]
+depends_on = [
+  null_resource.merge_kubeconfigs,
+  module.rke2_poc_apps
+]
 
-  triggers = {
-    truenas_csi_host              = var.truenas_csi_host
-    truenas_csi_api_key           = sha256(var.truenas_csi_api_key)
-    truenas_csi_pool              = var.truenas_csi_pool
-    truenas_csi_image             = var.truenas_csi_image
-    truenas_csi_image_pull_secret = var.truenas_csi_image_pull_secret
-    truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
-    truenas_csi_storage_class     = var.truenas_csi_storage_class_name
-    truenas_csi_storage_default   = tostring(var.truenas_csi_storage_class_default)
-    template_file                 = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
-    storage_class_params          = "nfs-mapall-empty-0777"  # Bump when changing NFS permission params
-  }
+triggers = {
+  truenas_csi_host                   = var.truenas_csi_host
+  truenas_csi_api_key                = sha256(var.truenas_csi_api_key)
+  truenas_csi_pool                   = var.truenas_csi_pool
+  truenas_csi_image                  = var.truenas_csi_image
+  truenas_csi_image_pull_secret      = var.truenas_csi_image_pull_secret
+  truenas_csi_image_pull_secret_file = var.truenas_csi_image_pull_secret_file
+  truenas_csi_storage_class          = var.truenas_csi_storage_class_name
+  truenas_csi_storage_default        = tostring(var.truenas_csi_storage_class_default)
+  template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
+  storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
+}
 }
 
 # ============================================================================

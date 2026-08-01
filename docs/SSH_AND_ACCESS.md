@@ -14,7 +14,7 @@ ssh_private_key = "/mnt/game2/git/rancher-deploy/.keys/id_rsa"
 # or: ssh_private_key = "${path relative to where you run terraform}/../.keys/id_rsa"
 ```
 
-The VM module injects the **matching public key** from `${ssh_private_key}.pub` into cloud-init (`keys = [file("${var.ssh_private_key}.pub")]` in `terraform/modules/proxmox_vm`). There is no separate `ssh_public_key` variable.
+The VM module injects the **matching public key** from `${ssh_private_key}.pub` into cloud-init (`keys = [trimspace(file("${var.ssh_private_key}.pub"))]` in `terraform/modules/proxmox_vm`). There is no separate `ssh_public_key` variable. `trimspace` avoids bpg/proxmox `illegal base64 data` failures from trailing newlines in `.pub` files.
 
 Generate a new pair (example):
 

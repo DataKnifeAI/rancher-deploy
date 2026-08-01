@@ -4,6 +4,10 @@ terraform {
       source  = "bpg/proxmox"
       version = "~> 0.90"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
   }
 }
 
@@ -177,6 +181,19 @@ variable "rancher_ca_checksum" {
   type        = string
   default     = ""
 }
+
+variable "rke2_registries_yaml_b64" {
+  description = "Base64-encoded registries.yaml for containerd/CRI mirrors. Empty skips. Keep source file under gitignored config/."
+  type        = string
+  default     = ""
+}
+
+variable "rke2_node_labels" {
+  description = "RKE2 node-label entries (key=value) written into config.yaml"
+  type        = list(string)
+  default     = []
+}
+
 output "vm_id" {
   value = proxmox_virtual_environment_vm.vm.vm_id
 }
@@ -192,12 +209,12 @@ output "hostname" {
 # Create VM from pre-downloaded cloud image
 # Image is already downloaded at root level and passed via variables
 resource "proxmox_virtual_environment_vm" "vm" {
-  vm_id                              = var.vm_id
-  name                               = var.vm_name
-  node_name                          = var.proxmox_node
-  stop_on_destroy                    = true
+  vm_id                                = var.vm_id
+  name                                 = var.vm_name
+  node_name                            = var.proxmox_node
+  stop_on_destroy                      = true
   delete_unreferenced_disks_on_destroy = false
-  purge_on_destroy                   = false
+  purge_on_destroy                     = false
 
   cpu {
     cores   = var.cpu_cores
@@ -228,8 +245,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
   # This allows Proxmox to get VM status, IP addresses, and perform graceful shutdowns
   agent {
     enabled = true
-    trim     = true  # Enable fstrim for disk space recovery
-    type     = "virtio"
+    trim    = true # Enable fstrim for disk space recovery
+    type    = "virtio"
   }
 
   initialization {
@@ -237,8 +254,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
     user_account {
       username = "ubuntu"
-      # Add SSH public key for ansible/terraform provisioning
-      keys = [file("${var.ssh_private_key}.pub")]
+      # trimspace avoids bpg/proxmox "illegal base64 data" on trailing newlines in .pub files
+      keys = [trimspace(file("${var.ssh_private_key}.pub"))]
     }
 
     dns {
@@ -259,36 +276,58 @@ resource "proxmox_virtual_environment_vm" "vm" {
   lifecycle {
     ignore_changes = [
       initialization,
-      disk  # Ignore disk size changes to prevent shrinking attempts
+      disk # Ignore disk size changes to prevent shrinking attempts
     ]
   }
+}
 
-  # Apply RKE2 installation via provisioner if enabled
+# RKE2 bootstrap is intentionally split from the VM resource.
+# If the bpg/proxmox provider fails post-create (e.g. illegal base64 on SSH key
+# re-read), the VM can still exist while a provisioner on the VM resource never
+# runs. A separate null_resource can be re-applied once SSH is reachable.
+resource "null_resource" "rke2_bootstrap" {
+  count = var.rke2_enabled ? 1 : 0
+
+  triggers = {
+    vm_id               = proxmox_virtual_environment_vm.vm.vm_id
+    ip_address          = var.ip_address
+    rke2_version        = var.rke2_version
+    is_rke2_server      = tostring(var.is_rke2_server)
+    rke2_server_ip      = var.rke2_server_ip
+    install_script_md5  = filemd5("${path.module}/cloud-init-rke2.sh")
+    registries_yaml_md5 = md5(var.rke2_registries_yaml_b64)
+    node_labels         = join(",", var.rke2_node_labels)
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = file(var.ssh_private_key)
+    host        = split("/", var.ip_address)[0]
+    timeout     = "60m"
+  }
+
+  # Registries payload is uploaded as a file (not inline env) to avoid SSH/shell
+  # command-length limits on larger registries.yaml documents.
+  provisioner "file" {
+    content     = var.rke2_registries_yaml_b64
+    destination = "/tmp/rke2-registries.yaml.b64"
+  }
+
   provisioner "remote-exec" {
-    inline = var.rke2_enabled ? concat(
+    inline = concat(
       [
-        # RKE2 installation
         "cat > /tmp/rke2-install.sh <<'RKEEOF'\n${file("${path.module}/cloud-init-rke2.sh")}\nRKEEOF",
         "chmod +x /tmp/rke2-install.sh",
-        "IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' sudo -E bash /tmp/rke2-install.sh"
+        "RKE2_REGISTRIES_YAML_B64=$(cat /tmp/rke2-registries.yaml.b64 2>/dev/null || true); rm -f /tmp/rke2-registries.yaml.b64; IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRIES_YAML_B64=\"$RKE2_REGISTRIES_YAML_B64\" RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"
       ],
-      # Add Rancher registration if this is a server node and registration is enabled
       var.register_with_rancher && var.is_rke2_server ? [
-        # Add hosts entry for Rancher hostname
         "echo '${var.rancher_ingress_ip} ${var.rancher_hostname}' | sudo tee -a /etc/hosts > /dev/null",
-        # Wait for RKE2 to be ready (token file should exist)
         "for i in {1..120}; do [ -f /var/lib/rancher/rke2/server/node-token ] && echo 'RKE2 ready!' && break || (echo 'Waiting for RKE2 token... $i/120' && sleep 5); done",
-        # Attempt Rancher system-agent installation ONLY if credentials are available
         "if [ -n '${var.rancher_registration_token}' ] && [ -n '${var.rancher_ca_checksum}' ]; then curl -kfL https://${var.rancher_hostname}/system-agent-install.sh | sudo sh -s - --server https://${var.rancher_hostname} --label 'cattle.io/os=linux' --token ${var.rancher_registration_token} --ca-checksum ${var.rancher_ca_checksum} --etcd --controlplane --worker; else echo 'Registration credentials not available - will be done post-deployment'; fi"
       ] : []
-    ) : ["echo 'RKE2 disabled, skipping installation'"]
-
-    connection {
-      type        = "ssh"
-      user        = "ubuntu"
-      private_key = file(var.ssh_private_key)
-      host        = split("/", var.ip_address)[0]
-      timeout     = "60m"
-    }
+    )
   }
+
+  depends_on = [proxmox_virtual_environment_vm.vm]
 }
