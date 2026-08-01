@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Example Homelab Topology — Ubiquiti + Proxmox + Rancher / RKE2</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --bg-elev: #121820;
+      --bg-card: #161e28;
+      --border: #2a3545;
+      --border-soft: #1e2836;
+      --text: #e6edf5;
+      --muted: #8b9bb0;
+      --dim: #5c6b7e;
+      --accent: #3d9cf0;
+      --accent-dim: #1e4a72;
+      --mgmt: #4ade80;
+      --mgmt-dim: #1a4d32;
+      --storage: #f0b429;
+      --storage-dim: #5c4510;
+      --aux: #a78bfa;
+      --aux-dim: #3b2f66;
+      --ceph: #f07178;
+      --zfs: #56d4c4;
+      --guest: #7ec8ff;
+      --unifi: #0559c9;
+      --unifi-glow: #3b82f6;
+      --sas: #fb923c;
+      --sas-dim: #7c3a12;
+      --warn: #fb923c;
+      --mono: "IBM Plex Mono", "JetBrains Mono", "SF Mono", Consolas, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1100px 520px at 8% -8%, #142033 0%, transparent 55%),
+        radial-gradient(800px 420px at 92% 4%, #0f1c28 0%, transparent 50%),
+        radial-gradient(600px 400px at 50% 100%, #121018 0%, transparent 45%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    header.hero {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin: 0 0 0.5rem;
+    }
+    h1 {
+      font-size: clamp(1.6rem, 3vw, 2.15rem);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.6rem;
+    }
+    .lede {
+      color: var(--muted);
+      max-width: 68ch;
+      margin: 0;
+      font-size: 1.02rem;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--dim);
+    }
+    .meta span {
+      border: 1px solid var(--border);
+      background: var(--bg-elev);
+      padding: 0.25rem 0.55rem;
+      border-radius: 4px;
+    }
+
+    section { margin: 2.25rem 0; }
+    h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0 0 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+    h2 .n {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+    }
+    p.note {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 0 0 1rem;
+      max-width: 78ch;
+    }
+
+    .canvas {
+      background:
+        linear-gradient(180deg, rgba(18, 24, 32, 0.95), rgba(14, 18, 24, 0.98)),
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 23px,
+          rgba(42, 53, 69, 0.18) 23px,
+          rgba(42, 53, 69, 0.18) 24px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 23px,
+          rgba(42, 53, 69, 0.12) 23px,
+          rgba(42, 53, 69, 0.12) 24px
+        );
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.35rem 1.25rem 1.5rem;
+      overflow-x: auto;
+    }
+
+    .stack {
+      display: grid;
+      gap: 0;
+      min-width: 980px;
+    }
+
+    .layer {
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.28);
+      padding: 1.1rem 1rem 1rem;
+      position: relative;
+    }
+    .layer.unifi {
+      border-color: #1e3a5f;
+      background: linear-gradient(180deg, rgba(5, 89, 201, 0.08), rgba(0, 0, 0, 0.28));
+    }
+    .layer.compute {
+      border-color: #243044;
+    }
+    .layer.storage-layer {
+      border-color: #3d3218;
+      background: linear-gradient(180deg, rgba(240, 180, 41, 0.05), rgba(0, 0, 0, 0.28));
+    }
+    .layer.guest-layer {
+      border-color: #1e3a52;
+      background: linear-gradient(180deg, rgba(126, 200, 255, 0.05), rgba(0, 0, 0, 0.28));
+    }
+
+    .layer-label {
+      position: absolute;
+      top: -0.55rem;
+      left: 0.85rem;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      background: var(--bg-elev);
+      padding: 0 0.45rem;
+      border-radius: 2px;
+    }
+    .layer.unifi .layer-label { color: var(--unifi-glow); }
+    .layer.storage-layer .layer-label { color: var(--storage); }
+    .layer.guest-layer .layer-label { color: var(--guest); }
+
+    .layer-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 0.85rem;
+      padding-right: 0.25rem;
+    }
+    .layer-head p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      max-width: 58ch;
+    }
+
+    /* Connectors between layers */
+    .conn {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 36px;
+      position: relative;
+    }
+    .conn svg { width: 100%; height: 36px; }
+    .conn-label {
+      position: absolute;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--dim);
+      background: var(--bg);
+      padding: 0 0.5rem;
+    }
+
+    /* Ubiquiti gear */
+    .unifi-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 1.35fr 0.9fr;
+      gap: 0.75rem;
+    }
+    .gear {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0e1520;
+      padding: 0.8rem 0.85rem;
+      position: relative;
+    }
+    .gear.gateway { border-color: #1e4a7a; box-shadow: inset 3px 0 0 var(--unifi-glow); }
+    .gear.switch { border-color: #1e4a7a; box-shadow: inset 3px 0 0 #60a5fa; }
+    .gear.ap { border-color: #243044; box-shadow: inset 3px 0 0 #64748b; }
+    .gear h3 {
+      margin: 0 0 0.25rem;
+      font-size: 0.95rem;
+    }
+    .gear .role {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--unifi-glow);
+      margin-bottom: 0.45rem;
+    }
+    .gear p {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .gear ul {
+      margin: 0.45rem 0 0;
+      padding: 0;
+      list-style: none;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .gear li { margin: 0.15rem 0; }
+    .gear li b { color: var(--text); font-weight: 550; }
+
+    .vlan-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+    }
+    .vlan-chip {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--muted);
+    }
+    .vlan-chip.mgmt { border-color: var(--mgmt-dim); color: var(--mgmt); }
+    .vlan-chip.stor { border-color: var(--storage-dim); color: var(--storage); }
+    .vlan-chip.auxc { border-color: var(--aux-dim); color: var(--aux); }
+    .vlan-chip.gst { border-color: var(--accent-dim); color: var(--guest); }
+
+    /* Hosts */
+    .hosts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+    .host {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #10161e;
+      padding: 0.85rem;
+    }
+    .host h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .host h3 .role {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .host .hw {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.65rem;
+    }
+    .host dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.2rem 0.7rem;
+      margin: 0;
+      font-size: 0.8rem;
+    }
+    .host dt {
+      font-family: var(--mono);
+      color: var(--dim);
+    }
+    .host dd {
+      margin: 0;
+      font-family: var(--mono);
+      color: var(--text);
+    }
+
+    .bond-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.65rem;
+      margin-top: 0.85rem;
+    }
+    .bond {
+      border-radius: 7px;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      background: #0c121a;
+      font-size: 0.76rem;
+    }
+    .bond.mgmt { border-color: var(--mgmt-dim); box-shadow: inset 3px 0 0 var(--mgmt); }
+    .bond.fast { border-color: var(--storage-dim); box-shadow: inset 3px 0 0 var(--storage); }
+    .bond.aux  { border-color: var(--aux-dim); box-shadow: inset 3px 0 0 var(--aux); }
+    .bond h4 {
+      margin: 0 0 0.3rem;
+      font-size: 0.82rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.4rem;
+    }
+    .bond h4 code {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .bond ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .bond li { margin: 0.12rem 0; }
+    .bond li b { color: var(--text); font-weight: 550; }
+
+    /* Storage topology: MD1420 → SAS → TrueNAS */
+    .stor-topo {
+      display: grid;
+      grid-template-columns: 0.95fr auto 1.15fr;
+      gap: 0.65rem;
+      align-items: stretch;
+      margin-bottom: 0.85rem;
+    }
+    .stor-node {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #10161e;
+      padding: 0.85rem;
+    }
+    .stor-node.md {
+      border-color: var(--sas-dim);
+      box-shadow: inset 3px 0 0 var(--sas);
+    }
+    .stor-node.tn {
+      border-color: var(--storage-dim);
+      box-shadow: inset 3px 0 0 var(--storage);
+    }
+    .stor-node h4 {
+      margin: 0 0 0.3rem;
+      font-size: 0.92rem;
+    }
+    .stor-node .tag {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--sas);
+      margin-bottom: 0.4rem;
+    }
+    .stor-node.tn .tag { color: var(--storage); }
+    .stor-node p {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .stor-node ul {
+      margin: 0.4rem 0 0;
+      padding: 0;
+      list-style: none;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .stor-node li { margin: 0.12rem 0; }
+    .stor-node li b { color: var(--text); font-weight: 550; }
+
+    .sas-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 110px;
+      gap: 0.35rem;
+    }
+    .sas-badge {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+      color: var(--sas);
+      border: 1px solid var(--sas-dim);
+      background: rgba(251, 146, 60, 0.1);
+      padding: 0.35rem 0.55rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .sas-link .hint {
+      font-size: 0.68rem;
+      color: var(--dim);
+      text-align: center;
+      max-width: 9rem;
+      line-height: 1.35;
+    }
+
+    .stor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .stor {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 0.8rem;
+      background: #0c121a;
+    }
+    .stor h4 {
+      margin: 0 0 0.4rem;
+      font-size: 0.9rem;
+    }
+    .pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 0.12rem 0.4rem;
+      border-radius: 3px;
+      margin-right: 0.25rem;
+      margin-bottom: 0.35rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .pill.zfs { color: var(--zfs); border-color: #2a5c55; }
+    .pill.rbd { color: var(--ceph); border-color: #5c2a32; }
+    .pill.pbs { color: var(--warn); border-color: #5c3a1a; }
+    .pill.nfs { color: var(--storage); border-color: var(--storage-dim); }
+    .pill.sas { color: var(--sas); border-color: var(--sas-dim); }
+    .stor p {
+      margin: 0.35rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .guest-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+    }
+    .cluster {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 0.7rem 0.75rem;
+      background: #0c121a;
+      box-shadow: inset 3px 0 0 var(--guest);
+    }
+    .cluster h4 {
+      margin: 0 0 0.3rem;
+      font-size: 0.86rem;
+    }
+    .cluster .ids {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--dim);
+      margin-bottom: 0.35rem;
+    }
+    .cluster ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .cluster li { margin: 0.12rem 0; }
+    .cluster code {
+      font-family: var(--mono);
+      color: var(--text);
+      font-size: 0.72rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin-top: 0.9rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 0.35rem;
+      vertical-align: -1px;
+    }
+
+    table.detail {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    table.detail th,
+    table.detail td {
+      text-align: left;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: top;
+    }
+    table.detail th {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--dim);
+      background: var(--bg-elev);
+      font-weight: 550;
+    }
+    table.detail tr:last-child td { border-bottom: 0; }
+    table.detail code {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--guest);
+    }
+
+    .callout {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      background: rgba(61, 156, 240, 0.06);
+      border-radius: 6px;
+      padding: 0.85rem 1rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .callout strong { color: var(--text); }
+
+    footer {
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+
+    @media (max-width: 780px) {
+      .stack { min-width: 0; }
+      .unifi-grid,
+      .hosts,
+      .bond-row,
+      .stor-topo,
+      .stor-grid,
+      .guest-grid { grid-template-columns: 1fr; }
+      .sas-link {
+        flex-direction: row;
+        min-width: 0;
+        padding: 0.35rem 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">examples / homelab</p>
+      <h1>Example Homelab Topology</h1>
+      <p class="lede">
+        Reference layout: <strong>Ubiquiti / UniFi</strong> fabric → two-node
+        <strong>Proxmox VE</strong> (Dell PowerEdge) → storage
+        (<strong>MD1420 SAS → TrueNAS</strong>, Ceph NVMe, local ZFS) →
+        Rancher-managed <strong>RKE2</strong> guests. Framed as an
+        <strong>example</strong> — adapt gear labels, IPs, and VLANs to your site.
+      </p>
+      <div class="meta">
+        <span>Cluster: Ash</span>
+        <span>Nodes: pve1 · pve2</span>
+        <span>Net: UniFi (example gear)</span>
+        <span>DAS: MD1420 → SAS → TrueNAS</span>
+        <span>Guest VLAN: 14</span>
+      </div>
+    </header>
+
+    <section>
+      <h2><span class="n">01</span> Stack overview</h2>
+      <p class="note">
+        Top-down: UniFi gateway and aggregation switch carry LACP into Proxmox bonds;
+        MD1420 is a direct SAS shelf on the TrueNAS node (not an Ethernet “shared shelf”);
+        guests land on VLAN&nbsp;14. This repo’s Terraform creates the guest layer only —
+        UniFi, host bonds/bridges, and Ceph/ZFS live outside Terraform.
+      </p>
+
+      <div class="canvas">
+        <div class="stack">
+
+          <!-- 1. Ubiquiti -->
+          <div class="layer unifi">
+            <div class="layer-label">01 · Ubiquiti / UniFi fabric</div>
+            <div class="layer-head">
+              <p>
+                Example gear (no serials) — same L2/L3 layout this stack already uses:
+                mgmt, storage jumbo, aux, guest VLAN&nbsp;14. Compatible with UniFi
+                MetalLB L2 / DNS patterns in the docs.
+              </p>
+            </div>
+            <div class="unifi-grid">
+              <div class="gear gateway">
+                <h3>UniFi Gateway</h3>
+                <div class="role">example · UDM-Pro / UXG-style</div>
+                <p>L3 edge: VLANs, DHCP (optional), default gateways, WAN.</p>
+                <ul>
+                  <li><b>GW mgmt</b> 192.168.8.1</li>
+                  <li><b>Guest VLAN</b> 14 → 192.168.14.0/24</li>
+                  <li><b>DNS</b> local records / upstream</li>
+                </ul>
+              </div>
+              <div class="gear switch">
+                <h3>UniFi Aggregation / Core</h3>
+                <div class="role">example · aggregation or enterprise switch</div>
+                <p>
+                  Trunks from the gateway; LACP port-channels toward Proxmox
+                  <code>bond0/1/2</code> and a storage-net uplink to TrueNAS.
+                </p>
+                <ul>
+                  <li><b>LACP</b> → pve1 / pve2 (per bond)</li>
+                  <li><b>Jumbo</b> on storage VLAN / bond1 peers</li>
+                  <li><b>Uplink</b> TrueNAS 192.168.9.10</li>
+                </ul>
+              </div>
+              <div class="gear ap">
+                <h3>UniFi AP (optional)</h3>
+                <div class="role">example · Wi‑Fi</div>
+                <p>SSID on mgmt or a user VLAN; not on the storage path.</p>
+                <ul>
+                  <li><b>PoE</b> from access/core</li>
+                  <li><b>Role</b> admin / lab clients</li>
+                </ul>
+              </div>
+            </div>
+            <div class="vlan-strip">
+              <span class="vlan-chip mgmt">mgmt 192.168.8.0/24</span>
+              <span class="vlan-chip stor">storage 192.168.9.0/24 MTU 9000</span>
+              <span class="vlan-chip auxc">aux 192.168.10.0/24</span>
+              <span class="vlan-chip gst">guest VLAN 14 · 192.168.14.0/24</span>
+            </div>
+          </div>
+
+          <div class="conn" aria-hidden="true">
+            <svg viewBox="0 0 1000 36" preserveAspectRatio="none">
+              <line x1="180" y1="4" x2="180" y2="32" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <line x1="500" y1="4" x2="500" y2="32" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <line x1="820" y1="4" x2="820" y2="32" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3"/>
+            </svg>
+            <span class="conn-label">LACP / trunks → host bonds</span>
+          </div>
+
+          <!-- 2. Proxmox -->
+          <div class="layer compute">
+            <div class="layer-label">02 · Proxmox VE · cluster Ash</div>
+            <div class="hosts">
+              <div class="host">
+                <h3>pve1 <span class="role">example · PowerEdge R630/R730xd</span></h3>
+                <div class="hw">2× Xeon E5-2697 v4 (72 threads) · ~378&nbsp;GiB RAM · PVE 9.x</div>
+                <dl>
+                  <dt>mgmt</dt><dd>192.168.8.5/24 via vmbr0</dd>
+                  <dt>storage</dt><dd>192.168.9.5/24 via vmbr1</dd>
+                  <dt>aux</dt><dd>192.168.10.5/24 via vmbr2</dd>
+                  <dt>local ZFS</dt><dd>local-vm-zfs (~3.5&nbsp;TiB usable)</dd>
+                  <dt>Ceph</dt><dd>4× NVMe OSD (osd.0–3)</dd>
+                </dl>
+              </div>
+              <div class="host">
+                <h3>pve2 <span class="role">example · PowerEdge R630/R730xd</span></h3>
+                <div class="hw">2× Xeon E5-2697 v4 (72 threads) · ~378&nbsp;GiB RAM · PVE 9.x</div>
+                <dl>
+                  <dt>mgmt</dt><dd>192.168.8.6/24 via vmbr0</dd>
+                  <dt>storage</dt><dd>192.168.9.6/24 via vmbr1</dd>
+                  <dt>aux</dt><dd>192.168.10.6/24 via vmbr2</dd>
+                  <dt>local ZFS</dt><dd>local-vm-zfs (~3.5&nbsp;TiB usable)</dd>
+                  <dt>Ceph</dt><dd>4× NVMe OSD (osd.4–7)</dd>
+                </dl>
+              </div>
+            </div>
+            <div class="bond-row">
+              <div class="bond mgmt">
+                <h4>Management <code>bond0 → vmbr0</code></h4>
+                <ul>
+                  <li><b>Mode</b> 802.3ad (LACP)</li>
+                  <li><b>Slaves</b> eno1np0 + eno2np1</li>
+                  <li><b>Subnet</b> 192.168.8.0/24 · GW .1</li>
+                  <li><b>VLAN</b> aware · guests tag 14</li>
+                  <li><b>Role</b> Corosync / UI / VM LAN</li>
+                </ul>
+              </div>
+              <div class="bond fast">
+                <h4>Fast / storage <code>bond1 → vmbr1</code></h4>
+                <ul>
+                  <li><b>Mode</b> 802.3ad (LACP)</li>
+                  <li><b>Slaves</b> eno3np2 + eno4np3</li>
+                  <li><b>MTU</b> 9000 (jumbo)</li>
+                  <li><b>Hosts</b> .5 / .6 · TrueNAS .10</li>
+                  <li><b>Role</b> Ceph public · NFS / CSI</li>
+                </ul>
+              </div>
+              <div class="bond aux">
+                <h4>Aux / migration <code>bond2 → vmbr2</code></h4>
+                <ul>
+                  <li><b>Mode</b> 802.3ad (LACP)</li>
+                  <li><b>Slaves</b> enp129s0f0 + enp129s0f1</li>
+                  <li><b>Subnet</b> 192.168.10.0/24</li>
+                  <li><b>VLAN</b> aware</li>
+                  <li><b>Role</b> migration path (off mgmt)</li>
+                </ul>
+              </div>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--unifi-glow)"></i>UniFi LACP peers</span>
+              <span><i style="background:var(--mgmt)"></i>mgmt bond0</span>
+              <span><i style="background:var(--storage)"></i>storage jumbo bond1</span>
+              <span><i style="background:var(--aux)"></i>aux / migration bond2</span>
+              <span><i style="background:var(--guest)"></i>guest VLAN 14 on vmbr0</span>
+            </div>
+          </div>
+
+          <div class="conn" aria-hidden="true">
+            <svg viewBox="0 0 1000 36" preserveAspectRatio="none">
+              <line x1="500" y1="4" x2="500" y2="32" stroke="#f0b429" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <path d="M320 18 H680" stroke="#5c6b7e" stroke-width="1" stroke-dasharray="2 3" fill="none"/>
+            </svg>
+            <span class="conn-label">Ethernet storage net · SAS is offline from this path</span>
+          </div>
+
+          <!-- 3. Storage -->
+          <div class="layer storage-layer">
+            <div class="layer-label">03 · Storage</div>
+            <div class="layer-head">
+              <p>
+                <strong>MD1420 → SAS → TrueNAS</strong> is a direct-attached shelf
+                (HBA / dual SAS links). Cluster pods reach that pool over the
+                storage network via NFS/iSCSI CSI — not via SAS to Proxmox.
+              </p>
+            </div>
+
+            <div class="stor-topo">
+              <div class="stor-node md">
+                <h4>Dell MD1420</h4>
+                <div class="tag">DAS shelf · example</div>
+                <p>JBOD / expander chassis with SAS disks for the TrueNAS pool.</p>
+                <ul>
+                  <li><b>Attach</b> dual SAS to TrueNAS HBA</li>
+                  <li><b>Not</b> Ethernet-shared to pve1/pve2</li>
+                  <li><b>Not</b> Proxmox guest disks</li>
+                </ul>
+              </div>
+              <div class="sas-link">
+                <svg width="100" height="28" viewBox="0 0 100 28" aria-hidden="true">
+                  <defs>
+                    <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                      <path d="M0,0 L7,3.5 L0,7 Z" fill="#fb923c"/>
+                    </marker>
+                  </defs>
+                  <line x1="4" y1="14" x2="92" y2="14" stroke="#fb923c" stroke-width="2.2" marker-end="url(#arr)"/>
+                  <line x1="4" y1="8" x2="70" y2="8" stroke="#fb923c" stroke-width="1" opacity="0.45"/>
+                  <line x1="4" y1="20" x2="70" y2="20" stroke="#fb923c" stroke-width="1" opacity="0.45"/>
+                </svg>
+                <span class="sas-badge">SAS</span>
+                <span class="hint">direct-connect · HBA / multipath</span>
+              </div>
+              <div class="stor-node tn">
+                <h4>TrueNAS</h4>
+                <div class="tag">storage net · 192.168.9.10</div>
+                <p>Owns the MD1420 via SAS; exports pool over Ethernet to the cluster.</p>
+                <ul>
+                  <li><b>NIC</b> on UniFi storage VLAN / bond peers</li>
+                  <li><b>Pool</b> <code>SAS</code></li>
+                  <li><b>Export</b> NFS / iSCSI → CSI</li>
+                  <li><b>Class</b> <code>truenas-csi-nfs</code></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="stor-grid">
+              <div class="stor">
+                <h4>Per-node local</h4>
+                <span class="pill zfs">zfspool</span>
+                <span class="pill">not shared</span>
+                <p>
+                  <strong>local-vm-zfs</strong> — primary datastore for Rancher/RKE2 VM disks
+                  (<code>clusters.*.storage</code>). Local SSDs per host. Also
+                  <code>rpool</code> / <code>local-zfs</code>, <code>local</code>,
+                  <code>images-import</code>.
+                </p>
+              </div>
+              <div class="stor">
+                <h4>Cluster shared (Ceph)</h4>
+                <span class="pill rbd">rbd</span>
+                <span class="pill">shared</span>
+                <p>
+                  Pool <strong>data</strong> (~8 OSDs on host NVMe across pve1/pve2).
+                  Ceph mons on 192.168.9.x. Optional inactive pool
+                  <code>pathfinder</code>. Terraform example prefers local ZFS for OS disks.
+                </p>
+              </div>
+              <div class="stor">
+                <h4>Backup &amp; PV path</h4>
+                <span class="pill pbs">PBS</span>
+                <span class="pill nfs">NFS / CSI</span>
+                <span class="pill sas">MD1420 SAS</span>
+                <p>
+                  <strong>PBS</strong> for VM backups.
+                  <strong>TrueNAS</strong> at 192.168.9.10 serves pool <code>SAS</code>
+                  (disk behind SAS) as Kubernetes PVs.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="conn" aria-hidden="true">
+            <svg viewBox="0 0 1000 36" preserveAspectRatio="none">
+              <line x1="200" y1="4" x2="200" y2="32" stroke="#7ec8ff" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <line x1="500" y1="4" x2="500" y2="32" stroke="#7ec8ff" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <line x1="800" y1="4" x2="800" y2="32" stroke="#7ec8ff" stroke-width="1.5" stroke-dasharray="4 3"/>
+            </svg>
+            <span class="conn-label">Terraform → cloud-init VMs on local-vm-zfs · CSI PVs via NFS</span>
+          </div>
+
+          <!-- 4. Guests -->
+          <div class="layer guest-layer">
+            <div class="layer-label">04 · Guest / Kubernetes</div>
+            <div class="guest-grid">
+              <div class="cluster">
+                <h4>manager</h4>
+                <div class="ids">VM 401–403 · Rancher</div>
+                <ul>
+                  <li><code>192.168.14.100–102</code></li>
+                  <li>3× RKE2 servers</li>
+                  <li>VLAN 14 on <code>vmbr0</code></li>
+                </ul>
+              </div>
+              <div class="cluster">
+                <h4>nprd-apps</h4>
+                <div class="ids">VM 410+ · non-prod</div>
+                <ul>
+                  <li><code>192.168.14.110+</code></li>
+                  <li>servers + workers</li>
+                  <li>kube-vip LB pool</li>
+                </ul>
+              </div>
+              <div class="cluster">
+                <h4>prd-apps</h4>
+                <div class="ids">VM 420+ · production</div>
+                <ul>
+                  <li><code>192.168.14.120+</code></li>
+                  <li>servers + workers</li>
+                  <li>Envoy Gateway</li>
+                </ul>
+              </div>
+              <div class="cluster">
+                <h4>poc-apps</h4>
+                <div class="ids">VM 430+ · sandbox</div>
+                <ul>
+                  <li><code>192.168.14.130+</code></li>
+                  <li>servers + workers</li>
+                  <li>TrueNAS CSI PVs</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">02</span> How layers connect</h2>
+      <p class="note">
+        Ethernet paths stay on UniFi; the MD1420 path is SAS-only into TrueNAS,
+        then NFS/CSI rides the storage VLAN back to guests.
+      </p>
+      <div class="canvas" style="padding:1rem 1.1rem 0.5rem">
+        <svg viewBox="0 0 1120 420" width="100%" height="auto" role="img" aria-label="Flow from UniFi through Proxmox and TrueNAS SAS to RKE2">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1a2433"/>
+              <stop offset="100%" stop-color="#0e1520"/>
+            </linearGradient>
+            <marker id="mGray" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#5c6b7e"/>
+            </marker>
+            <marker id="mBlue" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#3b82f6"/>
+            </marker>
+            <marker id="mOrange" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#fb923c"/>
+            </marker>
+            <marker id="mGold" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#f0b429"/>
+            </marker>
+            <style>
+              .b { fill: url(#g1); stroke: #2a3545; stroke-width: 1.2; }
+              .t { fill: #e6edf5; font-family: system-ui, sans-serif; font-size: 13px; font-weight: 600; }
+              .s { fill: #8b9bb0; font-family: ui-monospace, monospace; font-size: 11px; }
+              .l { stroke: #5c6b7e; stroke-width: 1.4; fill: none; }
+              .lbl { fill: #5c6b7e; font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: 0.04em; }
+            </style>
+          </defs>
+
+          <!-- Row labels -->
+          <text class="lbl" x="16" y="52">UNIFI</text>
+          <text class="lbl" x="16" y="152">COMPUTE</text>
+          <text class="lbl" x="16" y="252">STORAGE</text>
+          <text class="lbl" x="16" y="352">GUESTS</text>
+
+          <!-- UniFi row -->
+          <rect class="b" x="70" y="20" width="240" height="64" rx="8" style="stroke:#1e4a7a"/>
+          <text class="t" x="85" y="45">UniFi Gateway</text>
+          <text class="s" x="85" y="64">VLANs · GW .1 · example</text>
+
+          <rect class="b" x="350" y="20" width="300" height="64" rx="8" style="stroke:#2563eb"/>
+          <text class="t" x="365" y="45">UniFi Aggregation / Core</text>
+          <text class="s" x="365" y="64">LACP → bonds · trunks</text>
+
+          <rect class="b" x="690" y="20" width="200" height="64" rx="8" style="stroke:#334155"/>
+          <text class="t" x="705" y="45">UniFi AP</text>
+          <text class="s" x="705" y="64">optional Wi‑Fi</text>
+
+          <path d="M310 52 H350" stroke="#3b82f6" stroke-width="1.6" fill="none" marker-end="url(#mBlue)"/>
+          <path d="M650 52 H690" stroke="#5c6b7e" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+
+          <!-- Compute row -->
+          <rect class="b" x="70" y="120" width="220" height="64" rx="8"/>
+          <text class="t" x="85" y="145">pve1</text>
+          <text class="s" x="85" y="164">.8.5 · .9.5 · .10.5</text>
+
+          <rect class="b" x="320" y="120" width="220" height="64" rx="8"/>
+          <text class="t" x="335" y="145">pve2</text>
+          <text class="s" x="335" y="164">.8.6 · .9.6 · .10.6</text>
+
+          <rect class="b" x="580" y="120" width="310" height="64" rx="8" style="stroke:#1a4d32"/>
+          <text class="t" x="595" y="145">Host bonds → bridges</text>
+          <text class="s" x="595" y="164">bond0/1/2 → vmbr0/1/2</text>
+
+          <path d="M500 84 V110" stroke="#3b82f6" stroke-width="1.5" fill="none" marker-end="url(#mBlue)"/>
+          <path d="M180 184 V200 H735 V184" class="l"/>
+          <path d="M430 184 V200" class="l"/>
+
+          <!-- Storage row -->
+          <rect class="b" x="70" y="220" width="200" height="64" rx="8" style="stroke:#7c3a12"/>
+          <text class="t" x="85" y="245">MD1420</text>
+          <text class="s" x="85" y="264">DAS shelf · example</text>
+
+          <rect x="290" y="232" width="90" height="40" rx="6" fill="rgba(251,146,60,0.12)" stroke="#fb923c" stroke-width="1.4"/>
+          <text fill="#fb923c" font-family="ui-monospace, monospace" font-size="12" font-weight="700" x="312" y="257">SAS</text>
+
+          <rect class="b" x="400" y="220" width="240" height="64" rx="8" style="stroke:#5c4510"/>
+          <text class="t" x="415" y="245">TrueNAS</text>
+          <text class="s" x="415" y="264">192.168.9.10 · pool SAS</text>
+
+          <rect class="b" x="680" y="220" width="210" height="64" rx="8" style="stroke:#5c2a32"/>
+          <text class="t" x="695" y="245">Ceph + local ZFS</text>
+          <text class="s" x="695" y="264">NVMe OSDs · local-vm-zfs</text>
+
+          <path d="M270 252 H290" stroke="#fb923c" stroke-width="2" fill="none" marker-end="url(#mOrange)"/>
+          <path d="M380 252 H400" stroke="#fb923c" stroke-width="2" fill="none" marker-end="url(#mOrange)"/>
+          <path d="M520 184 V210" stroke="#f0b429" stroke-width="1.5" fill="none" marker-end="url(#mGold)"/>
+          <text class="lbl" x="300" y="218">direct-connect</text>
+          <path d="M640 252 H680" stroke="#f0b429" stroke-width="1.3" fill="none" stroke-dasharray="3 3"/>
+          <path d="M785 184 V220" class="l"/>
+
+          <!-- Guest row -->
+          <rect class="b" x="70" y="320" width="200" height="64" rx="8" style="stroke:#1e4a72"/>
+          <text class="t" x="85" y="345">manager</text>
+          <text class="s" x="85" y="364">Rancher · .100–.102</text>
+
+          <rect class="b" x="300" y="320" width="230" height="64" rx="8" style="stroke:#1e4a72"/>
+          <text class="t" x="315" y="345">nprd / prd / poc</text>
+          <text class="s" x="315" y="364">RKE2 apps · VLAN 14</text>
+
+          <rect class="b" x="560" y="320" width="200" height="64" rx="8" style="stroke:#2a5c55"/>
+          <text class="t" x="575" y="345">local-vm-zfs</text>
+          <text class="s" x="575" y="364">VM OS disks</text>
+
+          <rect class="b" x="790" y="320" width="200" height="64" rx="8" style="stroke:#5c4510"/>
+          <text class="t" x="805" y="345">CSI volumes</text>
+          <text class="s" x="805" y="364">NFS from TrueNAS</text>
+
+          <path d="M180 284 V320" class="l" marker-end="url(#mGray)"/>
+          <path d="M415 284 V320" class="l" marker-end="url(#mGray)"/>
+          <path d="M785 284 V320" class="l" marker-end="url(#mGray)"/>
+          <path d="M520 284 V300 H890 V320" stroke="#f0b429" stroke-width="1.5" fill="none" marker-end="url(#mGold)"/>
+          <text class="lbl" x="700" y="310">NFS / CSI · 192.168.9.10</text>
+        </svg>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">03</span> Address &amp; VLAN cheat sheet</h2>
+      <table class="detail">
+        <thead>
+          <tr>
+            <th>Segment</th>
+            <th>Bridge / bond · UniFi</th>
+            <th>Example addresses</th>
+            <th>Used for</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Management</td>
+            <td><code>vmbr0</code> ← <code>bond0</code> ← UniFi LACP</td>
+            <td><code>192.168.8.5–6</code>, GW <code>.1</code></td>
+            <td>Proxmox UI/API, Corosync, host default route</td>
+          </tr>
+          <tr>
+            <td>Storage / Ceph</td>
+            <td><code>vmbr1</code> ← <code>bond1</code> (MTU 9000)</td>
+            <td><code>192.168.9.5–6</code>, TrueNAS <code>.10</code></td>
+            <td>Ceph, NFS CSI, high-throughput storage</td>
+          </tr>
+          <tr>
+            <td>Aux</td>
+            <td><code>vmbr2</code> ← <code>bond2</code></td>
+            <td><code>192.168.10.5–6</code></td>
+            <td>Optional migration / isolated traffic</td>
+          </tr>
+          <tr>
+            <td>Guest LAN (VLAN 14)</td>
+            <td><code>vmbr0</code> tag 14 · UniFi VLAN</td>
+            <td><code>192.168.14.0/24</code></td>
+            <td>All RKE2/Rancher VMs, kube-vip / MetalLB L2</td>
+          </tr>
+          <tr>
+            <td>MD1420 ↔ TrueNAS</td>
+            <td>SAS (not Ethernet)</td>
+            <td>—</td>
+            <td>Direct-attach DAS into TrueNAS HBA; pool media only</td>
+          </tr>
+          <tr>
+            <td>Upstream DNS</td>
+            <td>UniFi / local DNS</td>
+            <td><code>192.168.1.1</code> (example)</td>
+            <td>cloud-init <code>dns_servers</code> → CoreDNS</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="n">04</span> Storage roles (example)</h2>
+      <table class="detail">
+        <thead>
+          <tr>
+            <th>Datastore</th>
+            <th>Type</th>
+            <th>Shared?</th>
+            <th>Role in this stack</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>local-vm-zfs</code></td>
+            <td>ZFS pool</td>
+            <td>No</td>
+            <td>Default VM disk target for Terraform clusters</td>
+          </tr>
+          <tr>
+            <td><code>data</code></td>
+            <td>Ceph RBD</td>
+            <td>Yes</td>
+            <td>Shared images; NVMe OSDs on both hosts</td>
+          </tr>
+          <tr>
+            <td><code>PBS</code></td>
+            <td>Proxmox Backup Server</td>
+            <td>Yes</td>
+            <td>VM backup target</td>
+          </tr>
+          <tr>
+            <td><code>images-import</code> / <code>local</code></td>
+            <td>Directory</td>
+            <td>No</td>
+            <td>Cloud image import, ISOs, templates</td>
+          </tr>
+          <tr>
+            <td>TrueNAS <code>SAS</code></td>
+            <td>NFS via CSI (disks via SAS)</td>
+            <td>Yes (to pods)</td>
+            <td>MD1420 direct-SAS to TrueNAS; PVCs over 192.168.9.10</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:0.85rem">
+        Disk roles on the example hosts: boot SSDs → <code>rpool</code>;
+        Intel SATA SSDs → <code>local-vm-zfs</code>; host NVMe → Ceph OSDs.
+        The MD1420 is labeled as example DAS media attached by SAS to TrueNAS —
+        not as invented serial-numbered devices and not as a Proxmox-attached shelf.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="n">05</span> Guest clusters (Terraform)</h2>
+      <p class="note">
+        IPs and VM ID ranges come from the <code>clusters</code> map. DNS records
+        (manager / rancher / *-apps) should round-robin the server nodes — see
+        <a href="../../docs/DNS_CONFIGURATION.md">DNS_CONFIGURATION.md</a>
+        (includes UniFi DNS steps).
+      </p>
+      <table class="detail">
+        <thead>
+          <tr>
+            <th>Cluster</th>
+            <th>VM IDs (example)</th>
+            <th>IPs</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>manager / rancher-manager</td>
+            <td><code>401–403</code></td>
+            <td><code>.100–.102</code></td>
+            <td>Rancher UI + management plane</td>
+          </tr>
+          <tr>
+            <td>nprd-apps</td>
+            <td><code>410+</code></td>
+            <td><code>.110+</code> · LB <code>.150–.183</code></td>
+            <td>Non-prod workloads</td>
+          </tr>
+          <tr>
+            <td>prd-apps</td>
+            <td><code>420+</code></td>
+            <td><code>.120+</code> · LB <code>.184–.217</code></td>
+            <td>Production workloads</td>
+          </tr>
+          <tr>
+            <td>poc-apps</td>
+            <td><code>430+</code></td>
+            <td><code>.130+</code> · LB <code>.218–.251</code></td>
+            <td>Sandbox / POC</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="callout">
+      <strong>Scope reminder.</strong>
+      This page documents an example physical/homelab layout for operators.
+      UniFi, host networking, and Ceph/ZFS are outside Terraform. Do not put API tokens,
+      PBS credentials, or TrueNAS keys in diagrams or committed docs — keep them in
+      gitignored <code>terraform.tfvars</code> / secret stores. Ubiquiti models are
+      illustrative labels only.
+    </div>
+
+    <footer>
+      Part of <a href="../../README.md">rancher-deploy</a> ·
+      Architecture: <a href="../../docs/ARCHITECTURE.md">ARCHITECTURE.md</a> ·
+      Ops: <a href="../../docs/OPS_NOTES.md">OPS_NOTES.md</a> ·
+      Open this file in a browser (no CDN required).
+    </footer>
+  </div>
+</body>
+</html>

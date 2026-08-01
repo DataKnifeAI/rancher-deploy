@@ -46,11 +46,14 @@ RKE2 version is set in `terraform/main.tf` (currently `v1.34.3+rke2r1`). Rancher
   - **Official TrueNAS CSI** → `truenas-csi-nfs` (vars: `truenas_csi_*`; SCALE 25.10+)
   - Migration between drivers: [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md)
 
+For a visual of an example two-node Proxmox homelab (hosts, MD1420 shelves, bonds, Ceph/ZFS, TrueNAS CSI, guest clusters), see [../examples/homelab/index.html](../examples/homelab/index.html).
+
 ## Networking / ingress
 
 - Node DNS via cloud-init (`dns_servers`); CoreDNS inherits node resolvers.
 - App clusters: **kube-vip** provides `LoadBalancer` IPs from `kube_vip_ip_pools` (MetalLB is legacy; see [METALLB_SETUP.md](METALLB_SETUP.md) note).
 - **Envoy Gateway** when `install_envoy_gateway = true`.
+- Host bonds/bridges are **not** managed by this Terraform root — see [OPS_NOTES.md](OPS_NOTES.md) and the [homelab diagram](../examples/homelab/index.html).
 
 ## Optional operators
 
