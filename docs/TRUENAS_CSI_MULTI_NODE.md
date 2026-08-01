@@ -2,18 +2,22 @@
 
 The official TrueNAS CSI driver rejects `ControllerPublishVolume` for nodes other than the controller's own node ID when the driver runs in default `--mode=all`. Symptom: `rpc error: code = NotFound desc = node <name> not found`.
 
-**Upstream issue:** https://github.com/truenas/truenas-csi/issues/3
+## Canonical fix (upstream)
 
-## Required deploy flags (v0.18+ / IsNodeRegistered)
+Upstream fixed this by splitting CSI process modes in the deploy manifest:
 
-Split controller and node processes so the controller does not register a single node ID:
+| Reference | Link |
+|-----------|------|
+| Issue | https://github.com/truenas/truenas-csi/issues/3 |
+| Deploy commit | https://github.com/truenas/truenas-csi/commit/6201fce8041fe1bac3f7f693853c4e5f2f21137e (`set explicit --mode flags in deploy manifest (fixes #3)`) |
+| Current deploy YAML | https://github.com/truenas/truenas-csi/blob/master/deploy/truenas-csi-driver.yaml |
 
 | Workload | Container | Required args |
 |----------|-----------|---------------|
 | `truenas-csi-controller` Deployment | `csi-controller` | `--mode=controller` |
 | `truenas-csi-node` DaemonSet | `csi-node` | `--mode=node` |
 
-With `--mode=controller`, `IsNodeRegistered` skips node-ID validation (empty registry), so attaches work on any worker. The Terraform template `terraform/templates/truenas-csi-driver.yaml.tpl` sets these flags. Keep image at `v0.18` (or newer) via `truenas_csi_image`.
+With `--mode=controller`, `IsNodeRegistered` skips node-ID validation (empty registry), so attaches work on any worker. This repo's Terraform template (`terraform/templates/truenas-csi-driver.yaml.tpl`) mirrors that upstream deploy change. Keep image at `v0.18` (or newer) via `truenas_csi_image`.
 
 After changing args, roll the controller/node pods, clear stuck `VolumeAttachment` objects if needed, and delete `ContainerCreating` pods so they re-attach.
 
@@ -27,6 +31,6 @@ Democratic CSI works on any node. Use it for workloads that need scheduling flex
 storageClassName: truenas-nfs  # Democratic CSI
 ```
 
-### 2. Hard-delete patch (legacy; prefer mode flags)
+### 2. Hard-delete patch (legacy / optional)
 
-Older workaround: remove the node check in `ControllerPublishVolume`. Prefer `--mode=controller` / `--mode=node` on v0.18+ instead of rebuilding a patched image.
+Older local workaround before upstream mode flags: remove the node check in `ControllerPublishVolume` and rebuild a patched image. Prefer the upstream `--mode=controller` / `--mode=node` deploy flags instead; keep this only if you cannot run a mode-split deploy.
