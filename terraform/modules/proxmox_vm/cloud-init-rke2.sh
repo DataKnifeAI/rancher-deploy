@@ -11,55 +11,38 @@ log() {
 
 log "=== RKE2 Installation Script Starting ==="
 
-# Write Harbor/private-registry CRI config when Terraform passes base64 payloads.
-# Safe to re-run; restarts containerd-backed rke2 service only when files change.
+# Write optional registries.yaml when Terraform passes a base64 payload.
+# Harbor uses public Let's Encrypt certs — no custom CA install.
+# Safe to re-run; restarts containerd-backed rke2 service only when the file changes.
 configure_rke2_harbor_cri() {
-  if [ -z "${RKE2_REGISTRY_CA_B64:-}" ] && [ -z "${RKE2_REGISTRIES_YAML_B64:-}" ]; then
-    log "ⓘ Harbor CRI config skipped (no registry CA / registries.yaml provided)"
+  if [ -z "${RKE2_REGISTRIES_YAML_B64:-}" ]; then
+    log "ⓘ registries.yaml skipped (none provided; optional for mirrors only)"
     return 0
   fi
 
   mkdir -p /etc/rancher/rke2
   CHANGED=0
 
-  if [ -n "${RKE2_REGISTRY_CA_B64:-}" ]; then
-    TMP_CA=$(mktemp)
-    if echo "${RKE2_REGISTRY_CA_B64}" | base64 -d > "$TMP_CA" 2>/dev/null && [ -s "$TMP_CA" ]; then
-      if [ ! -f /etc/rancher/rke2/harbor-ca.crt ] || ! cmp -s "$TMP_CA" /etc/rancher/rke2/harbor-ca.crt; then
-        install -m 0644 "$TMP_CA" /etc/rancher/rke2/harbor-ca.crt
-        CHANGED=1
-        log "✓ Wrote /etc/rancher/rke2/harbor-ca.crt"
-      else
-        log "✓ /etc/rancher/rke2/harbor-ca.crt already up to date"
-      fi
+  TMP_REG=$(mktemp)
+  if echo "${RKE2_REGISTRIES_YAML_B64}" | base64 -d > "$TMP_REG" 2>/dev/null && [ -s "$TMP_REG" ]; then
+    if [ ! -f /etc/rancher/rke2/registries.yaml ] || ! cmp -s "$TMP_REG" /etc/rancher/rke2/registries.yaml; then
+      install -m 0600 "$TMP_REG" /etc/rancher/rke2/registries.yaml
+      CHANGED=1
+      log "✓ Wrote /etc/rancher/rke2/registries.yaml"
     else
-      log "⚠ Failed to decode RKE2_REGISTRY_CA_B64"
+      log "✓ /etc/rancher/rke2/registries.yaml already up to date"
     fi
-    rm -f "$TMP_CA"
+  else
+    log "⚠ Failed to decode RKE2_REGISTRIES_YAML_B64"
   fi
-
-  if [ -n "${RKE2_REGISTRIES_YAML_B64:-}" ]; then
-    TMP_REG=$(mktemp)
-    if echo "${RKE2_REGISTRIES_YAML_B64}" | base64 -d > "$TMP_REG" 2>/dev/null && [ -s "$TMP_REG" ]; then
-      if [ ! -f /etc/rancher/rke2/registries.yaml ] || ! cmp -s "$TMP_REG" /etc/rancher/rke2/registries.yaml; then
-        install -m 0600 "$TMP_REG" /etc/rancher/rke2/registries.yaml
-        CHANGED=1
-        log "✓ Wrote /etc/rancher/rke2/registries.yaml"
-      else
-        log "✓ /etc/rancher/rke2/registries.yaml already up to date"
-      fi
-    else
-      log "⚠ Failed to decode RKE2_REGISTRIES_YAML_B64"
-    fi
-    rm -f "$TMP_REG"
-  fi
+  rm -f "$TMP_REG"
 
   if [ "$CHANGED" -eq 1 ] && [ -f /usr/local/bin/rke2 ]; then
     if systemctl is-active --quiet rke2-agent 2>/dev/null; then
-      log "Restarting rke2-agent to pick up Harbor CRI config..."
+      log "Restarting rke2-agent to pick up registries.yaml..."
       systemctl restart rke2-agent || log "⚠ rke2-agent restart failed"
     elif systemctl is-active --quiet rke2-server 2>/dev/null; then
-      log "Restarting rke2-server to pick up Harbor CRI config..."
+      log "Restarting rke2-server to pick up registries.yaml..."
       systemctl restart rke2-server || log "⚠ rke2-server restart failed"
     fi
   fi
@@ -96,7 +79,7 @@ append_rke2_node_labels() {
 
 configure_rke2_harbor_cri
 
-# Skip full install if already installed (Harbor CRI above still runs)
+# Skip full install if already installed (registries.yaml above still runs)
 if [ -f /usr/local/bin/rke2 ]; then
   if [ -f /etc/rancher/rke2/config.yaml ]; then
     append_rke2_node_labels /etc/rancher/rke2/config.yaml

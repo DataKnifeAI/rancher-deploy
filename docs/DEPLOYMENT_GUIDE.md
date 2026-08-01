@@ -232,7 +232,7 @@ grep -E '^(rke2_version|rancher_version)' terraform/terraform.tfvars terraform/t
 grep 'rke2_version' terraform/main.tf | head
 ```
 
-Pin RKE2 with `rke2_version` (default `v1.34.3+rke2r1` for this change set). Changing the pin alone only affects **new** VMs. See [OPS_NOTES.md](OPS_NOTES.md) for Harbor CRI / topology labels.
+Pin RKE2 with `rke2_version` (default `v1.34.3+rke2r1` for this change set). Changing the pin alone only affects **new** VMs. See [OPS_NOTES.md](OPS_NOTES.md) for optional registries.yaml / topology labels.
 
 **View installation logs:**
 ```bash

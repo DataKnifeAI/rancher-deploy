@@ -13,15 +13,13 @@ Short operational truths that do not belong in the README.
 - **Official TrueNAS CSI** (`truenas_csi_*`, class `truenas-csi-nfs`) is optional and can coexist during migration; old Democratic volumes are not mountable by the new driver. See [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) and [TRUENAS_CSI_MULTI_NODE.md](TRUENAS_CSI_MULTI_NODE.md).
 - Apps-cluster nodes get label `topology.truenas.io/pool=<truenas_csi_pool>` via RKE2 `node-label` at bootstrap, plus a post-kubeconfig `null_resource` that labels all nodes. Manager nodes are not labeled (CSI is apps-side).
 
-## Harbor CRI (node containerd)
+## Harbor / registries (node containerd)
 
-- Pod `imagePullSecrets` alone are not enough for some pulls; nodes need RKE2 CRI config:
-  - `config/harbor-ca.crt` → `/etc/rancher/rke2/harbor-ca.crt`
-  - `config/rke2-registries.yaml` → `/etc/rancher/rke2/registries.yaml`
-- Vars: `rke2_registry_ca_file`, `rke2_registries_yaml_file` (defaults under `config/`). Missing files skip silently.
-- Example registries file: `terraform/templates/rke2-registries.yaml.example`.
+- Harbor uses **Let's Encrypt** — no custom CA on nodes (`harbor-ca.crt` is legacy; do not install).
+- Optional mirrors only: `config/rke2-registries.yaml` → `/etc/rancher/rke2/registries.yaml` via `rke2_registries_yaml_file` (default under `config/`). Missing file skips silently.
+- Example: `terraform/templates/rke2-registries.yaml.example` (no `tls.ca_file`).
 - Bootstrap lives in `proxmox_vm` `null_resource.rke2_bootstrap` (split from the VM resource so a bpg/proxmox post-create failure does not skip RKE2 install).
-- **Manual repair** (e.g. replaced worker before TF managed CRI): copy both files from a sibling node, `sudo systemctl restart rke2-agent` (or `rke2-server`), then `kubectl label node <name> topology.truenas.io/pool=<pool> --overwrite`.
+- **Manual repair** (e.g. replaced worker before TF managed registries): copy `registries.yaml` from a sibling if used, `sudo systemctl restart rke2-agent` (or `rke2-server`), then `kubectl label node <name> topology.truenas.io/pool=<pool> --overwrite`.
 - **bpg/proxmox base64 fallback:** if apply fails with `illegal base64 data` after the VM already exists, SSH pubkey is now `trimspace`d; re-run apply so `null_resource.rke2_bootstrap` can finish, or run `cloud-init-rke2.sh` over SSH with the same env vars. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## LoadBalancer

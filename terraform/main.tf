@@ -36,16 +36,11 @@ locals {
   # Image pull secrets YAML for CSI when using private registry
   truenas_csi_image_pull_secrets = var.truenas_csi_image_pull_secret != "" ? "      imagePullSecrets:\n        - name: ${var.truenas_csi_image_pull_secret}" : ""
 
-  # Harbor CRI files (gitignored under config/). Empty b64 skips writing on nodes.
-  rke2_registry_ca_path = var.rke2_registry_ca_file != "" ? (
-    startswith(var.rke2_registry_ca_file, "/") ? var.rke2_registry_ca_file : abspath("${path.root}/../${var.rke2_registry_ca_file}")
-  ) : ""
+  # Optional registries.yaml for CRI mirrors (gitignored under config/). Empty b64 skips.
+  # Harbor uses Let's Encrypt — no custom registry CA is installed on nodes.
   rke2_registries_yaml_path = var.rke2_registries_yaml_file != "" ? (
     startswith(var.rke2_registries_yaml_file, "/") ? var.rke2_registries_yaml_file : abspath("${path.root}/../${var.rke2_registries_yaml_file}")
   ) : ""
-  rke2_registry_ca_b64 = (
-    local.rke2_registry_ca_path != "" && fileexists(local.rke2_registry_ca_path)
-  ) ? filebase64(local.rke2_registry_ca_path) : ""
   rke2_registries_yaml_b64 = (
     local.rke2_registries_yaml_path != "" && fileexists(local.rke2_registries_yaml_path)
   ) ? filebase64(local.rke2_registries_yaml_path) : ""
@@ -97,8 +92,7 @@ module "rancher_manager_primary" {
   cluster_primary_ip = var.manager_cluster_primary_ip
   cluster_aliases    = var.manager_cluster_aliases
 
-  # Harbor CRI (manager has no TrueNAS CSI topology label)
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
+  # Optional registries.yaml; manager has no TrueNAS CSI topology label
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = []
 
@@ -194,7 +188,6 @@ module "rancher_manager_additional" {
   cluster_primary_ip = var.manager_cluster_primary_ip
   cluster_aliases    = var.manager_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = []
 
@@ -298,7 +291,6 @@ module "nprd_apps_primary" {
   cluster_aliases    = var.nprd_apps_cluster_aliases
   rke2_server_ip     = ""
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -367,7 +359,6 @@ module "nprd_apps_additional" {
   cluster_primary_ip = var.nprd_apps_cluster_primary_ip
   cluster_aliases    = var.nprd_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -438,7 +429,6 @@ module "nprd_apps_workers" {
   cluster_primary_ip = var.nprd_apps_cluster_primary_ip
   cluster_aliases    = var.nprd_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -627,7 +617,6 @@ module "prd_apps_primary" {
   cluster_aliases    = var.prd_apps_cluster_aliases
   rke2_server_ip     = ""
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -696,7 +685,6 @@ module "prd_apps_additional" {
   cluster_primary_ip = var.prd_apps_cluster_primary_ip
   cluster_aliases    = var.prd_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -767,7 +755,6 @@ module "prd_apps_workers" {
   cluster_primary_ip = var.prd_apps_cluster_primary_ip
   cluster_aliases    = var.prd_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -886,7 +873,6 @@ module "poc_apps_primary" {
   cluster_aliases    = var.poc_apps_cluster_aliases
   rke2_server_ip     = ""
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -955,7 +941,6 @@ module "poc_apps_additional" {
   cluster_primary_ip = var.poc_apps_cluster_primary_ip
   cluster_aliases    = var.poc_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 
@@ -1026,7 +1011,6 @@ module "poc_apps_workers" {
   cluster_primary_ip = var.poc_apps_cluster_primary_ip
   cluster_aliases    = var.poc_apps_cluster_aliases
 
-  rke2_registry_ca_b64     = local.rke2_registry_ca_b64
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
   rke2_node_labels         = local.apps_rke2_node_labels
 

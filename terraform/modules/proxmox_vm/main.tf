@@ -182,14 +182,8 @@ variable "rancher_ca_checksum" {
   default     = ""
 }
 
-variable "rke2_registry_ca_b64" {
-  description = "Base64-encoded PEM CA written to /etc/rancher/rke2/harbor-ca.crt during bootstrap. Empty skips. Keep source file under gitignored config/."
-  type        = string
-  default     = ""
-}
-
 variable "rke2_registries_yaml_b64" {
-  description = "Base64-encoded registries.yaml for containerd/CRI. Empty skips. Keep source file under gitignored config/."
+  description = "Base64-encoded registries.yaml for containerd/CRI mirrors. Empty skips. Keep source file under gitignored config/."
   type        = string
   default     = ""
 }
@@ -301,7 +295,6 @@ resource "null_resource" "rke2_bootstrap" {
     is_rke2_server      = tostring(var.is_rke2_server)
     rke2_server_ip      = var.rke2_server_ip
     install_script_md5  = filemd5("${path.module}/cloud-init-rke2.sh")
-    registry_ca_md5     = md5(var.rke2_registry_ca_b64)
     registries_yaml_md5 = md5(var.rke2_registries_yaml_b64)
     node_labels         = join(",", var.rke2_node_labels)
   }
@@ -319,7 +312,7 @@ resource "null_resource" "rke2_bootstrap" {
       [
         "cat > /tmp/rke2-install.sh <<'RKEEOF'\n${file("${path.module}/cloud-init-rke2.sh")}\nRKEEOF",
         "chmod +x /tmp/rke2-install.sh",
-        "IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRY_CA_B64='${var.rke2_registry_ca_b64}' RKE2_REGISTRIES_YAML_B64='${var.rke2_registries_yaml_b64}' RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"
+        "IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRIES_YAML_B64='${var.rke2_registries_yaml_b64}' RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"
       ],
       var.register_with_rancher && var.is_rke2_server ? [
         "echo '${var.rancher_ingress_ip} ${var.rancher_hostname}' | sudo tee -a /etc/hosts > /dev/null",

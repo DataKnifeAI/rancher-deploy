@@ -40,14 +40,13 @@ example.tfvars
 terraform_deploy.log
 logs/
 
-# Generated Configuration (kubeconfigs, tokens, Harbor CRI CA/registries)
+# Generated Configuration (kubeconfigs, tokens, optional registries.yaml)
 config/
 !config/.gitkeep
 # Image pull secrets (sensitive - contains registry credentials)
 config/*-registry-secret*.yaml
 config/harbor-registry-secret*.yaml
-# Harbor CRI node files (CA is semi-public; keep with config/ pattern)
-config/harbor-ca.crt
+# Optional RKE2 registries.yaml (mirrors; gitignored under config/)
 config/rke2-registries.yaml
 
 # RKE2 Tokens (sensitive)

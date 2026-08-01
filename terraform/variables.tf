@@ -378,17 +378,11 @@ variable "truenas_csi_image_pull_secret_file" {
 }
 
 # ============================================================================
-# RKE2 HARBOR / PRIVATE REGISTRY CRI (node-level containerd config)
+# RKE2 REGISTRY MIRRORS (optional node-level containerd config)
 # ============================================================================
 
-variable "rke2_registry_ca_file" {
-  description = "Path (repo-relative or absolute) to Harbor/private registry CA PEM written to /etc/rancher/rke2/harbor-ca.crt. Gitignored under config/. Empty or missing file skips."
-  type        = string
-  default     = "config/harbor-ca.crt"
-}
-
 variable "rke2_registries_yaml_file" {
-  description = "Path to RKE2 registries.yaml (mirrors/configs for CRI). Gitignored under config/. See terraform/templates/rke2-registries.yaml.example. Empty or missing file skips."
+  description = "Optional path to RKE2 registries.yaml (mirrors only). Harbor uses Let's Encrypt so no custom CA is needed. Gitignored under config/. See terraform/templates/rke2-registries.yaml.example. Empty or missing file skips."
   type        = string
   default     = "config/rke2-registries.yaml"
 }
