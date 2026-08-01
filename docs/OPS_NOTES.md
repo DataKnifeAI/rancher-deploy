@@ -13,7 +13,21 @@ Short operational truths that do not belong in the README.
 - **Official TrueNAS CSI** (`truenas_csi_*`, class `truenas-csi-nfs`) is optional and can coexist during migration; old Democratic volumes are not mountable by the new driver. See [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) and [TRUENAS_CSI_MULTI_NODE.md](TRUENAS_CSI_MULTI_NODE.md).
 - Apps-cluster nodes get label `topology.truenas.io/pool=<truenas_csi_pool>` via RKE2 `node-label` at bootstrap, plus a post-kubeconfig `null_resource` that labels all nodes. Manager nodes are not labeled (CSI is apps-side).
 
+## Version pins (RKE2 / Rancher / OS)
+
+| Pin | Variable | Default (as of 2026-07) | Notes |
+|-----|----------|-------------------------|--------|
+| RKE2 | `rke2_version` | `v1.34.9+rke2r1` | New nodes only unless `enable_rke2_upgrade=true` |
+| Rancher | `rancher_version` | `v2.14.3` | Stable chart; **minor upgrades must step** latest patch of current minor first (e.g. `v2.13.1` → `v2.13.7` → `v2.14.3`) |
+| OS patch | `enable_os_patch` | `false` | SSH `apt update/upgrade` via `scripts/patch-os-nodes.sh`; optional `os_patch_reboot` |
+
+**Apply path (when ready — not automatic):**
+1. OS: set `enable_os_patch=true`, bump `os_patch_trigger`, prefer `os_patch_reboot=false`, drain/reboot manually if needed.
+2. RKE2: set `rke2_version`, then either replace nodes or set `enable_rke2_upgrade=true` (rolling SSH installer, **no drain** — cordon/drain yourself). No system-upgrade-controller Plans in this repo.
+3. Rancher: change `rancher_version` and apply (targets `module.rancher_deployment`); follow supported minor stepping.
+
 ## Harbor / registries (node containerd)
+
 
 - Harbor uses **Let's Encrypt** — no custom CA on nodes (`harbor-ca.crt` is legacy; do not install).
 - Optional mirrors only: `config/rke2-registries.yaml` → `/etc/rancher/rke2/registries.yaml` via `rke2_registries_yaml_file` (default under `config/`). Missing file skips silently.

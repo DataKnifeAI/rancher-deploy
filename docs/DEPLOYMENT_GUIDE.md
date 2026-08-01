@@ -232,7 +232,7 @@ grep -E '^(rke2_version|rancher_version)' terraform/terraform.tfvars terraform/t
 grep 'rke2_version' terraform/main.tf | head
 ```
 
-Pin RKE2 with `rke2_version` (default `v1.34.3+rke2r1` for this change set). Changing the pin alone only affects **new** VMs. See [OPS_NOTES.md](OPS_NOTES.md) for optional registries.yaml / topology labels.
+Pin RKE2 with `rke2_version` (default `v1.34.9+rke2r1`). Changing the pin alone only affects **new** VMs; existing nodes need `enable_rke2_upgrade=true` (day-2, default off) or a manual rolling upgrade. See [OPS_NOTES.md](OPS_NOTES.md) for optional registries.yaml / topology labels.
 
 **View installation logs:**
 ```bash
@@ -240,7 +240,7 @@ ssh -i .keys/id_rsa ubuntu@192.168.1.100
 sudo journalctl -u rke2-server | grep -E "INFO|ERROR"
 ```
 
-**Do not** wipe `terraform.tfstate` to “fix” a version — set `rke2_version` for new nodes and upgrade existing nodes deliberately.
+**Do not** wipe `terraform.tfstate` to “fix” a version — set `rke2_version` / use the gated upgrade flags instead.
 
 ### Network Issues
 

@@ -1163,6 +1163,81 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
   depends_on = [module.rke2_poc_apps]
 }
 
+# ============================================================================
+# DAY-2: OS PATCH + RKE2 IN-PLACE UPGRADE (gated, default off)
+# Collects all known RKE2 guest IPs. Does not run unless enable_* is true.
+# ============================================================================
+
+locals {
+  all_rke2_node_ips = compact(concat(
+    [split("/", module.rancher_manager_primary.ip_address)[0]],
+    [for n in module.rancher_manager_additional : split("/", n.ip_address)[0]],
+    [split("/", module.nprd_apps_primary.ip_address)[0]],
+    [for n in module.nprd_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.nprd_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.prd_apps_primary.ip_address)[0]],
+    [for n in module.prd_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.prd_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.poc_apps_primary.ip_address)[0]],
+    [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
+  ))
+}
+
+resource "null_resource" "os_patch_nodes" {
+  count = var.enable_os_patch ? 1 : 0
+
+  triggers = {
+    trigger = var.os_patch_trigger
+    reboot  = tostring(var.os_patch_reboot)
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/patch-os-nodes.sh" \
+        "${var.ssh_private_key}" \
+        "${var.os_patch_reboot}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+  ]
+}
+
+resource "null_resource" "rke2_upgrade_nodes" {
+  count = var.enable_rke2_upgrade ? 1 : 0
+
+  triggers = {
+    trigger = var.rke2_upgrade_trigger
+    version = var.rke2_version
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/upgrade-rke2-nodes.sh" \
+        "${var.ssh_private_key}" \
+        "${var.rke2_version}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+    null_resource.os_patch_nodes,
+  ]
+}
+
+# ============================================================================
 # ENVOY GATEWAY DEPLOYMENT - DOWNSTREAM CLUSTERS
 # Installs Envoy Gateway and Gateway API CRDs on downstream clusters
 # ============================================================================
