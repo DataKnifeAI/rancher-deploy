@@ -179,6 +179,7 @@ ${image_pull_secrets}
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node-id=$(NODE_ID)"
+            - "--mode=controller"
             - "--v=4"
           env:
             - name: CSI_ENDPOINT
@@ -340,6 +341,7 @@ ${image_pull_secrets}
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node-id=$(NODE_ID)"
+            - "--mode=node"
             - "--v=4"
           env:
             - name: CSI_ENDPOINT

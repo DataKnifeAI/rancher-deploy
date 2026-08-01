@@ -1,10 +1,27 @@
 # TrueNAS CSI Multi-Node Scheduling Fix
 
-The official TrueNAS CSI driver has a limitation: `ControllerPublishVolume` only accepts the node where the controller pod runs. This prevents scheduling pods on other worker nodes.
+The official TrueNAS CSI driver rejects `ControllerPublishVolume` for nodes other than the controller's own node ID when the driver runs in default `--mode=all`. Symptom: `rpc error: code = NotFound desc = node <name> not found`.
 
-**Upstream issue:** https://github.com/truenas/truenas-csi/issues/3
+## Canonical fix (upstream)
 
-## Options
+Upstream fixed this by splitting CSI process modes in the deploy manifest:
+
+| Reference | Link |
+|-----------|------|
+| Issue | https://github.com/truenas/truenas-csi/issues/3 |
+| Deploy commit | https://github.com/truenas/truenas-csi/commit/6201fce8041fe1bac3f7f693853c4e5f2f21137e (`set explicit --mode flags in deploy manifest (fixes #3)`) |
+| Current deploy YAML | https://github.com/truenas/truenas-csi/blob/master/deploy/truenas-csi-driver.yaml |
+
+| Workload | Container | Required args |
+|----------|-----------|---------------|
+| `truenas-csi-controller` Deployment | `csi-controller` | `--mode=controller` |
+| `truenas-csi-node` DaemonSet | `csi-node` | `--mode=node` |
+
+With `--mode=controller`, `IsNodeRegistered` skips node-ID validation (empty registry), so attaches work on any worker. This repo's Terraform template (`terraform/templates/truenas-csi-driver.yaml.tpl`) mirrors that upstream deploy change. Keep image at `v0.18` (or newer) via `truenas_csi_image`.
+
+After changing args, roll the controller/node pods, clear stuck `VolumeAttachment` objects if needed, and delete `ContainerCreating` pods so they re-attach.
+
+## Alternatives
 
 ### 1. Use Democratic CSI (truenas-nfs) for flexible scheduling
 
@@ -14,34 +31,6 @@ Democratic CSI works on any node. Use it for workloads that need scheduling flex
 storageClassName: truenas-nfs  # Democratic CSI
 ```
 
-### 2. Wait for upstream fix
+### 2. Hard-delete patch (legacy / optional)
 
-The issue has been reported. Once merged, update to the fixed image.
-
-### 3. Build a patched image (until upstream merges)
-
-**Fix:** Remove the node validation in `pkg/driver/controller.go` `ControllerPublishVolume`:
-
-```go
-// DELETE these 4 lines (around line 976):
-// Validate node exists - in single-node deployments, check against our node ID
-// In multi-node deployments, this should be expanded to track all registered nodes
-if req.NodeId != s.driver.NodeID() {
-    return nil, status.Errorf(codes.NotFound, "node %s not found", req.NodeId)
-}
-```
-
-**Build:**
-```bash
-git clone https://github.com/truenas/truenas-csi
-cd truenas-csi
-# Edit pkg/driver/controller.go - remove the 4 lines above
-make docker-build
-docker tag truenas-csi:latest YOUR_REGISTRY/truenas-csi:multi-node
-docker push YOUR_REGISTRY/truenas-csi:multi-node
-```
-
-Then set in `terraform.tfvars`:
-```hcl
-truenas_csi_image = "YOUR_REGISTRY/truenas-csi:multi-node"
-```
+Older local workaround before upstream mode flags: remove the node check in `ControllerPublishVolume` and rebuild a patched image. Prefer the upstream `--mode=controller` / `--mode=node` deploy flags instead; keep this only if you cannot run a mode-split deploy.
