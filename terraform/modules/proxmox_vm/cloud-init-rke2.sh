@@ -94,14 +94,60 @@ restart_rke2_for_config() {
   fi
 }
 
+# Install/configure unattended-upgrades: security pocket only, no auto-reboot.
+# Idempotent; also runs on re-bootstrap when RKE2 is already present.
+configure_unattended_upgrades() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    log "⚠ unattended-upgrades skipped (apt-get not available)"
+    return 0
+  fi
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq >/dev/null 2>&1 || true
+  if ! apt-get install -y -qq unattended-upgrades >/dev/null 2>&1; then
+    log "⚠ Failed to install unattended-upgrades"
+    return 0
+  fi
+
+  cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTO'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";
+AUTO
+
+  cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUC'
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+};
+Unattended-Upgrade::Package-Blacklist {
+};
+Unattended-Upgrade::DevRelease "auto";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::Mail "";
+Unattended-Upgrade::MailReport "only-on-error";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+UUC
+
+  systemctl enable unattended-upgrades >/dev/null 2>&1 || true
+  systemctl restart unattended-upgrades >/dev/null 2>&1 || true
+  log "✓ unattended-upgrades configured (security only, Automatic-Reboot false)"
+}
+
 configure_rke2_harbor_cri
 
-# Skip full install if already installed (registries.yaml above still runs)
+# Skip full install if already installed (registries.yaml above still runs; unattended-upgrades too)
 if [ -f /usr/local/bin/rke2 ]; then
   RKE2_NODE_LABELS_CHANGED=0
   if [ -f /etc/rancher/rke2/config.yaml ]; then
     append_rke2_node_labels /etc/rancher/rke2/config.yaml
   fi
+  configure_unattended_upgrades
   # New node-label entries in config.yaml need a service restart (like registries).
   if [ "$RKE2_NODE_LABELS_CHANGED" -eq 1 ]; then
     restart_rke2_for_config
@@ -267,6 +313,9 @@ fi
 # Update packages
 log "Updating package list..."
 apt-get update -qq || log "⚠ Package update failed"
+
+# Security auto-updates (no automatic reboot) before RKE2 install
+configure_unattended_upgrades
 
 # Download RKE2 installer with timeout and retries
 log "Downloading RKE2 installer..."

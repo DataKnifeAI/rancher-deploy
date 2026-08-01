@@ -34,21 +34,34 @@ if [ -n "\$CURRENT" ] && [ "\$CURRENT" = "\$TARGET" ]; then
   echo "✓ Already on \$TARGET"
   exit 0
 fi
-INSTALLER=/tmp/rke2-installer-upgrade.sh
-curl -sfL --max-time 60 https://get.rke2.io -o "\$INSTALLER"
-chmod +x "\$INSTALLER"
-INSTALL_RKE2_VERSION="\$TARGET" "\$INSTALLER"
-systemctl daemon-reload
-if systemctl list-unit-files | grep -q '^rke2-server.service'; then
-  systemctl restart rke2-server
-  echo "✓ Restarted rke2-server"
-elif systemctl list-unit-files | grep -q '^rke2-agent.service'; then
-  systemctl restart rke2-agent
-  echo "✓ Restarted rke2-agent"
+# Detect node role BEFORE installer (defaults to server if INSTALL_RKE2_TYPE unset).
+TYPE=""
+if systemctl is-active --quiet rke2-agent 2>/dev/null; then
+  TYPE=agent
+elif systemctl is-active --quiet rke2-server 2>/dev/null; then
+  TYPE=server
+elif systemctl is-enabled --quiet rke2-agent 2>/dev/null; then
+  TYPE=agent
+elif systemctl is-enabled --quiet rke2-server 2>/dev/null; then
+  TYPE=server
+elif [ -f /usr/local/lib/systemd/system/rke2-agent.service ] && [ ! -f /usr/local/lib/systemd/system/rke2-server.service ]; then
+  TYPE=agent
+elif [ -f /usr/local/lib/systemd/system/rke2-server.service ]; then
+  TYPE=server
+elif [ -f /usr/local/lib/systemd/system/rke2-agent.service ]; then
+  TYPE=agent
 else
   echo "⚠ No rke2-server/agent unit found" >&2
   exit 1
 fi
+echo "INSTALL_RKE2_TYPE=\$TYPE"
+INSTALLER=/tmp/rke2-installer-upgrade.sh
+curl -sfL --max-time 60 https://get.rke2.io -o "\$INSTALLER"
+chmod +x "\$INSTALLER"
+INSTALL_RKE2_VERSION="\$TARGET" INSTALL_RKE2_TYPE="\$TYPE" "\$INSTALLER"
+systemctl daemon-reload
+systemctl restart "rke2-\${TYPE}"
+echo "✓ Restarted rke2-\${TYPE}"
 echo "✓ RKE2 upgrade command completed on \$(hostname)"
 EOF
   then

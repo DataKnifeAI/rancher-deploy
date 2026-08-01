@@ -1164,8 +1164,8 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
 }
 
 # ============================================================================
-# DAY-2: OS PATCH + RKE2 IN-PLACE UPGRADE (gated, default off)
-# Collects all known RKE2 guest IPs. Does not run unless enable_* is true.
+# DAY-2: UNATTENDED-UPGRADES (default on) + OS PATCH / RKE2 UPGRADE (gated, default off)
+# Collects all known RKE2 guest IPs.
 # ============================================================================
 
 locals {
@@ -1182,6 +1182,31 @@ locals {
     [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
   ))
+}
+
+resource "null_resource" "unattended_upgrades_nodes" {
+  count = var.enable_unattended_upgrades ? 1 : 0
+
+  triggers = {
+    trigger = var.unattended_upgrades_trigger
+    script  = filemd5("${path.root}/../scripts/enable-unattended-upgrades.sh")
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/enable-unattended-upgrades.sh" \
+        "${var.ssh_private_key}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+  ]
 }
 
 resource "null_resource" "os_patch_nodes" {
@@ -1207,6 +1232,7 @@ resource "null_resource" "os_patch_nodes" {
     module.rke2_nprd_apps,
     module.rke2_prd_apps,
     module.rke2_poc_apps,
+    null_resource.unattended_upgrades_nodes,
   ]
 }
 

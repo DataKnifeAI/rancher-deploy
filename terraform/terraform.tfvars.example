@@ -174,6 +174,11 @@ rancher_version = "v2.15.0"
 # Latest stable 1.36.x (v1.36.3+rke2r1 still RC-only as of pin date).
 rke2_version = "v1.36.2+rke2r1"
 
+# Day-2 unattended-upgrades (security pocket only, no auto-reboot). Default on —
+# next apply configures existing nodes via SSH; new nodes get it at bootstrap.
+enable_unattended_upgrades   = true
+unattended_upgrades_trigger  = "1"
+
 # Day-2 OS package patch (Ubuntu 24.04). Default off — set true + bump os_patch_trigger to run.
 enable_os_patch   = false
 os_patch_reboot   = false   # if true, reboot when /var/run/reboot-required (no drain)

@@ -107,6 +107,18 @@ variable "rke2_version" {
   default     = "v1.36.2+rke2r1"
 }
 
+variable "enable_unattended_upgrades" {
+  description = "When true (default), SSH-configure unattended-upgrades on all known RKE2 node IPs (security pocket only, Automatic-Reboot false). New nodes also get this at cloud-init bootstrap regardless of this flag."
+  type        = bool
+  default     = true
+}
+
+variable "unattended_upgrades_trigger" {
+  description = "Bump this string to re-run enable_unattended_upgrades when it remains true."
+  type        = string
+  default     = "1"
+}
+
 variable "enable_os_patch" {
   description = "When true, run day-2 apt update/upgrade on all known RKE2 node IPs via SSH. Default false — enable deliberately before apply."
   type        = bool

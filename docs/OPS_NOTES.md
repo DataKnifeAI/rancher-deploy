@@ -19,12 +19,14 @@ Short operational truths that do not belong in the README.
 |-----|----------|-------------------------|--------|
 | RKE2 | `rke2_version` | `v1.36.2+rke2r1` | New nodes only unless `enable_rke2_upgrade=true`. Needs Rancher 2.15+ (2.14.x max certified RKE2 is 1.35) |
 | Rancher | `rancher_version` | `v2.15.0` | Stable chart with K8s/RKE2 1.36 support; **minor upgrades must step** latest patch of current minor first (e.g. `v2.14.3` → `v2.14.4` → `v2.15.0`) |
+| Unattended upgrades | `enable_unattended_upgrades` | `true` | Security pocket only; `Automatic-Reboot false`. New nodes via `cloud-init-rke2.sh`; existing via `scripts/enable-unattended-upgrades.sh` |
 | OS patch | `enable_os_patch` | `false` | SSH `apt update/upgrade` via `scripts/patch-os-nodes.sh`; optional `os_patch_reboot` |
 
 **Apply path (when ready — not automatic):**
-1. OS: set `enable_os_patch=true`, bump `os_patch_trigger`, prefer `os_patch_reboot=false`, drain/reboot manually if needed.
-2. RKE2: set `rke2_version`, then either replace nodes or set `enable_rke2_upgrade=true` (rolling SSH installer, **no drain** — cordon/drain yourself). No system-upgrade-controller Plans in this repo.
-3. Rancher: change `rancher_version` and apply (targets `module.rancher_deployment`); follow supported minor stepping.
+1. Unattended-upgrades: default **on** — next apply configures existing nodes (idempotent); set `enable_unattended_upgrades=false` to skip. New VMs always get it at bootstrap. Reboots stay manual (`/var/run/reboot-required`).
+2. OS: set `enable_os_patch=true`, bump `os_patch_trigger`, prefer `os_patch_reboot=false`, drain/reboot manually if needed.
+3. RKE2: set `rke2_version`, then either replace nodes or set `enable_rke2_upgrade=true` (rolling SSH installer, **no drain** — cordon/drain yourself). No system-upgrade-controller Plans in this repo.
+4. Rancher: change `rancher_version` and apply (targets `module.rancher_deployment`); follow supported minor stepping.
 
 **Live upgrade runbook (poc-apps canary, stepped pins, abort criteria):** [UPGRADE_PLAN.md](UPGRADE_PLAN.md).
 

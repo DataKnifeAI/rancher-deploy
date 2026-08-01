@@ -20,7 +20,7 @@ Related: [OPS_NOTES.md](OPS_NOTES.md) (pin summary), [DEPLOYMENT_GUIDE.md](DEPLO
 | Step | Action | Done |
 |------|--------|------|
 | 0.1 | Merge **#14** (`feat/rke2-bootstrap-harbor-topology`) — `rke2_version` var, Harbor CRI, topology labels, resilient bootstrap | [ ] |
-| 0.2 | Merge/rebase **#15** (`feat/rancher-rke2-os-upgrades`) — default pins + `enable_rke2_upgrade` / `enable_os_patch` (both default **false**) | [ ] |
+| 0.2 | Merge/rebase **#15** (`feat/rancher-rke2-os-upgrades`) — default pins + `enable_rke2_upgrade` / `enable_os_patch` (both default **false**); `enable_unattended_upgrades` defaults **true** (security-only, no auto-reboot) | [ ] |
 | 0.3 | In live `terraform/terraform.tfvars`, **do not** leave final pins active for the first apply after merge | [ ] |
 
 **How #15 interacts with stepped upgrades**
@@ -321,11 +321,14 @@ enable_os_patch      = false
 
 Separate from Kubernetes upgrades. Run only after poc C1 or C2 is stable.
 
+**Unattended-upgrades** (security pocket, `Automatic-Reboot false`) is independent: enabled by default for new nodes at bootstrap and for existing nodes via `enable_unattended_upgrades=true` (day-2 SSH). It does **not** replace a deliberate full `enable_os_patch` window.
+
 | Step | Action | Done |
 |------|--------|------|
 | D.1 | Prefer manual: drain node → `scripts/patch-os-nodes.sh` for that IP → reboot if needed → uncordon | [ ] |
 | D.2 | Or set `enable_os_patch=true`, `os_patch_reboot=false`, bump `os_patch_trigger` — still expect to drain yourself; script hits **all** IPs | [ ] |
 | D.3 | Do **not** combine OS patch + RKE2 minor bump in the same change window | [ ] |
+| D.4 | Confirm unattended-upgrades is present (`/etc/apt/apt.conf.d/50unattended-upgrades`); leave auto-reboot **false** | [ ] |
 
 ---
 
