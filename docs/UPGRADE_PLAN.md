@@ -172,12 +172,17 @@ Example Helm (if not using Terraform for a step):
 ```bash
 export KUBECONFIG=~/.kube/rancher-manager.yaml
 helm repo update
-# Prefer stable when available; else rancher-latest for 2.15.0 only
+# Prefer stable when available; else rancher-latest for 2.15.0 only.
+# From 2.14 onward use --reset-then-reuse-values (not plain --reuse-values)
+# and set networkExposure.type=ingress explicitly.
 helm upgrade rancher rancher-stable/rancher \
   --namespace cattle-system \
+  --reset-then-reuse-values \
   --set hostname="$RANCHER_HOSTNAME" \
   --set replicas=3 \
-  --version 2.13.3 \
+  --set ingress.tls.source=secret \
+  --set networkExposure.type=ingress \
+  --version 2.14.3 \
   --wait --timeout 15m
 ```
 
@@ -293,9 +298,48 @@ Repeat the same validation block as C1 (nodes / UI / pods / CSI).
 
 **Note:** RKE2 1.36 defaults Traefik for *new* clusters; existing ingress-nginx installs should remain. Watch Ingress / Gateway behavior on poc after upgrade.
 
+### Poc canary results & learnings (2026-07-31)
+
+**Verdict: GO to promote** nprd → prd → manager RKE2 (same drain + script ladder). Do **not** skip manager CM → `v1.21.1` before manager RKE2 1.36.
+
+| Component | Live after canary |
+|-----------|-------------------|
+| Rancher (manager) | `v2.15.0` (3/3 Ready; UI HTTPS 200) |
+| Manager RKE2 | still `v1.34.3+rke2r1` |
+| Manager cert-manager | `v1.19.2` (bump to `v1.21.1` before manager 1.36) |
+| poc-apps RKE2 | all 9 nodes Ready `v1.36.2+rke2r1`; `/readyz` pass |
+| poc cert-manager | `v1.21.1` (controller/cainjector/webhook Ready; ClusterIssuer Ready) |
+| nprd / prd RKE2 | still `v1.34.3+rke2r1` (untouched) |
+| Downstream in Rancher | poc / nprd / prd / local all `Ready=True`, `Connected=True`; poc reports `v1.36.2+rke2r1` |
+
+**Promote procedure fixes (apply these on nprd/prd/manager):**
+
+1. **Rancher Helm (already done on manager):** from 2.14 use `--reset-then-reuse-values` + `--set networkExposure.type=ingress` (plain `--reuse-values` omitted new chart keys and failed render).
+2. **Rancher 2.15 chart source:** `v2.15.0` was on `rancher-latest` only — not yet on `rancher-stable`. Re-check stable before future upgrades; document override if still missing.
+3. **`scripts/upgrade-rke2-nodes.sh`:** avoid `list-unit-files \| grep -q` under `pipefail` (SIGPIPE abort); restart the **enabled/active** unit (`rke2-server` vs `rke2-agent`) — both unit files ship in the tarball so `systemctl cat` alone can pick the wrong one. Do **not** force `INSTALL_RKE2_TYPE` from a stale probe if the official installer already preserves role.
+4. **Manager CM gate:** leave manager at CM `v1.19.2` until just before manager RKE2 1.36, then Helm to `v1.21.1` (same as poc B3).
+5. **Backups:** Rancher Backup → RustFS S3 returned Access Denied; relied on on-demand etcd snapshots (`pre-upgrade-poc-canary-20260731` on manager + poc). Fix RustFS creds/bucket before the next window; still take etcd snapshots per cluster before each RKE2 ladder.
+6. **Apps CM before each cluster’s 1.36:** nprd/prd are still on CM `v1.19.2` — bump each to `v1.21.1` before that cluster’s C2 (1.36) step (same as poc).
+
+**Verification notes (poc post-C2):**
+
+| Area | Result |
+|------|--------|
+| Core (etcd, apiserver, scheduler, CCM, CoreDNS, canal 9/9, kube-proxy 9/9, ingress-nginx 9/9) | Healthy |
+| cattle-cluster-agent 2/2, fleet-agent, rancher-webhook | Ready; brief metrics discovery flaps during roll settled |
+| TrueNAS CSI | CSIDriver present; controller 6/6 + node DS Ready; only PVC Bound (prometheus) |
+| Operators | cnpg, mongodb, ARC, envoy-gateway Running |
+| cert-manager TLS | ClusterIssuer Ready; TLS secrets present (wildcard). No Certificate CRs listed on poc at verify time (manager Certificates Ready) |
+| Pre-existing bad pod | `cka-troubleshooting/web-server` ImagePullBackOff (`nginx:1.21-invalid`) — intentional lab, ignore |
+| OpenSearch operator | Manager container Running; sidecar `gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0` **ImagePullBackOff** (image **not found** on gcr). nprd/prd still 2/2 only because the image is node-cached — expect the same pull failure after drain/reboot. Fix (retarget image / upgrade operator) before or during promote |
+| Manager | Rancher 3/3 `v2.15.0`, CM `v1.19.2`, fleet Ready; `healthz` ok (`readyz` not exposed on this manager API) |
+| Non-blocking noise | `rke2-snapshot-controller` restarts during roll (Ready); kube-vip high historical restart counts but Running; fleet-default `gitops-core` Init:Error age 195d (pre-existing) |
+
+---
+
 ### C3. Promote: nprd → prd → manager
 
-Only after poc C2 is green.
+Only after poc C2 is green **and** the learnings above are applied (script fix present; CM 1.21.1 before each cluster’s 1.36; etcd snapshot before roll).
 
 | Order | Cluster | RKE2 steps | Extra care | Done |
 |-------|---------|------------|------------|------|

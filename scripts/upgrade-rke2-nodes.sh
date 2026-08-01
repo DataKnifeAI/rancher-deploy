@@ -28,40 +28,29 @@ for IP in "${IPS[@]}"; do
   if ! ssh "${SSH_OPTS[@]}" "ubuntu@$IP" "sudo bash -s" <<EOF
 set -euo pipefail
 TARGET="$RKE2_VERSION"
-CURRENT=\$(/usr/local/bin/rke2 --version 2>/dev/null | awk '{print \$3}' || true)
+CURRENT=\$(/usr/local/bin/rke2 --version 2>/dev/null | head -1 | awk '{print \$3}' || true)
 echo "Current: \${CURRENT:-unknown}  Target: \$TARGET"
 if [ -n "\$CURRENT" ] && [ "\$CURRENT" = "\$TARGET" ]; then
   echo "✓ Already on \$TARGET"
   exit 0
 fi
-# Detect node role BEFORE installer (defaults to server if INSTALL_RKE2_TYPE unset).
-TYPE=""
-if systemctl is-active --quiet rke2-agent 2>/dev/null; then
-  TYPE=agent
-elif systemctl is-active --quiet rke2-server 2>/dev/null; then
-  TYPE=server
-elif systemctl is-enabled --quiet rke2-agent 2>/dev/null; then
-  TYPE=agent
-elif systemctl is-enabled --quiet rke2-server 2>/dev/null; then
-  TYPE=server
-elif [ -f /usr/local/lib/systemd/system/rke2-agent.service ] && [ ! -f /usr/local/lib/systemd/system/rke2-server.service ]; then
-  TYPE=agent
-elif [ -f /usr/local/lib/systemd/system/rke2-server.service ]; then
-  TYPE=server
-elif [ -f /usr/local/lib/systemd/system/rke2-agent.service ]; then
-  TYPE=agent
-else
-  echo "⚠ No rke2-server/agent unit found" >&2
-  exit 1
-fi
-echo "INSTALL_RKE2_TYPE=\$TYPE"
 INSTALLER=/tmp/rke2-installer-upgrade.sh
 curl -sfL --max-time 60 https://get.rke2.io -o "\$INSTALLER"
 chmod +x "\$INSTALLER"
-INSTALL_RKE2_VERSION="\$TARGET" INSTALL_RKE2_TYPE="\$TYPE" "\$INSTALLER"
+INSTALL_RKE2_VERSION="\$TARGET" "\$INSTALLER"
 systemctl daemon-reload
-systemctl restart "rke2-\${TYPE}"
-echo "✓ Restarted rke2-\${TYPE}"
+# Prefer the enabled/active unit. Both unit files ship in the tarball, so
+# \`systemctl cat\` alone is not enough to choose server vs agent.
+if systemctl is-enabled rke2-server.service >/dev/null 2>&1 || systemctl is-active --quiet rke2-server.service; then
+  systemctl restart rke2-server
+  echo "✓ Restarted rke2-server"
+elif systemctl is-enabled rke2-agent.service >/dev/null 2>&1 || systemctl is-active --quiet rke2-agent.service; then
+  systemctl restart rke2-agent
+  echo "✓ Restarted rke2-agent"
+else
+  echo "⚠ No enabled/active rke2-server/agent unit found" >&2
+  exit 1
+fi
 echo "✓ RKE2 upgrade command completed on \$(hostname)"
 EOF
   then
