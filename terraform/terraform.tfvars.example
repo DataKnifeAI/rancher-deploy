@@ -165,10 +165,28 @@ cert_manager_version = "v1.13.0"
 # Set to false to deploy manager and apps clusters without Rancher
 install_rancher = true
 
-rancher_version = "v2.13.1"
+rancher_version = "v2.15.0"
+# Live upgrade path (Rancher minor stepping): latest patch of current minor → next minor.
+# Example from 2.14.3: first set v2.14.4 and apply Rancher only, then set v2.15.0.
+# Rancher 2.14.x only certifies RKE2 through 1.35; 1.36 needs Rancher 2.15+.
 
-# RKE2 pin for NEW node bootstrap (does not upgrade existing nodes by itself)
-rke2_version = "v1.34.3+rke2r1"
+# RKE2 pin for NEW node bootstrap (and for enable_rke2_upgrade day-2).
+# Latest stable 1.36.x (v1.36.3+rke2r1 still RC-only as of pin date).
+rke2_version = "v1.36.2+rke2r1"
+
+# Day-2 unattended-upgrades (security pocket only, no auto-reboot). Default on —
+# next apply configures existing nodes via SSH; new nodes get it at bootstrap.
+enable_unattended_upgrades   = true
+unattended_upgrades_trigger  = "1"
+
+# Day-2 OS package patch (Ubuntu 24.04). Default off — set true + bump os_patch_trigger to run.
+enable_os_patch   = false
+os_patch_reboot   = false   # if true, reboot when /var/run/reboot-required (no drain)
+os_patch_trigger  = "1"
+
+# Day-2 in-place RKE2 upgrade via SSH installer. Default off — drain/cordon manually first.
+enable_rke2_upgrade  = false
+rke2_upgrade_trigger = "1"
 
 
 # Initial admin password (change immediately after first login!)

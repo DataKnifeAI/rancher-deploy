@@ -94,14 +94,32 @@ restart_rke2_for_config() {
   fi
 }
 
+# Install/configure unattended-upgrades via shared scripts/lib helper uploaded by
+# null_resource.rke2_bootstrap. Soft-fail so RKE2 install can continue.
+# Idempotent; also runs on re-bootstrap when RKE2 is already present.
+configure_unattended_upgrades() {
+  local lib="/tmp/configure-unattended-upgrades.sh"
+  if [ ! -f "$lib" ]; then
+    log "⚠ unattended-upgrades skipped (shared script missing at $lib)"
+    return 0
+  fi
+  if bash "$lib"; then
+    log "✓ unattended-upgrades configured (security only, Automatic-Reboot false)"
+  else
+    log "⚠ Failed to configure unattended-upgrades"
+  fi
+  return 0
+}
+
 configure_rke2_harbor_cri
 
-# Skip full install if already installed (registries.yaml above still runs)
+# Skip full install if already installed (registries.yaml above still runs; unattended-upgrades too)
 if [ -f /usr/local/bin/rke2 ]; then
   RKE2_NODE_LABELS_CHANGED=0
   if [ -f /etc/rancher/rke2/config.yaml ]; then
     append_rke2_node_labels /etc/rancher/rke2/config.yaml
   fi
+  configure_unattended_upgrades
   # New node-label entries in config.yaml need a service restart (like registries).
   if [ "$RKE2_NODE_LABELS_CHANGED" -eq 1 ]; then
     restart_rke2_for_config
@@ -267,6 +285,9 @@ fi
 # Update packages
 log "Updating package list..."
 apt-get update -qq || log "⚠ Package update failed"
+
+# Security auto-updates (no automatic reboot) before RKE2 install
+configure_unattended_upgrades
 
 # Download RKE2 installer with timeout and retries
 log "Downloading RKE2 installer..."

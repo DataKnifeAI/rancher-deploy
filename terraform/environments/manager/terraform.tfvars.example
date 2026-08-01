@@ -14,7 +14,7 @@ ssh_private_key = "~/.ssh/id_rsa"
 # Rancher Configuration
 rancher_hostname = "rancher.lab.local"
 rancher_password = "your-secure-password"
-rancher_version  = "v2.7.7"
+rancher_version  = "v2.15.0"
 
 # Network Configuration
 domain      = "lab.local"

@@ -96,19 +96,58 @@ variable "ubuntu_cloud_image_url" {
 }
 
 variable "rancher_version" {
-  description = "Rancher version to install"
+  description = "Rancher Helm chart / image version (stable). New installs use this pin. Live upgrades from older minors must step latest-patch-of-current-minor → next minor (e.g. v2.14.3 → v2.14.4 → v2.15.0). Rancher 2.15+ required for Kubernetes/RKE2 1.36."
   type        = string
-  default     = "v2.7.7"
+  default     = "v2.15.0"
 }
-
 
 variable "rke2_version" {
-  description = "RKE2 version pin for new node bootstrap (INSTALL_RKE2_VERSION). Changing this alone does not upgrade existing nodes."
+  description = "RKE2 version pin for new node bootstrap (INSTALL_RKE2_VERSION). Default tracks latest stable 1.36.x supported by Rancher 2.15+. Changing this alone does not upgrade existing nodes; see enable_rke2_upgrade."
   type        = string
-  default     = "v1.34.3+rke2r1"
+  default     = "v1.36.2+rke2r1"
 }
 
+variable "enable_unattended_upgrades" {
+  description = "When true (default), SSH-configure unattended-upgrades on all known RKE2 node IPs (security pocket only, Automatic-Reboot false). New nodes also get this at cloud-init bootstrap regardless of this flag."
+  type        = bool
+  default     = true
+}
 
+variable "unattended_upgrades_trigger" {
+  description = "Bump this string to re-run enable_unattended_upgrades when it remains true."
+  type        = string
+  default     = "1"
+}
+
+variable "enable_os_patch" {
+  description = "When true, run day-2 apt update/upgrade on all known RKE2 node IPs via SSH. Default false — enable deliberately before apply. Mutually exclusive with enable_rke2_upgrade (separate change windows)."
+  type        = bool
+  default     = false
+}
+
+variable "os_patch_reboot" {
+  description = "When enable_os_patch is true, reboot each node after upgrade if /var/run/reboot-required exists. Default false (safer; reboot manually / drain first)."
+  type        = bool
+  default     = false
+}
+
+variable "os_patch_trigger" {
+  description = "Bump this string (e.g. date or ticket id) to re-run OS patching when enable_os_patch remains true."
+  type        = string
+  default     = "1"
+}
+
+variable "enable_rke2_upgrade" {
+  description = "When true, run day-2 in-place RKE2 upgrade on all known node IPs to var.rke2_version (rolling SSH installer). Default false — dangerous on live clusters; prefer drained rolling windows. Mutually exclusive with enable_os_patch (separate change windows)."
+  type        = bool
+  default     = false
+}
+
+variable "rke2_upgrade_trigger" {
+  description = "Bump to re-run enable_rke2_upgrade when the version pin is unchanged."
+  type        = string
+  default     = "1"
+}
 
 variable "rancher_password" {
   description = "Rancher admin password"

@@ -21,6 +21,7 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 | [RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md) | Downstream registration |
 | [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) | Rancher API tokens |
 | [OPS_NOTES.md](OPS_NOTES.md) | Short operational truths |
+| [UPGRADE_PLAN.md](UPGRADE_PLAN.md) | Poc-first Rancher / RKE2 / cert-manager upgrade runbook |
 
 ## Storage
 

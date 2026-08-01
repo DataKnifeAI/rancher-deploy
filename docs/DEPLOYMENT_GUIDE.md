@@ -35,12 +35,12 @@ ssh_private_key = "../.keys/id_rsa"   # or absolute path to .keys/id_rsa
 # Rancher configuration
 rancher_hostname = "rancher.example.com"
 rancher_password = "your-secure-password"
-rancher_version  = "v2.13.1"
+rancher_version  = "v2.15.0"
 install_rancher  = true  # Deploys Rancher automatically in single apply
 ```
 
 **Critical: RKE2 Version**
-- RKE2 version is pinned in `terraform/main.tf` (currently `v1.34.3+rke2r1`)
+- RKE2 version is pinned via `rke2_version` (default `v1.36.2+rke2r1`; needs Rancher 2.15+)
 - Do NOT use a `"latest"` tag for RKE2 — it is not a downloadable release
 - Check available versions at https://github.com/rancher/rke2/tags
 
@@ -232,7 +232,7 @@ grep -E '^(rke2_version|rancher_version)' terraform/terraform.tfvars terraform/t
 grep 'rke2_version' terraform/main.tf | head
 ```
 
-Pin RKE2 with `rke2_version` (default `v1.34.3+rke2r1` for this change set). Changing the pin alone only affects **new** VMs. See [OPS_NOTES.md](OPS_NOTES.md) for optional registries.yaml / topology labels.
+Pin RKE2 with `rke2_version` (default `v1.36.2+rke2r1`; requires Rancher `v2.15.0+`). Changing the pin alone only affects **new** VMs; existing nodes need `enable_rke2_upgrade=true` (day-2, default off) or a manual rolling upgrade. See [OPS_NOTES.md](OPS_NOTES.md) for optional registries.yaml / topology labels.
 
 **View installation logs:**
 ```bash
@@ -240,7 +240,7 @@ ssh -i .keys/id_rsa ubuntu@192.168.1.100
 sudo journalctl -u rke2-server | grep -E "INFO|ERROR"
 ```
 
-**Do not** wipe `terraform.tfstate` to “fix” a version — set `rke2_version` for new nodes and upgrade existing nodes deliberately.
+**Do not** wipe `terraform.tfstate` to “fix” a version — set `rke2_version` / use the gated upgrade flags instead.
 
 ### Network Issues
 

@@ -289,14 +289,15 @@ resource "null_resource" "rke2_bootstrap" {
   count = var.rke2_enabled ? 1 : 0
 
   triggers = {
-    vm_id               = proxmox_virtual_environment_vm.vm.vm_id
-    ip_address          = var.ip_address
-    rke2_version        = var.rke2_version
-    is_rke2_server      = tostring(var.is_rke2_server)
-    rke2_server_ip      = var.rke2_server_ip
-    install_script_md5  = filemd5("${path.module}/cloud-init-rke2.sh")
-    registries_yaml_md5 = md5(var.rke2_registries_yaml_b64)
-    node_labels         = join(",", var.rke2_node_labels)
+    vm_id                          = proxmox_virtual_environment_vm.vm.vm_id
+    ip_address                     = var.ip_address
+    rke2_version                   = var.rke2_version
+    is_rke2_server                 = tostring(var.is_rke2_server)
+    rke2_server_ip                 = var.rke2_server_ip
+    install_script_md5             = filemd5("${path.module}/cloud-init-rke2.sh")
+    unattended_upgrades_script_md5 = filemd5("${path.module}/../../../scripts/lib/configure-unattended-upgrades.sh")
+    registries_yaml_md5            = md5(var.rke2_registries_yaml_b64)
+    node_labels                    = join(",", var.rke2_node_labels)
   }
 
   connection {
@@ -317,6 +318,8 @@ resource "null_resource" "rke2_bootstrap" {
   provisioner "remote-exec" {
     inline = concat(
       [
+        "cat > /tmp/configure-unattended-upgrades.sh <<'UUEOF'\n${file("${path.module}/../../../scripts/lib/configure-unattended-upgrades.sh")}\nUUEOF",
+        "chmod +x /tmp/configure-unattended-upgrades.sh",
         "cat > /tmp/rke2-install.sh <<'RKEEOF'\n${file("${path.module}/cloud-init-rke2.sh")}\nRKEEOF",
         "chmod +x /tmp/rke2-install.sh",
         "RKE2_REGISTRIES_YAML_B64=$(cat /tmp/rke2-registries.yaml.b64 2>/dev/null || true); rm -f /tmp/rke2-registries.yaml.b64; IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRIES_YAML_B64=\"$RKE2_REGISTRIES_YAML_B64\" RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"

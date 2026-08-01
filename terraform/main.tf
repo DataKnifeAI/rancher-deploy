@@ -1163,6 +1163,131 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
   depends_on = [module.rke2_poc_apps]
 }
 
+# ============================================================================
+# DAY-2: UNATTENDED-UPGRADES (default on) + OS PATCH / RKE2 UPGRADE (gated, default off)
+# Collects all known RKE2 guest IPs.
+# OS patch and RKE2 upgrade are mutually exclusive (runbook: separate change windows).
+# ============================================================================
+
+locals {
+  # Canary/downstream first (poc → nprd → prd), Rancher manager last — matches
+  # UPGRADE_PLAN roll order so enable_rke2_upgrade / enable_os_patch never touch
+  # the management plane before apps clusters.
+  all_rke2_node_ips = compact(concat(
+    [split("/", module.poc_apps_primary.ip_address)[0]],
+    [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.nprd_apps_primary.ip_address)[0]],
+    [for n in module.nprd_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.nprd_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.prd_apps_primary.ip_address)[0]],
+    [for n in module.prd_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.prd_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.rancher_manager_primary.ip_address)[0]],
+    [for n in module.rancher_manager_additional : split("/", n.ip_address)[0]],
+  ))
+}
+
+resource "null_resource" "unattended_upgrades_nodes" {
+  count = var.enable_unattended_upgrades ? 1 : 0
+
+  triggers = {
+    trigger = var.unattended_upgrades_trigger
+    script  = filemd5("${path.root}/../scripts/enable-unattended-upgrades.sh")
+    lib     = filemd5("${path.root}/../scripts/lib/configure-unattended-upgrades.sh")
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/enable-unattended-upgrades.sh" \
+        "${var.ssh_private_key}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+  ]
+}
+
+resource "null_resource" "os_patch_nodes" {
+  count = var.enable_os_patch ? 1 : 0
+
+  triggers = {
+    trigger = var.os_patch_trigger
+    reboot  = tostring(var.os_patch_reboot)
+    script  = filemd5("${path.root}/../scripts/patch-os-nodes.sh")
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_rke2_upgrade
+      error_message = "Do not enable enable_os_patch and enable_rke2_upgrade in the same apply. Run RKE2 upgrades first (separate window), then OS patch — see docs/UPGRADE_PLAN.md."
+    }
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/patch-os-nodes.sh" \
+        "${var.ssh_private_key}" \
+        "${var.os_patch_reboot}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+    null_resource.unattended_upgrades_nodes,
+  ]
+}
+
+resource "null_resource" "rke2_upgrade_nodes" {
+  count = var.enable_rke2_upgrade ? 1 : 0
+
+  triggers = {
+    trigger = var.rke2_upgrade_trigger
+    version = var.rke2_version
+    script  = filemd5("${path.root}/../scripts/upgrade-rke2-nodes.sh")
+    ips     = join(",", local.all_rke2_node_ips)
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_os_patch
+      error_message = "Do not enable enable_os_patch and enable_rke2_upgrade in the same apply. Run RKE2 upgrades first (separate window), then OS patch — see docs/UPGRADE_PLAN.md."
+    }
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "${path.root}/../scripts/upgrade-rke2-nodes.sh" \
+        "${var.ssh_private_key}" \
+        "${var.rke2_version}" \
+        ${join(" ", [for ip in local.all_rke2_node_ips : format("%q", ip)])}
+    EOT
+  }
+
+  # Intentionally does NOT depend on os_patch_nodes — OS patch and RKE2 upgrade
+  # are mutually exclusive (lifecycle preconditions). Both serialize after
+  # unattended-upgrades so apt/dpkg work does not overlap the RKE2 installer.
+  depends_on = [
+    module.rke2_manager,
+    module.rke2_nprd_apps,
+    module.rke2_prd_apps,
+    module.rke2_poc_apps,
+    null_resource.unattended_upgrades_nodes,
+  ]
+}
+
+# ============================================================================
 # ENVOY GATEWAY DEPLOYMENT - DOWNSTREAM CLUSTERS
 # Installs Envoy Gateway and Gateway API CRDs on downstream clusters
 # ============================================================================
