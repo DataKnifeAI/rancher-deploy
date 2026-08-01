@@ -8,7 +8,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 if ! command -v apt-get >/dev/null 2>&1; then
   echo "apt-get not available; skipping" >&2
-  exit 1
+  exit 0
 fi
 
 apt-get update -qq

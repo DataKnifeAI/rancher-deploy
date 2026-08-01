@@ -31,15 +31,21 @@ wait_for_ssh() {
 wait_for_reboot_cycle() {
   local ip="$1"
   local i
+  local saw_drop=0
   echo "Waiting for $ip to go down and come back after reboot..."
   # Allow reboot to start (SSH may still succeed briefly).
   sleep 20
   for i in $(seq 1 30); do
     if ! ssh "${SSH_OPTS[@]}" "ubuntu@$ip" "true" >/dev/null 2>&1; then
+      saw_drop=1
       break
     fi
     sleep 2
   done
+  if [ "$saw_drop" -ne 1 ]; then
+    echo "✗ $ip never dropped SSH after reboot was requested (~80s)" >&2
+    return 1
+  fi
   if ! wait_for_ssh "$ip"; then
     echo "✗ $ip did not return after reboot (~5m)" >&2
     return 1
@@ -80,8 +86,9 @@ EOF
     continue
   fi
 
-  # 42 = reboot requested; 255 often means SSH dropped mid-reboot.
-  if [ "$rc" -eq 42 ] || { [ "$REBOOT" = "true" ] && [ "$rc" -eq 255 ]; }; then
+  # 42 = intentional reboot after successful patch (remote exits before SSH drop).
+  # Do not treat SSH 255 as reboot — that can be a failed apt/session.
+  if [ "$rc" -eq 42 ]; then
     if ! wait_for_reboot_cycle "$IP"; then
       FAILED=$((FAILED + 1))
     fi

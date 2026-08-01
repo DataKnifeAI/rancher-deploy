@@ -1170,18 +1170,21 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
 # ============================================================================
 
 locals {
+  # Canary/downstream first (poc → nprd → prd), Rancher manager last — matches
+  # UPGRADE_PLAN roll order so enable_rke2_upgrade / enable_os_patch never touch
+  # the management plane before apps clusters.
   all_rke2_node_ips = compact(concat(
-    [split("/", module.rancher_manager_primary.ip_address)[0]],
-    [for n in module.rancher_manager_additional : split("/", n.ip_address)[0]],
+    [split("/", module.poc_apps_primary.ip_address)[0]],
+    [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
+    [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
     [split("/", module.nprd_apps_primary.ip_address)[0]],
     [for n in module.nprd_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.nprd_apps_workers : split("/", n.ip_address)[0]],
     [split("/", module.prd_apps_primary.ip_address)[0]],
     [for n in module.prd_apps_additional : split("/", n.ip_address)[0]],
     [for n in module.prd_apps_workers : split("/", n.ip_address)[0]],
-    [split("/", module.poc_apps_primary.ip_address)[0]],
-    [for n in module.poc_apps_additional : split("/", n.ip_address)[0]],
-    [for n in module.poc_apps_workers : split("/", n.ip_address)[0]],
+    [split("/", module.rancher_manager_primary.ip_address)[0]],
+    [for n in module.rancher_manager_additional : split("/", n.ip_address)[0]],
   ))
 }
 
