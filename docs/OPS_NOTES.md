@@ -26,7 +26,10 @@ Short operational truths that do not belong in the README.
 2. RKE2: set `rke2_version`, then either replace nodes or set `enable_rke2_upgrade=true` (rolling SSH installer, **no drain** — cordon/drain yourself). No system-upgrade-controller Plans in this repo.
 3. Rancher: change `rancher_version` and apply (targets `module.rancher_deployment`); follow supported minor stepping.
 
+**Live upgrade runbook (poc-apps canary, stepped pins, abort criteria):** [UPGRADE_PLAN.md](UPGRADE_PLAN.md).
+
 ## Harbor / registries (node containerd)
+
 
 
 - Harbor uses **Let's Encrypt** — no custom CA on nodes (`harbor-ca.crt` is legacy; do not install).
