@@ -9,9 +9,11 @@ Terraform automation that builds a Rancher management plane and hybrid RKE2 app 
 | Cluster | Role | Default VM IDs | Default IPs (example) |
 |---------|------|----------------|------------------------|
 | **manager** | RKE2 + Rancher control plane (3 servers) | 401–403 | `192.168.1.100–102` |
-| **nprd-apps** | Non-prod (3 servers + 3 workers) | 410–415 | `192.168.1.110–115` |
-| **prd-apps** | Production (3 servers + 3 workers) | 420–425 | `192.168.1.120–125` |
-| **poc-apps** | POC / test (3 servers + 3 workers) | 430–435 | `192.168.1.130–135` |
+| **nprd-apps** | Non-prod (3 servers + 3 workers + optional large workers) | 410–415 | `192.168.1.110–115` |
+| **prd-apps** | Production (3 servers + 3 workers + optional large workers) | 420–425 | `192.168.1.120–125` |
+| **poc-apps** | POC / test (3 servers + 3 workers + optional large workers) | 430–435 | `192.168.1.130–135` |
+
+App clusters can enable an optional **large worker** pool after the primary workers (default **0** / opt-in; sizing 8 vCPU / 32 GiB / 100 GB; hostnames `*-large-worker-*`). Set `large_worker_count` in `terraform.tfvars` to enable (example: `prd-apps = 1`, `nprd-apps`/`poc-apps = 0`); extend `vm_id_start_*` / subnet if you add many nodes.
 
 Also automated when enabled in `terraform.tfvars`:
 

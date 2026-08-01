@@ -9,19 +9,21 @@
 # This configuration creates:
 # - 3 Rancher Manager nodes (VMs 401-403) - 40x range
 # - 3 NPRD Apps server nodes (VMs 410-412) - 41x range
-# - 3 NPRD Apps worker nodes (VMs 413-415) - 41x range
+# - 3 NPRD Apps primary worker nodes (VMs 413-415) - 41x range
 # - 3 PRD Apps server nodes (VMs 420-422) - 42x range
-# - 3 PRD Apps worker nodes (VMs 423-425) - 42x range
+# - 3 PRD Apps primary worker nodes (VMs 423-425) - 42x range
+# - 1 PRD Apps large worker (VM 426) - opt-in example (8 vCPU / 32 GiB / 100 GB)
 # - 3 POC Apps server nodes (VMs 430-432) - 43x range
-# - 3 POC Apps worker nodes (VMs 433-435) - 43x range
+# - 3 POC Apps primary worker nodes (VMs 433-435) - 43x range
+# - Large workers default OFF (large_worker_count = 0); example enables only prd=1
 # - All from Ubuntu 24.04 LTS cloud images
 # - Hybrid architecture: Servers (control plane) + Workers (workloads)
 #
 # VM ID Ranges:
 #   manager:    40x (401-403)
-#   nprd-apps:  41x (410-415)
-#   prd-apps:   42x (420-425)
-#   poc-apps:   43x (430-435)
+#   nprd-apps:  41x (410-415: servers + primary workers; large workers opt-in after)
+#   prd-apps:   42x (420-426 with example large_worker_count = 1)
+#   poc-apps:   43x (430-435: servers + primary workers; large workers opt-in after)
 #
 # See CLOUD_IMAGE_SETUP.md for detailed instructions
 
@@ -94,7 +96,10 @@ clusters = {
     domain              = "example.com"
     ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
     ip_start_octet      = 110         # Server VMs: .110, .111, .112 (VMs 410-412)
-    # Worker VMs: .113, .114, .115 (VMs 413-415)
+    # Primary worker VMs: .113, .114, .115 (VMs 413-415)
+    # Large workers are opt-in (default 0). Safe example: keep nprd/poc at 0.
+    large_worker_count = 0
+    # large_worker_cpu_cores / large_worker_memory_mb / large_worker_disk_size_gb  # optional (defaults 8 / 32768 / 100)
     gateway     = "192.168.1.1"
     dns_servers = ["192.168.1.1"] # Upstream DNS resolver
     storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
@@ -115,7 +120,11 @@ clusters = {
     domain              = "example.com"
     ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
     ip_start_octet      = 120         # Server VMs: .120, .121, .122 (VMs 420-422)
-    # Worker VMs: .123, .124, .125 (VMs 423-425)
+    # Primary workers .123-.125; example enables one large worker at .126 (VM 426)
+    large_worker_count = 1
+    # large_worker_cpu_cores = 8
+    # large_worker_memory_mb = 32768
+    # large_worker_disk_size_gb = 100
     gateway     = "192.168.1.1"
     dns_servers = ["192.168.1.1"] # Upstream DNS resolver
     storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
@@ -136,7 +145,8 @@ clusters = {
     domain              = "example.com"
     ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
     ip_start_octet      = 130         # Server VMs: .130, .131, .132 (VMs 430-432)
-    # Worker VMs: .133, .134, .135 (VMs 433-435)
+    # Primary workers .133-.135; keep large workers off for poc unless needed
+    large_worker_count = 0
     gateway     = "192.168.1.1"
     dns_servers = ["192.168.1.1"] # Upstream DNS resolver
     storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
@@ -150,9 +160,9 @@ clusters = {
 
 # Starting VM IDs for clusters
 vm_id_start_manager   = 401 # Manager cluster: VMs 401-403 (servers only) - 40x range
-vm_id_start_nprd_apps = 410 # NPRD Apps cluster: VMs 410-412 (servers), 413-415 (workers) - 41x range
-vm_id_start_prd_apps  = 420 # PRD Apps cluster: VMs 420-422 (servers), 423-425 (workers) - 42x range
-vm_id_start_poc_apps  = 430 # POC Apps cluster: VMs 430-432 (servers), 433-435 (workers) - 43x range
+vm_id_start_nprd_apps = 410 # NPRD Apps: 410-412 servers, 413-415 primary workers (large workers opt-in)
+vm_id_start_prd_apps  = 420 # PRD Apps: 420-422 servers, 423-425 workers, 426 large (example count=1)
+vm_id_start_poc_apps  = 430 # POC Apps: 430-432 servers, 433-435 primary workers (large workers opt-in)
 
 # ============================================================================
 # CERT-MANAGER CONFIGURATION
