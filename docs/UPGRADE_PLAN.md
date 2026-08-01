@@ -2,12 +2,12 @@
 
 Concrete day-2 upgrade path from **live** pins to **PR #15** targets. Review this before any apply. **Do not** run `terraform apply` or live upgrades from this doc alone — treat every phase as a gated checklist.
 
-| | Live (start) | Target (PR #15) |
-|--|--------------|-----------------|
-| Rancher | `v2.13.1` | `v2.15.0` |
-| RKE2 | `v1.34.3+rke2r1` | `v1.36.2+rke2r1` |
-| Manager cert-manager | `v1.16.5` | `v1.21.1` (aim `v1.21.x`) |
-| Apps cert-manager | `v1.19.2` | `v1.21.1` (aim `v1.21.x`) |
+| | Live (start) | Target (PR #15) | Live after promote (2026-08-01) |
+|--|--------------|-----------------|--------------------------------|
+| Rancher | `v2.13.1` | `v2.15.0` | `v2.15.0` |
+| RKE2 | `v1.34.3+rke2r1` | `v1.36.2+rke2r1` | all clusters `v1.36.2+rke2r1` |
+| Manager cert-manager | `v1.16.5` | `v1.21.1` (aim `v1.21.x`) | `v1.21.1` |
+| Apps cert-manager | `v1.19.2` | `v1.21.1` (aim `v1.21.x`) | `v1.21.1` |
 
 **Safe order:** backups → manager cert-manager → stepped Rancher → apps cert-manager → RKE2 stepped on **poc-apps** first → nprd-apps → prd-apps → manager nodes carefully → (optional) OS patch.
 
@@ -341,11 +341,13 @@ Repeat the same validation block as C1 (nodes / UI / pods / CSI).
 
 Only after poc C2 is green **and** the learnings above are applied (script fix present; CM 1.21.1 before each cluster’s 1.36; etcd snapshot before roll).
 
-| Order | Cluster | RKE2 steps | Extra care | Done |
-|-------|---------|------------|------------|------|
-| 1 | nprd-apps | `1.35.6` then `1.36.2` | Same drain+script pattern | [ ] |
-| 2 | prd-apps | same | Maintenance window; CSI + prod workloads | [ ] |
-| 3 | manager (local) | same | **Last**; one CP at a time; Rancher downtime risk; etcd quorum | [ ] |
+| Order (doc default) | Cluster | RKE2 steps | Extra care | Done |
+|---------------------|---------|------------|------------|------|
+| 1 | nprd-apps | `1.35.6` then `1.36.2` | Same drain+script pattern | [x] |
+| 2 | prd-apps | same | Maintenance window; CSI + prod workloads | [x] |
+| 3 | manager (local) | same | **Last**; one CP at a time; Rancher downtime risk; etcd quorum | [x] |
+
+**Live promote order (2026-07-31 / 2026-08-01):** manager → nprd-apps → prd-apps (poc left as canary). Same ladder; manager first per operator request.
 
 Manager: prefer manual script with **only** manager IPs. Avoid `enable_rke2_upgrade=true` until every cluster is already on the target pin and you intentionally want a re-run trigger.
 
@@ -358,6 +360,40 @@ cert_manager_version = "v1.21.1"
 enable_rke2_upgrade  = false
 enable_os_patch      = false
 ```
+
+### Promote results (2026-08-01)
+
+**Verdict: COMPLETE.** All four clusters on target pins. Rancher UI HTTPS 200; downstream Ready+Connected.
+
+| Component | Live after promote |
+|-----------|-------------------|
+| Rancher (manager) | `v2.15.0` (3/3 Ready; UI HTTPS 200) |
+| Manager RKE2 | all 3 CP Ready `v1.36.2+rke2r1` |
+| Manager cert-manager | `v1.21.1` |
+| poc-apps RKE2 | all 9 Ready `v1.36.2+rke2r1` (unchanged canary) |
+| nprd-apps RKE2 | all 9 Ready `v1.36.2+rke2r1` |
+| prd-apps RKE2 | all 9 Ready `v1.36.2+rke2r1` |
+| cert-manager (all) | `v1.21.1` |
+| Downstream in Rancher | poc / nprd / prd / local all `Ready=True`, `Connected=True`, `v1.36.2+rke2r1` |
+
+**Status by phase**
+
+| Cluster | CM → 1.21.1 | Etcd snap | OpenSearch proxy fix | RKE2 1.35.6 | RKE2 1.36.2 | Post-validate |
+|---------|-------------|-----------|----------------------|-------------|-------------|---------------|
+| manager | [x] | [x] `pre-upgrade-manager-promote-*` | n/a | [x] | [x] | Rancher 3/3, healthz ok |
+| nprd-apps | [x] | [x] | [x] → `quay.io/brancz/kube-rbac-proxy:v0.15.0` | [x] | [x] | cattle-agent 2/2, CSIDriver present |
+| prd-apps | [x] | [x] | [x] same image | [x] | [x] | cattle-agent 2/2, CSIDriver present |
+| poc-apps | [x] (prior) | prior | [x] during promote | [x] prior | [x] prior | left as-is |
+
+**Promote learnings (add to next window):**
+
+1. **Direct kubeconfig for drains:** Rancher-proxied kubeconfigs (`~/.kube/*-apps.yaml`) flap when cattle-cluster-agent is drained. Prefer admin kubeconfig from `/etc/rancher/rke2/rke2.yaml` rewritten to a CP IP for drain/wait loops.
+2. **STRICT_VERIFY / agent CA:** After manager RKE2 roll, prd `cattle-cluster-agent` CrashLoopBackOff with `STRICT_VERIFY=true` and missing `/etc/kubernetes/ssl/certs/serverca`. Patched deploy env `STRICT_VERIFY=false` (nprd already false). `apply-system-agent-upgrader-*` Error pods from same CA strict path are noisy but non-blocking once cluster-agent is up.
+3. **OpenSearch kube-rbac-proxy:** Patched all apps clusters to `quay.io/brancz/kube-rbac-proxy:v0.15.0` (gcr image not found). Helm release still `opensearch-operator-2.8.0` — re-apply chart values or keep the set-image patch across helm upgrades.
+4. **PDB blockers:** nprd Harbor postgres PDBs (`minAvailable: 1`) blocked drains; temporarily `minAvailable: 0` then restore. prd: `coder-postgres-primary` / `high-command-postgres-primary` same pattern. Prefer `--force --disable-eviction` with short timeout when PDB softens are in place.
+5. **CSINode NotReady flake:** After CP restart, kubelet can stick `Ready=False` with `failed to initialize CSINode` / API connection refused during boot. Fix: restart `rke2-server`/`rke2-agent` once API is listening.
+6. **Workspace branch churn:** Concurrent agents switched git branches mid-run and removed `scripts/upgrade-rke2-nodes.sh` from the working tree. Keep a copy of the script outside the repo (e.g. `/tmp`) for long rolls.
+7. **Etcd snapshots:** On-demand snaps taken (`pre-upgrade-manager-promote-*`, `pre-upgrade-nprd-promote-*`, `pre-upgrade-prd-*`). RustFS Rancher Backup still not fixed from canary notes.
 
 ---
 
@@ -404,9 +440,9 @@ RKE2 **does not** support clean downgrade. Recovery = fix forward, restore VM/et
 | 6 | poc CM → `v1.21.1` (then other apps / manager) | B3 | [ ] |
 | 7 | poc RKE2 → `v1.35.6+rke2r1` + validate CSI | C1 | [ ] |
 | 8 | Soak; then poc RKE2 → `v1.36.2+rke2r1` | C2 | [ ] |
-| 9 | nprd then prd RKE2 ladder | C3 | [ ] |
-| 10 | Manager RKE2 ladder (careful) | C3 | [ ] |
-| 11 | Align tfvars to final pins; flags stay false | cleanup | [ ] |
+| 9 | nprd then prd RKE2 ladder | C3 | [x] |
+| 10 | Manager RKE2 ladder (careful) | C3 | [x] |
+| 11 | Align tfvars to final pins; flags stay false | cleanup | [x] |
 | 12 | Optional OS patch | D | [ ] |
 
 ---
