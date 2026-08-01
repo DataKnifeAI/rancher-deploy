@@ -13,6 +13,14 @@ SSH_KEY="$1"
 shift
 IPS=("$@")
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_SCRIPT="${SCRIPT_DIR}/lib/configure-unattended-upgrades.sh"
+
+if [ ! -f "$LIB_SCRIPT" ]; then
+  echo "Missing shared script: $LIB_SCRIPT" >&2
+  exit 1
+fi
+
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no)
 FAILED=0
 
@@ -21,51 +29,8 @@ for IP in "${IPS[@]}"; do
   echo "=========================================="
   echo "unattended-upgrades: ubuntu@$IP"
   echo "=========================================="
-  if ! ssh "${SSH_OPTS[@]}" "ubuntu@$IP" "sudo bash -s" <<'EOF'
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-
-if ! command -v apt-get >/dev/null 2>&1; then
-  echo "apt-get not available; skipping" >&2
-  exit 1
-fi
-
-apt-get update -qq
-apt-get install -y -qq unattended-upgrades
-
-cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTO'
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-APT::Periodic::Download-Upgradeable-Packages "1";
-APT::Periodic::AutocleanInterval "7";
-AUTO
-
-# Security pocket only; no auto-reboot (drain/reboot manually after /var/run/reboot-required).
-cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUC'
-Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
-};
-Unattended-Upgrade::Package-Blacklist {
-};
-Unattended-Upgrade::DevRelease "auto";
-Unattended-Upgrade::AutoFixInterruptedDpkg "true";
-Unattended-Upgrade::MinimalSteps "true";
-Unattended-Upgrade::InstallOnShutdown "false";
-Unattended-Upgrade::Mail "";
-Unattended-Upgrade::MailReport "only-on-error";
-Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
-Unattended-Upgrade::Remove-Unused-Dependencies "false";
-Unattended-Upgrade::Automatic-Reboot "false";
-Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
-UUC
-
-systemctl enable unattended-upgrades >/dev/null 2>&1 || true
-systemctl restart unattended-upgrades >/dev/null 2>&1 || true
-
-echo "✓ unattended-upgrades configured on $(hostname) (security only, no auto-reboot)"
-EOF
-  then
+  # Pipe shared root script over SSH (single source of policy with bootstrap).
+  if ! ssh "${SSH_OPTS[@]}" "ubuntu@$IP" "sudo bash -s" <"$LIB_SCRIPT"; then
     echo "✗ unattended-upgrades failed on $IP" >&2
     FAILED=$((FAILED + 1))
   fi

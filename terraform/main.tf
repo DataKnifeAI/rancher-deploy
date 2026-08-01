@@ -1190,6 +1190,7 @@ resource "null_resource" "unattended_upgrades_nodes" {
   triggers = {
     trigger = var.unattended_upgrades_trigger
     script  = filemd5("${path.root}/../scripts/enable-unattended-upgrades.sh")
+    lib     = filemd5("${path.root}/../scripts/lib/configure-unattended-upgrades.sh")
     ips     = join(",", local.all_rke2_node_ips)
   }
 
@@ -1215,6 +1216,7 @@ resource "null_resource" "os_patch_nodes" {
   triggers = {
     trigger = var.os_patch_trigger
     reboot  = tostring(var.os_patch_reboot)
+    script  = filemd5("${path.root}/../scripts/patch-os-nodes.sh")
     ips     = join(",", local.all_rke2_node_ips)
   }
 
@@ -1242,6 +1244,7 @@ resource "null_resource" "rke2_upgrade_nodes" {
   triggers = {
     trigger = var.rke2_upgrade_trigger
     version = var.rke2_version
+    script  = filemd5("${path.root}/../scripts/upgrade-rke2-nodes.sh")
     ips     = join(",", local.all_rke2_node_ips)
   }
 

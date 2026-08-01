@@ -94,49 +94,21 @@ restart_rke2_for_config() {
   fi
 }
 
-# Install/configure unattended-upgrades: security pocket only, no auto-reboot.
+# Install/configure unattended-upgrades via shared scripts/lib helper uploaded by
+# null_resource.rke2_bootstrap. Soft-fail so RKE2 install can continue.
 # Idempotent; also runs on re-bootstrap when RKE2 is already present.
 configure_unattended_upgrades() {
-  if ! command -v apt-get >/dev/null 2>&1; then
-    log "⚠ unattended-upgrades skipped (apt-get not available)"
+  local lib="/tmp/configure-unattended-upgrades.sh"
+  if [ ! -f "$lib" ]; then
+    log "⚠ unattended-upgrades skipped (shared script missing at $lib)"
     return 0
   fi
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq >/dev/null 2>&1 || true
-  if ! apt-get install -y -qq unattended-upgrades >/dev/null 2>&1; then
-    log "⚠ Failed to install unattended-upgrades"
-    return 0
+  if bash "$lib"; then
+    log "✓ unattended-upgrades configured (security only, Automatic-Reboot false)"
+  else
+    log "⚠ Failed to configure unattended-upgrades"
   fi
-
-  cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTO'
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-APT::Periodic::Download-Upgradeable-Packages "1";
-APT::Periodic::AutocleanInterval "7";
-AUTO
-
-  cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUC'
-Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
-};
-Unattended-Upgrade::Package-Blacklist {
-};
-Unattended-Upgrade::DevRelease "auto";
-Unattended-Upgrade::AutoFixInterruptedDpkg "true";
-Unattended-Upgrade::MinimalSteps "true";
-Unattended-Upgrade::InstallOnShutdown "false";
-Unattended-Upgrade::Mail "";
-Unattended-Upgrade::MailReport "only-on-error";
-Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
-Unattended-Upgrade::Remove-Unused-Dependencies "false";
-Unattended-Upgrade::Automatic-Reboot "false";
-Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
-UUC
-
-  systemctl enable unattended-upgrades >/dev/null 2>&1 || true
-  systemctl restart unattended-upgrades >/dev/null 2>&1 || true
-  log "✓ unattended-upgrades configured (security only, Automatic-Reboot false)"
+  return 0
 }
 
 configure_rke2_harbor_cri
