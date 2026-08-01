@@ -49,6 +49,8 @@ configure_rke2_harbor_cri() {
 }
 
 # Append node-label entries to an existing RKE2 config.yaml (idempotent).
+# Sets RKE2_NODE_LABELS_CHANGED=1 when config.yaml was modified (caller may restart).
+RKE2_NODE_LABELS_CHANGED=0
 append_rke2_node_labels() {
   CONFIG_FILE="${1:-/etc/rancher/rke2/config.yaml}"
   if [ -z "${RKE2_NODE_LABELS:-}" ]; then
@@ -61,6 +63,7 @@ append_rke2_node_labels() {
 
   if ! grep -q '^node-label:' "$CONFIG_FILE"; then
     echo "node-label:" >> "$CONFIG_FILE"
+    RKE2_NODE_LABELS_CHANGED=1
   fi
 
   IFS=',' read -ra LABELS_ARRAY <<< "${RKE2_NODE_LABELS}"
@@ -73,16 +76,35 @@ append_rke2_node_labels() {
     if grep -q '^node-label:' "$CONFIG_FILE"; then
       sed -i "/^node-label:/a\\  - ${LABEL}" "$CONFIG_FILE"
       log "✓ Added node-label: ${LABEL}"
+      RKE2_NODE_LABELS_CHANGED=1
     fi
   done
+}
+
+# Restart the active RKE2 unit so config.yaml node-label changes take effect.
+restart_rke2_for_config() {
+  if systemctl is-active --quiet rke2-agent 2>/dev/null; then
+    log "Restarting rke2-agent to pick up config.yaml changes..."
+    systemctl restart rke2-agent || log "⚠ rke2-agent restart failed"
+  elif systemctl is-active --quiet rke2-server 2>/dev/null; then
+    log "Restarting rke2-server to pick up config.yaml changes..."
+    systemctl restart rke2-server || log "⚠ rke2-server restart failed"
+  else
+    log "⚠ No active rke2-server/agent unit to restart after config change"
+  fi
 }
 
 configure_rke2_harbor_cri
 
 # Skip full install if already installed (registries.yaml above still runs)
 if [ -f /usr/local/bin/rke2 ]; then
+  RKE2_NODE_LABELS_CHANGED=0
   if [ -f /etc/rancher/rke2/config.yaml ]; then
     append_rke2_node_labels /etc/rancher/rke2/config.yaml
+  fi
+  # New node-label entries in config.yaml need a service restart (like registries).
+  if [ "$RKE2_NODE_LABELS_CHANGED" -eq 1 ]; then
+    restart_rke2_for_config
   fi
   log "RKE2 already installed, skipping installation"
   exit 0

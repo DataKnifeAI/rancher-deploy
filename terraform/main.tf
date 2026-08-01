@@ -1079,12 +1079,18 @@ resource "null_resource" "label_nprd_apps_truenas_topology" {
       KUBECONFIG="${pathexpand("~/.kube/nprd-apps.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling nprd-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
       for i in $$(seq 1 60); do
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
           break
         fi
         sleep 5
       done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: nprd-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
       kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
       echo "✓ nprd-apps TrueNAS topology labels applied"
     EOT
@@ -1105,12 +1111,18 @@ resource "null_resource" "label_prd_apps_truenas_topology" {
       KUBECONFIG="${pathexpand("~/.kube/prd-apps.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling prd-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
       for i in $$(seq 1 60); do
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
           break
         fi
         sleep 5
       done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: prd-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
       kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
       echo "✓ prd-apps TrueNAS topology labels applied"
     EOT
@@ -1131,12 +1143,18 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
       KUBECONFIG="${pathexpand("~/.kube/poc-apps.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling poc-apps nodes with topology.truenas.io/pool=$${POOL}..."
+      READY=0
       for i in $$(seq 1 60); do
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
+          READY=1
           break
         fi
         sleep 5
       done
+      if [ "$${READY}" -ne 1 ]; then
+        echo "ERROR: poc-apps API never became ready (kubectl get nodes failed for ~5m)" >&2
+        exit 1
+      fi
       kubectl --kubeconfig "$${KUBECONFIG}" label nodes --all "topology.truenas.io/pool=$${POOL}" --overwrite
       echo "✓ poc-apps TrueNAS topology labels applied"
     EOT

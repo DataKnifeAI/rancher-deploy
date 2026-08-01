@@ -307,12 +307,19 @@ resource "null_resource" "rke2_bootstrap" {
     timeout     = "60m"
   }
 
+  # Registries payload is uploaded as a file (not inline env) to avoid SSH/shell
+  # command-length limits on larger registries.yaml documents.
+  provisioner "file" {
+    content     = var.rke2_registries_yaml_b64
+    destination = "/tmp/rke2-registries.yaml.b64"
+  }
+
   provisioner "remote-exec" {
     inline = concat(
       [
         "cat > /tmp/rke2-install.sh <<'RKEEOF'\n${file("${path.module}/cloud-init-rke2.sh")}\nRKEEOF",
         "chmod +x /tmp/rke2-install.sh",
-        "IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRIES_YAML_B64='${var.rke2_registries_yaml_b64}' RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"
+        "RKE2_REGISTRIES_YAML_B64=$(cat /tmp/rke2-registries.yaml.b64 2>/dev/null || true); rm -f /tmp/rke2-registries.yaml.b64; IS_RKE2_SERVER=${var.is_rke2_server} RKE2_VERSION=${var.rke2_version} SERVER_IP=${var.rke2_server_ip} SERVER_TOKEN=${var.rke2_server_token} CLUSTER_HOSTNAME=${var.cluster_hostname} CLUSTER_PRIMARY_IP=${var.cluster_primary_ip} CLUSTER_ALIASES='${join(",", var.cluster_aliases)}' DNS_SERVERS='${join(" ", var.dns_servers)}' RKE2_REGISTRIES_YAML_B64=\"$RKE2_REGISTRIES_YAML_B64\" RKE2_NODE_LABELS='${join(",", var.rke2_node_labels)}' sudo -E bash /tmp/rke2-install.sh"
       ],
       var.register_with_rancher && var.is_rke2_server ? [
         "echo '${var.rancher_ingress_ip} ${var.rancher_hostname}' | sudo tee -a /etc/hosts > /dev/null",
