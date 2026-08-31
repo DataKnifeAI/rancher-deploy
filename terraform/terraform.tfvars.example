@@ -121,10 +121,12 @@ clusters = {
     ip_subnet           = "192.168.1" # APPS CLUSTER SUBNET
     ip_start_octet      = 120         # Server VMs: .120, .121, .122 (VMs 420-422)
     # Primary workers .123-.125; example enables one large worker at .126 (VM 426)
+    # Large workers are labeled node-type=large for scheduling (game servers, etc.).
     large_worker_count = 1
     # large_worker_cpu_cores = 8
     # large_worker_memory_mb = 32768
     # large_worker_disk_size_gb = 100
+    # large_worker_proxmox_node = "pve2"  # optional; default var.proxmox_node. Set if large workers live on another node.
     gateway     = "192.168.1.1"
     dns_servers = ["192.168.1.1"] # Upstream DNS resolver
     storage     = "local-vm-zfs"  # VM storage (cloud image downloaded to 'local' then imported)
@@ -168,7 +170,7 @@ vm_id_start_poc_apps  = 430 # POC Apps: 430-432 servers, 433-435 primary workers
 # CERT-MANAGER CONFIGURATION
 # ============================================================================
 
-cert_manager_version = "v1.13.0"
+cert_manager_version = "v1.19.2"
 
 # Enable Rancher deployment (default: true)
 # Rancher installs on manager cluster after it's ready, then apps cluster deploys

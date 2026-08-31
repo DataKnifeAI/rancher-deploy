@@ -51,6 +51,13 @@ locals {
     "topology.truenas.io/pool=${local.truenas_csi_pool}"
   ] : []
 
+  # Large workers keep CSI topology plus a capacity-class label for scheduling
+  # (e.g. game servers: nodeSelector node-type=large). Applied at RKE2 join via
+  # rke2_node_labels; existing nodes need a one-time kubectl label until re-bootstrap.
+  apps_large_worker_rke2_node_labels = concat(local.apps_rke2_node_labels, [
+    "node-type=large",
+  ])
+
   # Primary workers use IPs/VM IDs immediately after control-plane nodes; large workers follow primary workers.
   # large_worker_count defaults to 0 (opt-in).
   cluster_worker_slot_offset = { for k, c in var.clusters : k => c.node_count }
@@ -485,7 +492,7 @@ module "nprd_apps_large_workers" {
       hostname   = "nprd-apps-large-worker-${i}"
       ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1}/24"
       node_index = local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
-      proxmox_node = var.proxmox_node
+      proxmox_node = coalesce(var.clusters["nprd-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
 
@@ -521,7 +528,7 @@ module "nprd_apps_large_workers" {
   cluster_aliases    = var.nprd_apps_cluster_aliases
 
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
-  rke2_node_labels         = local.apps_rke2_node_labels
+  rke2_node_labels         = local.apps_large_worker_rke2_node_labels
 
   register_with_rancher      = true
   rancher_hostname           = var.rancher_hostname
@@ -881,7 +888,7 @@ module "prd_apps_large_workers" {
       hostname   = "prd-apps-large-worker-${i}"
       ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1}/24"
       node_index = local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
-      proxmox_node = var.proxmox_node
+      proxmox_node = coalesce(var.clusters["prd-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
 
@@ -917,7 +924,7 @@ module "prd_apps_large_workers" {
   cluster_aliases    = var.prd_apps_cluster_aliases
 
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
-  rke2_node_labels         = local.apps_rke2_node_labels
+  rke2_node_labels         = local.apps_large_worker_rke2_node_labels
 
   register_with_rancher      = true
   rancher_hostname           = var.rancher_hostname
@@ -1207,7 +1214,7 @@ module "poc_apps_large_workers" {
       hostname   = "poc-apps-large-worker-${i}"
       ip_address = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1}/24"
       node_index = local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
-      proxmox_node = var.proxmox_node
+      proxmox_node = coalesce(var.clusters["poc-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
 
@@ -1243,7 +1250,7 @@ module "poc_apps_large_workers" {
   cluster_aliases    = var.poc_apps_cluster_aliases
 
   rke2_registries_yaml_b64 = local.rke2_registries_yaml_b64
-  rke2_node_labels         = local.apps_rke2_node_labels
+  rke2_node_labels         = local.apps_large_worker_rke2_node_labels
 
   register_with_rancher      = true
   rancher_hostname           = var.rancher_hostname

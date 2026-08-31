@@ -13,7 +13,7 @@ Terraform automation that builds a Rancher management plane and hybrid RKE2 app 
 | **prd-apps** | Production (3 servers + 3 workers + optional large workers) | 420–425 | `192.168.1.120–125` |
 | **poc-apps** | POC / test (3 servers + 3 workers + optional large workers) | 430–435 | `192.168.1.130–135` |
 
-App clusters can enable an optional **large worker** pool after the primary workers (default **0** / opt-in; sizing 8 vCPU / 32 GiB / 100 GB; hostnames `*-large-worker-*`). Set `large_worker_count` in `terraform.tfvars` to enable (example: `prd-apps = 1`, `nprd-apps`/`poc-apps = 0`); extend `vm_id_start_*` / subnet if you add many nodes.
+App clusters can enable an optional **large worker** pool after the primary workers (default **0** / opt-in; sizing 8 vCPU / 32 GiB / 100 GB; hostnames `*-large-worker-*`). Set `large_worker_count` in `terraform.tfvars` to enable (example: `prd-apps = 1`, `nprd-apps`/`poc-apps = 0`); extend `vm_id_start_*` / subnet if you add many nodes. Large workers get RKE2 label `node-type=large` (plus the shared TrueNAS CSI pool label) so heavy workloads can select them without hostname pins.
 
 Also automated when enabled in `terraform.tfvars`:
 

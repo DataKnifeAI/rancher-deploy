@@ -54,6 +54,7 @@ variable "clusters" {
     large_worker_cpu_cores    = optional(number, null)
     large_worker_memory_mb    = optional(number, null)
     large_worker_disk_size_gb = optional(number, null)
+    large_worker_proxmox_node = optional(string, null) # Override node for large workers (e.g. after migrate)
     domain         = string
     ip_subnet      = string
     ip_start_octet = number # Starting IP octet (e.g., 100 for 192.168.1.100)
@@ -91,7 +92,7 @@ variable "vm_id_start_poc_apps" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.13.0"
+  default     = "v1.19.2"
 }
 
 variable "ubuntu_cloud_image_url" {

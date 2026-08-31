@@ -7,30 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0-beta.1] - 2026-08-31
+
+First GitHub prerelease of the fleet stack. Palworld operator on prd is treated as **beta** (usable for hosting, not production-hardened). Operator source and image versioning live in [DataKnifeAI/palworld-operator](https://github.com/DataKnifeAI/palworld-operator) (`v0.1.0-beta.1`).
+
 ### Added
-- **cert-manager Module**: New Terraform module for automated cert-manager deployment across downstream clusters
-  - Automatic detection and cleanup of pre-existing unmanaged cert-manager installations
-  - Comprehensive resource cleanup (CRDs, ClusterRoles, Roles, WebhookConfigurations)
-  - Version-based triggers for automatic upgrades when version changes
-  - Support for nprd-apps, prd-apps, and poc-apps clusters
-- **cert-manager Version Management**: Automatic resource recreation when `cert_manager_version` changes in terraform.tfvars
-  - Triggers on version, cluster_name, kubeconfig_path, and namespace changes
-  - Eliminates need for manual resource tainting
+- Optional **Palworld operator** install (default **prd-apps** only) from a digest-pinned Harbor image
+- Optional **large worker** pool on app clusters (`large_worker_count`, default 0)
+  - RKE2 label `node-type=large` for scheduling (game servers without hostname pins)
+  - Optional `large_worker_proxmox_node` per cluster (defaults to `var.proxmox_node`)
+- **poc-apps** cluster; **kube-vip** LoadBalancer path (MetalLB retired)
+- **TrueNAS CSI** (alongside Democratic CSI), topology labels, Harbor CRI / registries bootstrap
+- Gated day-2 OS patch and RKE2 upgrade flags; Rancher/RKE2 version pins
+- Dedicated **cert-manager** Terraform module for nprd/prd/poc (cleanup of unmanaged installs)
 
 ### Changed
-- **cert-manager Version**: Upgraded from v1.13.0 (EOL) to v1.19.2 (latest stable)
-  - v1.13.0 reached end-of-life on June 5, 2024
-  - v1.19.2 provides security updates, bug fixes, and improved Kubernetes compatibility
-- **cert-manager Deployment**: Now managed via dedicated Terraform module instead of inline scripts
-  - Improved error handling and resource cleanup
-  - Better support for upgrading from unmanaged installations
+- **cert-manager** Terraform default / example pin: `v1.13.0` (EOL) → **`v1.19.2`**
+  - One var feeds manager + all apps modules
+  - Live manager may still be `v1.16.5`; bump via tfvars/Helm when you intend CM-M1 (see [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md))
+  - `v1.21.1` remains the RKE2 1.36 gate, not this default
 
 ### Fixed
-- **cert-manager Installation Issues**: Resolved Helm ownership metadata conflicts
-  - Automatic cleanup of unmanaged CRDs, ClusterRoles, ClusterRoleBindings
-  - Automatic cleanup of namespaced Roles and RoleBindings in kube-system
-  - Automatic cleanup of MutatingWebhookConfiguration and ValidatingWebhookConfiguration
-  - Proper waiting periods for resource deletion before reinstallation
+- kube-vip ClusterRole verbs for Service patch/update
+- TrueNAS CSI controller/node mode flags
+- Orphan MetalLB CRD cleanup helper
+
+### Known limitations
+- Palworld operator does not manage `PalworldServer` CRs by itself (apply CRs separately)
+- Existing large workers need a one-time `kubectl label` until re-bootstrap
+- Branding/org-avatar docs are not part of this cut
 
 ## [1.1.0] - 2026-01-01
 
@@ -97,4 +102,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-For detailed changes, see the [Git commit history](https://github.com/surrealwolf/rancher-deploy/commits/main).
+For detailed changes, see the [Git commit history](https://github.com/DataKnifeAI/rancher-deploy/commits/main).

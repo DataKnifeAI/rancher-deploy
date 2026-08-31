@@ -48,7 +48,7 @@ variable "rancher_hostname" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.13.0"
+  default     = "v1.19.2"
 }
 
 output "kubeconfig_path" {
