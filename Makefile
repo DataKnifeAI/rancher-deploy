@@ -3,6 +3,9 @@
 # Terraform directory
 TF_DIR := terraform
 
+# Extra flags for setup-rancher-kubeconfig.sh, e.g. "--auth-provider keyCloakProvider --break-glass"
+RANCHER_KUBECONFIG_ARGS ?=
+
 help:
 	@echo "Rancher on Proxmox - Terraform Management"
 	@echo "=========================================="
@@ -12,6 +15,8 @@ help:
 	@echo "  check-rancher-tools  - Check for Rancher deployment tools (helm, kubectl)"
 	@echo "  install-kubectl-tools - Install optional kubectx and kubens plugins"
 	@echo "  rancher-kubeconfig   - Merge Rancher CLI-authenticated contexts into ~/.kube/config"
+	@echo "                         SSO: make rancher-kubeconfig RANCHER_KUBECONFIG_ARGS=\"--auth-provider keyCloakProvider --break-glass\""
+	@echo "                         (see docs/CLUSTER_ACCESS_AND_SSO.md)"
 	@echo ""
 	@echo "Terraform Operations:"
 	@echo "  init                 - Initialize Terraform"
@@ -125,7 +130,7 @@ clean:
 	@echo "✓ Cleaned"
 
 rancher-kubeconfig:
-	@./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
+	@./scripts/setup-rancher-kubeconfig.sh --install-cli --merge $(RANCHER_KUBECONFIG_ARGS)
 
 install-kubectl-tools:
 	@echo "Installing optional kubectl plugins (kubectx and kubens)..."
