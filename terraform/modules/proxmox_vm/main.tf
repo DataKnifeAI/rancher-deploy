@@ -273,10 +273,17 @@ resource "proxmox_virtual_environment_vm" "vm" {
   # Prevent modification of import_from and disk size on existing VMs
   # Once a VM is created from an image, we can't change that import path
   # Disk size changes (shrinking) are not supported by Proxmox, so ignore them
+  #
+  # smbios is not managed here: PegaProx writes smbios1 on every VM in plain
+  # text (no base64=1 flag), which bpg/proxmox decodes as base64 into garbage.
+  # Planning to clear it would rewrite the VM config with reboot_after_update.
+  # cpu flags read back as null on some VMs and plan as []; nothing sets them.
   lifecycle {
     ignore_changes = [
       initialization,
-      disk # Ignore disk size changes to prevent shrinking attempts
+      disk, # Ignore disk size changes to prevent shrinking attempts
+      smbios,
+      cpu[0].flags,
     ]
   }
 }
