@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/setup-rancher-kubeconfig.sh` (`make rancher-kubeconfig`): kubeconfigs that authenticate via the Rancher CLI (`rancher token` exec plugin) instead of embedded tokens; `--auth-provider` for SSO and `--break-glass` for `<cluster>-local` contexts
 - [docs/CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md): Authentik → Rancher SAML → kubectl, first-time setup, SAML/Authentik reference, token settings, break-glass layers, automation guidance, certificate calendar, troubleshooting
 - `RANCHER_KUBECONFIG_ARGS` for `make rancher-kubeconfig`
+- [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md): per-node RKE2 cert expiry table and rolling leaf-cert rotation runbook (plan; expiry 2027-01-08 / 2027-01-15)
+- Break-glass RKE2 admin kubeconfigs `~/.kube/<cluster>-rke2.yaml` (direct `<cluster>.dataknife.net:6443`, kept out of `~/.kube/config`) with fetch procedure in CLUSTER_ACCESS_AND_SSO.md
 
 ### Changed
 - Rancher login via Authentik SAML (Rancher "Keycloak (SAML)" provider, site access `required`, allow-listed principals only) alongside local auth; `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600` (live settings, not managed by Terraform)
@@ -18,10 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Broken doc links (`TERRAFORM_VARIABLES.md`) and an unterminated code fence in `RANCHER_DOWNSTREAM_MANAGEMENT.md`
+- Docs no longer claim `~/.kube/<cluster>.yaml` are RKE2 admin kubeconfigs (they were overwritten by Rancher-proxied ones); break-glass is `~/.kube/<cluster>-rke2.yaml`
+- poc-apps wildcard certificate copy re-synced: gitops-core `cert-sync` uses direct RKE2 admin credentials for all clusters and fails loudly ([gitops-core#6](https://github.com/DataKnifeAI/gitops-core/pull/6))
 
 ### Known issues
 - Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`
-- poc-apps wildcard certificate copy expired (gitops-core `cert-sync` failing for poc-apps); TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
+- RKE2 leaf certs on all control-plane nodes expire 2027-01-08 (poc-apps 2027-01-15) — rotate per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
+- TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
 
 ## [1.2.0-beta.1] - 2026-08-31
 
