@@ -251,6 +251,20 @@ often during/after `proxmox_virtual_environment_vm` create when the provider re-
 2. RKE2 install is a separate `null_resource.rke2_bootstrap` in `modules/proxmox_vm` — re-run `terraform apply` (targeted if needed) once the VM is up and SSH works; do not recreate a healthy VM for this alone.
 3. Manual fallback: if you use mirrors, copy `/etc/rancher/rke2/registries.yaml` from a sibling (Harbor LE — no custom CA), restart `rke2-agent`/`rke2-server`, and `kubectl label node … topology.truenas.io/pool=<pool>`. See [OPS_NOTES.md](OPS_NOTES.md).
 
+### PegaProx SMBIOS values (refresh fails on existing VMs)
+
+PegaProx writes `smbios1` (`manufacturer=Proxmox,product=PegaProxManagment,…`) on every VM in plain text, without the `base64=1` flag. bpg/proxmox decodes those fields as base64 anyway, so a refresh can fail with `illegal base64 data` (seen on `rancher-manager-1`) or store garbled `smbios` values that then plan as an in-place VM update with `reboot_after_update`. `modules/proxmox_vm` ignores `smbios` and `cpu[0].flags` to keep those VMs out of the plan.
+
+Refreshing the full state is still hazardous on this estate:
+- VMs moved between `pve1`/`pve2` outside Terraform plan as node changes.
+- `ubuntu_cloud_image` plans a re-download whenever the upstream `current` image size changes.
+
+For day-2 changes that don't touch VMs, use targeted plans with `-refresh=false` and read the full plan before applying.
+
+### Adopting existing nodes into `rke2_bootstrap`
+
+VMs created before `null_resource.rke2_bootstrap` existed have no bootstrap instance in state, so any plan touching them proposes to create one — which would re-run the RKE2 installer on a live node. Do not `terraform import` these: an imported `null_resource` has no `triggers` and is replaced (provisioner runs) on the next plan. Instead, back up the state and add the instances with the exact trigger values from `terraform show -json <plan>` (`resource_changes[].change.after.triggers`), bump `serial`, and `terraform state push` the result. Re-plan to confirm they are gone from the diff.
+
 ## SSH/Connection Issues
 
 ### Issue: "Permission denied (publickey)"
