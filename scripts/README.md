@@ -15,9 +15,9 @@ Core infrastructure deployment and management:
 
 Rancher-specific configuration and management:
 
-- **`create-rancher-api-token.sh`** - Create Rancher API token for automation
-- **`test-rancher-api-token.sh`** - Test Rancher API token functionality
-- **`setup-rancher-kubeconfig.sh`** - Write kubeconfig entries that log in through the Rancher CLI (`rancher token`) instead of embedding expiring tokens
+- **`create-rancher-api-token.sh`** - Create Rancher API token for automation (writes `rancher_api_token` in tfvars; Terraform reads `config/.rancher-api-token` — copy it there; Rancher caps it at 90 days)
+- **`test-rancher-api-token.sh`** - Manual curl walkthrough for creating/testing a Rancher API token
+- **`setup-rancher-kubeconfig.sh`** - Write kubeconfig entries that log in through the Rancher CLI (`rancher token`) instead of embedding expiring tokens — the standard kubectl setup; see [../docs/CLUSTER_ACCESS_AND_SSO.md](../docs/CLUSTER_ACCESS_AND_SSO.md)
 - **`install-system-agent.sh`** - Install Rancher system-agent on downstream cluster nodes
 - **`check-agent-status.sh`** - Check cattle-cluster-agent status and troubleshoot DNS issues
 
@@ -72,12 +72,14 @@ Utility and maintenance scripts:
 # Create API token
 ./scripts/create-rancher-api-token.sh https://rancher.example.com admin password
 
-# kubectl access via Rancher CLI login (no more re-downloading kubeconfigs)
-./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
-kubectl --context prd-apps get nodes   # first call prompts for Rancher login, then cached
+# kubectl access (recommended): SSO via Authentik SAML (prints a login link) plus
+# <cluster>-local break-glass contexts that use the Rancher local user
+./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass
+kubectl --context prd-apps get nodes   # first call prints a login link, then cached (≤ 90 days)
+rancher token delete all               # clear the cache / force re-login
 
-# Same, but log in via Authentik SAML (prints a link) and add <cluster>-local break-glass contexts
-./scripts/setup-rancher-kubeconfig.sh --merge --auth-provider keyCloakProvider --break-glass
+# Local-provider only (e.g. before SAML is configured)
+./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
 
 # Install system agent on downstream nodes
 ./scripts/install-system-agent.sh \
@@ -142,3 +144,4 @@ Some scripts require:
 - **[../docs/GITHUB_ARC_SETUP.md](../docs/GITHUB_ARC_SETUP.md)** - Complete GitHub ARC setup guide
 - **[../docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md](../docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - TrueNAS storage setup guide
 - **[../docs/RANCHER_API_TOKEN_CREATION.md](../docs/RANCHER_API_TOKEN_CREATION.md)** - Rancher API token documentation
+- **[../docs/CLUSTER_ACCESS_AND_SSO.md](../docs/CLUSTER_ACCESS_AND_SSO.md)** - kubectl / Rancher SSO access and break-glass

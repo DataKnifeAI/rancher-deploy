@@ -10,6 +10,7 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 4. [API_TOKEN_AND_PERMISSIONS.md](API_TOKEN_AND_PERMISSIONS.md) — Proxmox API token
 5. [DNS_CONFIGURATION.md](DNS_CONFIGURATION.md) — required DNS records
 6. [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) — `.keys/`, SSH recovery via kubectl
+7. [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md) — **kubectl / Rancher login**: Authentik SSO, `rancher token` kubeconfigs, break-glass
 
 ## Core
 
@@ -19,7 +20,8 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 | [CLOUD_IMAGE_SETUP.md](CLOUD_IMAGE_SETUP.md) | Ubuntu cloud image / VM provisioning |
 | [PROXMOX_AGENT_SETUP.md](PROXMOX_AGENT_SETUP.md) | qemu-guest-agent |
 | [RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md) | Downstream registration |
-| [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) | Rancher API tokens |
+| [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md) | Authentik → Rancher SAML → kubectl, token settings, cert calendar |
+| [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) | Rancher API tokens (Terraform automation) |
 | [OPS_NOTES.md](OPS_NOTES.md) | Short operational truths |
 | [UPGRADE_PLAN.md](UPGRADE_PLAN.md) | Poc-first Rancher / RKE2 / cert-manager upgrade runbook |
 
@@ -47,6 +49,7 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) for lost SSH keys
+- [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#troubleshooting) for kubectl / SSO login problems
 
 ## Assets
 

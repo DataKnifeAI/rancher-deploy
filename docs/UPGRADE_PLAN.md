@@ -13,6 +13,8 @@ Concrete day-2 upgrade path from **live** pins to **PR #15** targets. Review thi
 
 Related: [OPS_NOTES.md](OPS_NOTES.md) (pin summary), [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md), PRs [#14](https://github.com/DataKnifeAI/rancher-deploy/pull/14) / [#15](https://github.com/DataKnifeAI/rancher-deploy/pull/15).
 
+**Access for the next window (2026-10-04):** `kubectl --context <cluster>` now logs in through Rancher SSO, and those contexts go through cattle-cluster-agent just like the old proxied kubeconfigs. For drains and wait loops use RKE2 admin kubeconfigs (`~/.kube/<cluster>.yaml` pulled from `/etc/rancher/rke2/rke2.yaml`; check/re-pull steps in [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass)). Log in once before starting so the token doesn't expire mid-run.
+
 ---
 
 ## 0. PR / Terraform foundation (before any live bump)

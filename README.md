@@ -59,7 +59,7 @@ make apply                 # wraps ./scripts/apply.sh (logged)
 # or: ./scripts/apply.sh
 ```
 
-Verify:
+Verify right after apply (Terraform writes RKE2 admin kubeconfigs — cluster-admin, keep for break-glass/automation):
 
 ```bash
 export KUBECONFIG=~/.kube/rancher-manager.yaml && kubectl get nodes
@@ -67,6 +67,15 @@ export KUBECONFIG=~/.kube/nprd-apps.yaml && kubectl get nodes
 export KUBECONFIG=~/.kube/prd-apps.yaml && kubectl get nodes
 export KUBECONFIG=~/.kube/poc-apps.yaml && kubectl get nodes
 ```
+
+Day-to-day kubectl goes through Rancher login (SSO via Authentik) instead of embedded tokens:
+
+```bash
+./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass
+kubectl --context prd-apps get nodes   # first call prints a login link
+```
+
+See [docs/CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md).
 
 Destroy: `make destroy` or `./scripts/destroy.sh`.
 
@@ -81,6 +90,7 @@ Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 | Architecture | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Deployment | [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) |
 | SSH keys & recovery | [SSH_AND_ACCESS.md](docs/SSH_AND_ACCESS.md) |
+| Cluster access, SSO & break-glass | [CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md) |
 | DNS | [DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md) |
 | TrueNAS / Democratic CSI | [DEMOCRATIC_CSI_TRUENAS_SETUP.md](docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md) |
 | TrueNAS CSI migration | [TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md) |
@@ -107,4 +117,4 @@ Never commit `terraform.tfvars`, `.keys/`, `config/*`, or generated Helm values 
 
 ## License
 
-MIT — see project license files. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
+Apache License 2.0 — see [LICENSE](LICENSE). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

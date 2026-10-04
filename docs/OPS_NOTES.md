@@ -2,6 +2,15 @@
 
 Short operational truths that do not belong in the README.
 
+## Cluster access (SSO)
+
+- Rancher `v2.15.0` at `https://rancher.dataknife.net`; auth providers **local** + **Keycloak (SAML)** pointed at Authentik (`https://auth.dataknife.net`, on prd-apps). Full guide: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
+- kubectl: `./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass`, then `kubectl --context <local|nprd-apps|prd-apps|poc-apps>`. Kubeconfigs embed no tokens; `rancher token` caches one (≤ 90 days) in `~/.rancher/cli2.json`.
+- SAML site access is **`required`** by design: only principals in `allowedPrincipalIds` may log in via SSO (currently `keycloak_user://4` = akadmin). Allow people via an Authentik group, `keycloak_group://<exact group name>`; single users are `keycloak_user://<Authentik numeric pk>`, not the username. Local logins are unaffected. See [CLUSTER_ACCESS_AND_SSO.md § Site access](CLUSTER_ACCESS_AND_SSO.md#site-access-required).
+- Break-glass: `<cluster>-local` contexts (Rancher local user), UI **Log in with Local User**, RKE2 admin kubeconfigs `~/.kube/<cluster>.yaml` (independent of Rancher/Authentik), Authentik recovery key.
+- Global settings: `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600`, `auth-token-max-ttl-minutes=129600` (default) — so **every** Rancher API token, including Terraform's `ttl: 0` one, expires in 90 days.
+- Unattended jobs: use a dedicated scoped API token or RKE2 admin kubeconfigs, never a personal SSO token cache.
+
 ## SSH deploy keys
 
 - Live keys live under **`.keys/`** (gitignored). See [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
@@ -14,6 +23,8 @@ Short operational truths that do not belong in the README.
 - Apps-cluster nodes get label `topology.truenas.io/pool=<truenas_csi_pool>` via RKE2 `node-label` at bootstrap, plus a post-kubeconfig `null_resource` that labels all nodes. Manager nodes are not labeled (CSI is apps-side).
 
 ## Version pins (RKE2 / Rancher / OS)
+
+Live clusters match these defaults (verified 2026-10-04: Rancher `v2.15.0`, all four clusters RKE2 `v1.36.2+rke2r1`, cert-manager `v1.21.1` after the 2026-08-01 promote).
 
 | Pin | Variable | Default (as of 2026-07) | Notes |
 |-----|----------|-------------------------|--------|
@@ -58,11 +69,22 @@ This repo creates guest VMs; it does **not** manage Proxmox host bonds/bridges. 
 
 Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`/`bond2`, local ZFS vs Ceph RBD vs TrueNAS CSI): [../examples/homelab/index.html](../examples/homelab/index.html).
 
+## Known issues (2026-10-04)
+
+- **TrueNAS CSI pods restart often on all app clusters.** The TrueNAS API (middlewared, `192.168.9.10`) freezes for ~20–60 s about every 7 minutes; the driver's liveness probe treats the lost API connection as fatal. A driver fix is in progress in the `truenas-csi` fork. Restarts are noisy but mounts recover; don't chase them per pod.
+- **CNPG replicas stuck on timeline divergence (prd-apps):** `coder/coder-postgres-1` and `high-command/high-command-postgres-1` (clusters report 2/3 ready). Re-clone each replica: confirm the primary is healthy, then delete the replica's pod **and** PVC so CNPG rebuilds it from the primary.
+- **poc-apps wildcard cert expired (2026-04-18).** `cert-manager/cert-sync` (gitops-core, manager) fails for poc-apps: its kubeconfig entry uses the Rancher proxy URL with a deleted token, and the job image fails x509 verification. nprd/prd copies are current. Fix in gitops-core (RKE2 admin kubeconfig entry for poc-apps). The other entries' client certs expire 2027-01-08. See [CLUSTER_ACCESS_AND_SSO.md § Certificate calendar](CLUSTER_ACCESS_AND_SSO.md#certificate-and-expiry-calendar).
+- **Terraform's Rancher API token is expired** (`config/.rancher-api-token` = `rancher_api_token` in tfvars, HTTP 401), and the registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`. Refresh before any `register_downstream_cluster` apply — [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md).
+- **`~/.kube/<cluster>.yaml` on the main workstation are Rancher-proxied token kubeconfigs**, not the RKE2 admin kubeconfigs Terraform writes (`rancher-manager.yaml`'s token is already expired). Re-pull them before relying on them for break-glass or Terraform add-on steps — see [CLUSTER_ACCESS_AND_SSO.md § Fallback](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass).
+
 ## Secrets hygiene
 
 | Path | Purpose |
 |------|---------|
 | `terraform/terraform.tfvars` | API tokens, passwords (gitignored) |
 | `.keys/` | SSH deploy keys (gitignored) |
-| `config/` | Tokens, registry pull secrets (gitignored) |
+| `config/` | Tokens (incl. `.rancher-api-token`), registry pull secrets (gitignored) |
 | `helm-values/democratic-csi-truenas.yaml` | Generated CSI values (gitignored) |
+| `~/.config/rancher-saml/` | Rancher SAML SP cert/key + Authentik IdP metadata (outside the repo) |
+| `~/.rancher/cli2.json` | Rancher CLI token cache (`rancher token delete all` to clear) |
+| `~/.kube/*.yaml`, `~/.kube/config*` | Kubeconfigs; RKE2 admin ones are cluster-admin |
