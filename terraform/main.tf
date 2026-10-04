@@ -2967,6 +2967,12 @@ resource "null_resource" "truenas_csi_cleanup_nprd_apps" {
   triggers = {
     truenas_csi_storage_class = var.truenas_csi_storage_class_name
   }
+
+  # Replacing this resource runs the teardown above on a live cluster, so a
+  # StorageClass rename must not force replacement.
+  lifecycle {
+    ignore_changes = [triggers]
+  }
 }
 
 resource "null_resource" "deploy_truenas_csi_prd_apps" {
@@ -3106,6 +3112,12 @@ resource "null_resource" "truenas_csi_cleanup_prd_apps" {
   triggers = {
     truenas_csi_storage_class = var.truenas_csi_storage_class_name
   }
+
+  # Replacing this resource runs the teardown above on a live cluster, so a
+  # StorageClass rename must not force replacement.
+  lifecycle {
+    ignore_changes = [triggers]
+  }
 }
 
 resource "null_resource" "deploy_truenas_csi_poc_apps" {
@@ -3244,6 +3256,12 @@ resource "null_resource" "truenas_csi_cleanup_poc_apps" {
 
   triggers = {
     truenas_csi_storage_class = var.truenas_csi_storage_class_name
+  }
+
+  # Replacing this resource runs the teardown above on a live cluster, so a
+  # StorageClass rename must not force replacement.
+  lifecycle {
+    ignore_changes = [triggers]
   }
 }
 
