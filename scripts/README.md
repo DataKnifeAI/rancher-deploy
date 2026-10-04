@@ -17,6 +17,7 @@ Rancher-specific configuration and management:
 
 - **`create-rancher-api-token.sh`** - Create Rancher API token for automation
 - **`test-rancher-api-token.sh`** - Test Rancher API token functionality
+- **`setup-rancher-kubeconfig.sh`** - Write kubeconfig entries that log in through the Rancher CLI (`rancher token`) instead of embedding expiring tokens
 - **`install-system-agent.sh`** - Install Rancher system-agent on downstream cluster nodes
 - **`check-agent-status.sh`** - Check cattle-cluster-agent status and troubleshoot DNS issues
 
@@ -70,6 +71,10 @@ Utility and maintenance scripts:
 ```bash
 # Create API token
 ./scripts/create-rancher-api-token.sh https://rancher.example.com admin password
+
+# kubectl access via Rancher CLI login (no more re-downloading kubeconfigs)
+./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
+kubectl --context prd-apps get nodes   # first call prompts for Rancher login, then cached
 
 # Install system agent on downstream nodes
 ./scripts/install-system-agent.sh \

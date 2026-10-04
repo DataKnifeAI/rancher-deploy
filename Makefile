@@ -1,4 +1,4 @@
-.PHONY: help init plan apply destroy destroy-quick validate fmt clean check-prereqs check-rancher-tools install-kubectl-tools
+.PHONY: help init plan apply destroy destroy-quick validate fmt clean check-prereqs check-rancher-tools install-kubectl-tools rancher-kubeconfig
 
 # Terraform directory
 TF_DIR := terraform
@@ -11,6 +11,7 @@ help:
 	@echo "  check-prereqs        - Check for required tools (terraform, curl, ssh, jq)"
 	@echo "  check-rancher-tools  - Check for Rancher deployment tools (helm, kubectl)"
 	@echo "  install-kubectl-tools - Install optional kubectx and kubens plugins"
+	@echo "  rancher-kubeconfig   - Merge Rancher CLI-authenticated contexts into ~/.kube/config"
 	@echo ""
 	@echo "Terraform Operations:"
 	@echo "  init                 - Initialize Terraform"
@@ -122,6 +123,9 @@ fmt:
 clean:
 	@cd $(TF_DIR) && rm -rf .terraform .terraform.lock.hcl tfplan terraform.tfstate*
 	@echo "✓ Cleaned"
+
+rancher-kubeconfig:
+	@./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
 
 install-kubectl-tools:
 	@echo "Installing optional kubectl plugins (kubectx and kubens)..."
