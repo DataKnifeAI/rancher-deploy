@@ -30,22 +30,24 @@ chmod 600 .keys/id_rsa
 ssh -i .keys/id_rsa ubuntu@<node-ip>
 ```
 
-Kubeconfigs after a successful apply typically land at:
+Kubeconfigs after a successful apply land at (RKE2 admin client certs pulled over SSH from `/etc/rancher/rke2/rke2.yaml`; independent of Rancher, cluster-admin):
 
 - `~/.kube/rancher-manager.yaml`
 - `~/.kube/nprd-apps.yaml`
 - `~/.kube/prd-apps.yaml`
 - `~/.kube/poc-apps.yaml`
 
+Keep these for break-glass, upgrade drains, and Terraform add-on steps (which read these paths). Day-to-day kubectl uses Rancher-login contexts (`kubectl --context prd-apps ...`, SSO via Authentik) — see [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md), which also shows how to check that these files are still RKE2 admin kubeconfigs and how to re-pull one.
+
 ## Recover SSH without replacing VMs
 
 If nodes no longer accept your current key but **kubectl still works**, inject the new public key onto the host filesystem via a privileged node debug session (no Proxmox console required).
 
-Prerequisites: cluster-admin (or equivalent) on the target cluster; `kubectl debug` / ephemeral containers enabled.
+Prerequisites: cluster-admin (or equivalent) on the target cluster; `kubectl debug` / ephemeral containers enabled. Any working path is fine: the RKE2 admin kubeconfig, the SSO context, or a `<cluster>-local` break-glass context.
 
 ```bash
 # One node example — repeat per Ready node / context
-export KUBECONFIG=~/.kube/prd-apps.yaml   # or use --context=
+export KUBECONFIG=~/.kube/prd-apps.yaml   # or use --context prd-apps / prd-apps-local
 PUB_B64=$(base64 -w0 < .keys/id_rsa.pub)
 
 kubectl debug "node/<node-name>" \
@@ -75,5 +77,6 @@ Update `ssh_private_key` in `terraform.tfvars` to the key you injected before ru
 
 ## Related
 
+- [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md) — kubectl / Rancher login, SSO, break-glass layers
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — SSH permission and IPS issues
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — first-time deploy

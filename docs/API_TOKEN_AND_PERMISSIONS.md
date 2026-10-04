@@ -2,6 +2,8 @@
 
 This guide covers creating and configuring Proxmox API tokens with the minimum required permissions for the Rancher Deploy automation to work end-to-end.
 
+> This page is about the **Proxmox** token only. For the Rancher API token Terraform uses, see [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md); for kubectl / Rancher login (SSO), see [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
+
 ## Overview
 
 The Rancher Deploy project uses Proxmox API tokens to automate infrastructure provisioning. You'll need to create at least one API token with specific permissions for VM creation, configuration, and management.
@@ -400,7 +402,8 @@ Full list of available Proxmox permissions:
 ## Related Documentation
 
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough
-- [TERRAFORM_VARIABLES.md](TERRAFORM_VARIABLES.md) - Full variable reference
+- [`terraform/terraform.tfvars.example`](../terraform/terraform.tfvars.example) / [`terraform/variables.tf`](../terraform/variables.tf) - Variable reference
+- [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) - Rancher API token (not Proxmox)
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Deployment troubleshooting
 
 ## Proxmox Documentation

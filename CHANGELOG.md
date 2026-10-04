@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `scripts/setup-rancher-kubeconfig.sh` (`make rancher-kubeconfig`): kubeconfigs that authenticate via the Rancher CLI (`rancher token` exec plugin) instead of embedded tokens; `--auth-provider` for SSO and `--break-glass` for `<cluster>-local` contexts
+- [docs/CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md): Authentik → Rancher SAML → kubectl, first-time setup, SAML/Authentik reference, token settings, break-glass layers, automation guidance, certificate calendar, troubleshooting
+- `RANCHER_KUBECONFIG_ARGS` for `make rancher-kubeconfig`
+
+### Changed
+- Rancher login via Authentik SAML (Rancher "Keycloak (SAML)" provider) alongside local auth; `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600` (live settings, not managed by Terraform)
+- Docs: Rancher API token path is `config/.rancher-api-token` and expires after 90 days (`auth-token-max-ttl-minutes`), not "never"; current-state notes in downstream registration, deployment, troubleshooting, ops notes; RKE2/Rancher version examples updated to `v1.36.2+rke2r1` / `v2.15.0`; README license corrected to Apache-2.0
+
+### Fixed
+- Broken doc links (`TERRAFORM_VARIABLES.md`) and an unterminated code fence in `RANCHER_DOWNSTREAM_MANAGEMENT.md`
+
+### Known issues
+- Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`
+- poc-apps wildcard certificate copy expired (gitops-core `cert-sync` failing for poc-apps); TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
+
 ## [1.2.0-beta.1] - 2026-08-31
 
 First GitHub prerelease of the fleet stack. Palworld operator on prd is treated as **beta** (usable for hosting, not production-hardened). Operator source and image versioning live in [DataKnifeAI/palworld-operator](https://github.com/DataKnifeAI/palworld-operator) (`v0.1.0-beta.1`).

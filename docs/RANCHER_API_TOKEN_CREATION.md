@@ -2,6 +2,18 @@
 
 The Rancher API token is automatically created during the Rancher deployment process. This document explains how the token creation works and how to use it.
 
+> **Scope:** this token is for **Terraform automation** (downstream cluster create/registration). Humans should not use it for kubectl — use the SSO / `rancher token` kubeconfigs in [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
+
+## Current facts (verified 2026-10-04)
+
+- **Where Terraform reads it:** `config/.rancher-api-token` (repo root) — the `rancher2` provider (`terraform/provider.tf`) and the cluster-create / cluster-ID `null_resource`s (`terraform/main.tf`). `deploy-rancher.sh` writes this file.
+- **Hard-coded path:** `module.rancher_downstream_registration_*` in `terraform/main.tf` uses `rancher_token_file = "/home/lee/git/rancher-deploy/config/.rancher-api-token"`, not this checkout's `config/`. Keep that path in sync (or fix the module call) before a registration apply.
+- **`rancher_api_token` in `terraform.tfvars`** is declared in `variables.tf` but not used by any Terraform resource. `create-rancher-api-token.sh` writes it, and `setup-rancher-kubeconfig.sh` reads it for its one-time lookup — copy it into `config/.rancher-api-token` as well.
+- **Lifetime:** both scripts request `ttl: 0`, but Rancher's `auth-token-max-ttl-minutes` (`129600` = 90 days) caps every API token, so it **expires after 90 days**.
+- **Status:** the token in `terraform.tfvars` and `config/.rancher-api-token` was an expired kubeconfig token (HTTP 401). Create a fresh one before the next downstream registration apply — see [Automation in CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#automation).
+- **SSO:** token creation logs in via the **local** provider (`/v3-public/localProviders/local?action=login`), so it keeps working with Authentik SAML enabled.
+- Rancher v2.14+ deprecates v3 tokens (`/v3/tokens`) in favour of `tokens.ext.cattle.io`; the scripts still use v3.
+
 ## Overview
 
 When you deploy Rancher using `terraform apply`, the deployment process automatically:
@@ -9,7 +21,7 @@ When you deploy Rancher using `terraform apply`, the deployment process automati
 1. Installs Rancher on the manager cluster
 2. Waits for Rancher to be fully operational
 3. Creates an API token using the bootstrap password
-4. Displays the token in the deployment output
+4. Displays the token in the deployment output and saves it to `config/.rancher-api-token`
 
 ## How It Works
 
@@ -42,16 +54,16 @@ curl -X POST \
 ### Token Properties
 
 - **Description**: "Terraform automation token for downstream cluster registration"
-- **TTL**: 0 (never expires)
+- **TTL**: requested `0`, capped by `auth-token-max-ttl-minutes` → **90 days** on this Rancher
 - **isDerived**: false (not a temporary derivative token)
-- **Permissions**: Full cluster access
+- **Permissions**: Full access as the `admin` user (unscoped)
 
 ## Deployment Workflow
 
 ### 1. Deploy Rancher
 
 ```bash
-cd /home/lee/git/rancher-deploy
+# from the repo root
 ./scripts/apply.sh  # or: terraform apply -auto-approve
 ```
 
@@ -78,18 +90,17 @@ Rancher API Token:
 ==========================================
 token-xxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-Token saved. Add to terraform/terraform.tfvars:
-  rancher_api_token = "token-xxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+✓ Token saved to: <repo>/config/.rancher-api-token
 ```
 
-### 2. Add Token to terraform.tfvars
+### 2. Enable Registration (token is already in place)
 
-Copy the token from the output and add it to your `terraform/terraform.tfvars`:
+Terraform reads the token from `config/.rancher-api-token`, which the deploy step wrote. Optionally mirror it into `terraform.tfvars` so `setup-rancher-kubeconfig.sh` can use it:
 
 ```hcl
 # terraform/terraform.tfvars
-rancher_api_token = "token-xxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 register_downstream_cluster = true
+rancher_api_token = "token-xxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # optional; not read by Terraform resources
 ```
 
 ### 3. Re-apply Terraform
@@ -109,11 +120,15 @@ This will:
 
 ## Manual Token Creation
 
-If the automatic token creation fails or you need to create another token, use the `create-rancher-api-token.sh` script:
+If the automatic token creation fails or you need to create another token (e.g. the 90-day token expired), use the `create-rancher-api-token.sh` script. It updates `rancher_api_token` in `terraform.tfvars`; copy it to `config/.rancher-api-token`, which is what Terraform reads:
 
 ```bash
-# From project root
-./create-rancher-api-token.sh https://rancher.example.com admin your-password
+# From project root (avoid putting the password in shell history)
+read -rsp 'Rancher admin password: ' RANCHER_ADMIN_PASSWORD; echo
+./scripts/create-rancher-api-token.sh https://rancher.example.com admin "$RANCHER_ADMIN_PASSWORD"
+unset RANCHER_ADMIN_PASSWORD
+sed -nE 's/^[[:space:]]*rancher_api_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' terraform/terraform.tfvars > config/.rancher-api-token
+chmod 600 config/.rancher-api-token
 ```
 
 ## Troubleshooting
@@ -135,9 +150,9 @@ Common causes:
 - Network connectivity issues to Rancher API
 - Invalid bootstrap password
 
-**Solution**: Create token manually:
+**Solution**: Create token manually (see [Manual Token Creation](#manual-token-creation)):
 ```bash
-./create-rancher-api-token.sh https://rancher.example.com admin your-password
+./scripts/create-rancher-api-token.sh https://rancher.example.com admin "$RANCHER_ADMIN_PASSWORD"
 ```
 
 ### "Failed to authenticate with Rancher API"
@@ -163,9 +178,11 @@ If downstream cluster registration isn't working even with API token set:
      -k https://rancher.example.com/v3/tokens
    ```
 
-2. **Ensure token is in terraform.tfvars**:
+2. **Ensure the token file Terraform reads exists and is valid** (prints the HTTP status only):
    ```bash
-   grep rancher_api_token terraform/terraform.tfvars
+   ls -l config/.rancher-api-token
+   curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat config/.rancher-api-token)" \
+     "https://rancher.example.com/v3/users?me=true"   # 200 = valid, 401 = expired/revoked
    ```
 
 3. **Check register_downstream_cluster is true**:
@@ -187,14 +204,16 @@ Once the API token is created and downstream cluster registration is complete:
 
 ```
 URL: https://<rancher-hostname>
-Username: admin
-Password: <bootstrap-password> (from terraform.tfvars)
+SSO: SAML button (provider "Keycloak", backed by Authentik)
+Fallback: "Log in with Local User" → admin / <current admin password>
+          (initially rancher_password from terraform.tfvars; change it after first login)
 ```
 
 ### kubectl Access
 
+Day-to-day: Rancher-login contexts (`./scripts/setup-rancher-kubeconfig.sh ...`, then `kubectl --context local ...`) — see [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md). Break-glass / automation: the RKE2 admin kubeconfig Terraform writes:
+
 ```bash
-# Use the manager kubeconfig
 export KUBECONFIG=~/.kube/rancher-manager.yaml
 kubectl get nodes
 kubectl get pods -n cattle-system
@@ -235,15 +254,17 @@ rancher login https://rancher.example.com --token <token>
 
 To create a new token and revoke the old one:
 
+Rotate at least every 90 days (the max TTL).
+
 1. **Create new token**:
    ```bash
-   ./scripts/create-rancher-api-token.sh https://rancher.example.com admin password
+   ./scripts/create-rancher-api-token.sh https://rancher.example.com admin "$RANCHER_ADMIN_PASSWORD"
    ```
 
-2. **Update terraform.tfvars** with new token
+2. **Copy it to `config/.rancher-api-token`** (the script already updated `terraform.tfvars`; see [Manual Token Creation](#manual-token-creation))
 
 3. **Delete old token** via Rancher UI:
-   - Go to Account & Settings → API & Keys
+   - Avatar → **Account & API Keys**
    - Find the old token
    - Click delete
 
@@ -257,6 +278,7 @@ To create a new token and revoke the old one:
 
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough
 - [RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md) - Downstream cluster registration
+- [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md) - kubectl / SSO access, token settings, automation guidance
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
 
 ## Script Reference
@@ -273,10 +295,10 @@ Manual token creation script:
 ```
 
 **What it does:**
-1. Authenticates with Rancher using admin credentials
-2. Creates a long-lived API token
-3. Saves token to `terraform/terraform.tfvars`
-4. Displays token for reference
+1. Authenticates with Rancher using admin credentials (local provider)
+2. Creates an API token (`ttl: 0`, capped to 90 days by Rancher)
+3. Saves token to `rancher_api_token` in `terraform/terraform.tfvars` — **not** to `config/.rancher-api-token`, which Terraform reads; copy it there
+4. Displays token for reference (its "TTL: Never expires" message is inaccurate on this Rancher)
 
 ### deploy-rancher.sh
 
@@ -297,7 +319,7 @@ Automatic token creation script (called during Terraform apply):
 2. Authenticates with bootstrap password
 3. Creates API token
 4. Displays token in deployment output
-5. Instructions for updating terraform.tfvars
+5. Saves it to `config/.rancher-api-token` (mode 600)
 
 ## Manual Token Creation via curl
 

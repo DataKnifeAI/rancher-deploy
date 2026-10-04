@@ -93,7 +93,7 @@ terraform destroy -auto-approve
 ### Documentation Updates
 
 - Update relevant docs in `docs/` folder
-- If modifying Terraform, update [TERRAFORM_VARIABLES.md](docs/TERRAFORM_VARIABLES.md)
+- If modifying Terraform variables, update [`terraform/terraform.tfvars.example`](terraform/terraform.tfvars.example) and the variable descriptions in `terraform/variables.tf`
 - If fixing an issue, add to [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 - Update [CHANGELOG.md](CHANGELOG.md) with your changes
 

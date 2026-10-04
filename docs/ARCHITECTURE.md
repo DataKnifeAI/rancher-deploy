@@ -36,7 +36,15 @@ IPs, VLANs, storage, and sizing come from the `clusters` map in `terraform.tfvar
 5. Register downstream clusters with Rancher (when `register_downstream_cluster = true`).
 6. Install platform add-ons on apps clusters when flags are set (CSI, Envoy Gateway, kube-vip, CNPG, MongoDB, OpenSearch, GitHub ARC, Palworld operator).
 
-RKE2 version is set in `terraform/main.tf` (currently `v1.34.3+rke2r1`). Rancher chart version comes from `rancher_version` in tfvars (example: `v2.13.1`).
+RKE2 version comes from `rke2_version` (default `v1.36.2+rke2r1`) and the Rancher chart from `rancher_version` (default `v2.15.0`); both live clusters and defaults match as of 2026-10. Upgrades: [UPGRADE_PLAN.md](UPGRADE_PLAN.md).
+
+## Access and authentication
+
+```
+Authentik (SAML IdP, prd-apps) → Rancher (keycloak SAML + local providers) → rancher token (exec plugin) → kubectl
+```
+
+Break-glass paths (Rancher local user, RKE2 admin kubeconfigs) bypass Authentik. Details: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
 
 ## Storage
 
@@ -77,4 +85,4 @@ Enabled via Terraform flags / versions in tfvars:
 
 - Deploy key path: `ssh_private_key` (public key = `${path}.pub`). Repo convention: `.keys/` (gitignored).
 - Tokens / kubeconfigs: under `config/` and `~/.kube/*.yaml` (gitignored).
-- See [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
+- See [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) and [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).

@@ -43,7 +43,7 @@ Deploys Rancher on manager cluster via Helm:
 - Deploys Rancher via Helm chart
 - Configures bootstrap password
 - Sets up Ingress for HTTPS access
-- **Creates and persists API token** to ~/.kube/.rancher-api-token
+- **Creates and persists API token** to config/.rancher-api-token
 
 **Key Features:**
 - Automatic namespace creation (cattle-system)
@@ -100,7 +100,7 @@ terraform apply
 │   ├── Install cert-manager
 │   ├── Deploy Rancher Helm chart
 │   ├── Create API token via Rancher API
-│   ├── Persist token to ~/.kube/.rancher-api-token
+│   ├── Persist token to config/.rancher-api-token
 │   └── Configure bootstrap password & Ingress
 ├── 4. Extract Downstream Cluster ID (AUTOMATIC) (<1 min)
 │   ├── Call Rancher API to list clusters
@@ -140,7 +140,7 @@ This solves the circular dependency: to register nodes, we need the cluster ID, 
 resource "null_resource" "create_downstream_cluster" {
   provisioner "local-exec" {
     command = <<-EOT
-      API_TOKEN=$(cat ~/.kube/.rancher-api-token)
+      API_TOKEN=$(cat config/.rancher-api-token)
       
       # Create cluster object - Rancher generates the ID
       curl -sk -X POST \
@@ -158,7 +158,7 @@ resource "null_resource" "create_downstream_cluster" {
 resource "null_resource" "fetch_downstream_cluster_id" {
   provisioner "local-exec" {
     command = <<-EOT
-      API_TOKEN=$(cat ~/.kube/.rancher-api-token)
+      API_TOKEN=$(cat config/.rancher-api-token)
       
       # Get cluster ID from response
       CLUSTER_ID=$(curl -sk \
@@ -220,7 +220,7 @@ resource "null_resource" "fetch_downstream_cluster_id" {
   provisioner "local-exec" {
     command = <<-EOT
       # Read API token from file (created by deploy-rancher.sh)
-      API_TOKEN=$(cat "~/.kube/.rancher-api-token")
+      API_TOKEN=$(cat "config/.rancher-api-token")
       
       # Query Rancher API for clusters
       CLUSTER_ID=$(curl -sk \
@@ -288,13 +288,13 @@ Authorization: Bearer <token-from-rancher-api-token-file>
 
 2. Verify API token file exists and is readable:
    ```bash
-   cat ~/.kube/.rancher-api-token
+   cat config/.rancher-api-token
    # Should print token starting with "token-"
    ```
 
 3. Verify Rancher API is accessible:
    ```bash
-   API_TOKEN=$(cat ~/.kube/.rancher-api-token)
+   API_TOKEN=$(cat config/.rancher-api-token)
    curl -sk -H "Authorization: Bearer ${API_TOKEN}" \
      https://rancher.example.com/v3/clusters | jq '.data[] | {id, name}'
    ```
@@ -352,7 +352,7 @@ terraform apply
 │   ├── Install cert-manager
 │   ├── Deploy Rancher Helm chart
 │   ├── Create API token via Rancher API
-│   ├── Persist token to ~/.kube/.rancher-api-token
+│   ├── Persist token to config/.rancher-api-token
 │   └── Configure bootstrap password & Ingress
 ├── 4. Register Downstream Cluster (NATIVE) (2-3 min)
 │   ├── Use rancher2 provider with API token
@@ -412,7 +412,7 @@ ssh_private_key = "../.keys/id_rsa"  # public key from "${ssh_private_key}.pub"
 
 ```bash
 # 1. Initialize Terraform
-cd /home/lee/git/rancher-deploy/terraform
+cd terraform   # from the repo root
 terraform init
 
 # 2. Preview changes

@@ -264,10 +264,22 @@ curl https://get.rke2.io | head -5  # Test RKE2 download
 
 ### Retrieve Kubeconfigs
 
-Automatically created at:
+Automatically created at (RKE2 admin kubeconfigs, cluster-admin — keep for break-glass and automation):
 - `~/.kube/rancher-manager.yaml` - Manager cluster
-- `~/.kube/nprd-apps.yaml` - Apps cluster
-- `~/.kube/.rancher-api-token` - API token file
+- `~/.kube/nprd-apps.yaml`, `~/.kube/prd-apps.yaml`, `~/.kube/poc-apps.yaml` - Apps clusters
+- `~/.kube/config` - all of the above merged (`null_resource.merge_kubeconfigs`)
+- `config/.rancher-api-token` (repo root) - Rancher API token used by Terraform (90-day max TTL)
+
+### Set Up Day-to-Day kubectl Access
+
+Once Rancher is up, add Rancher-login contexts (SSO through Authentik when the SAML provider is enabled, local user otherwise):
+
+```bash
+./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass
+kubectl --context nprd-apps get nodes
+```
+
+Before SAML is configured, drop `--auth-provider keyCloakProvider`. Full guide: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
 
 ### Rancher Deployment (Automatic with Single-Apply)
 
@@ -278,10 +290,10 @@ Automatically created at:
 2. Rancher Manager deployed via Helm (~5-10 minutes)
    - cert-manager installed automatically
    - Rancher deployed with bootstrap password
-   - **API token created and saved to `~/.kube/.rancher-api-token`**
-3. **Downstream cluster registered using native rancher2 provider** (~2-3 minutes)
-   - Cluster object created in Rancher Manager
-   - Registration credentials auto-extracted
+   - **API token created and saved to `config/.rancher-api-token`**
+3. **Downstream cluster registered via the Rancher API** (~2-3 minutes)
+   - Cluster object created in Rancher Manager (`null_resource.create_*_cluster`)
+   - Registration manifest applied to the nodes (`rancher_downstream_registration` module)
    - **No manual Rancher UI steps required!**
 4. Apps cluster RKE2 installed (~5-10 minutes)
    - Nodes automatically discover Rancher
@@ -297,9 +309,9 @@ Automatically created at:
 
 **Technical Implementation:**
 - Module: `terraform/modules/rancher_cluster/main.tf` (Helm deployments)
-- Provider: `rancher2` (native cluster registration)
+- Registration: Rancher REST API (`curl` in `null_resource`s) + `rancher_downstream_registration` module; `rancher2` provider is configured but not the registration path
 - Script: `deploy-rancher.sh` (creates and persists API token)
-- Token file: `~/.kube/.rancher-api-token` (for provider authentication)
+- Token file: `config/.rancher-api-token` (expires after 90 days — see [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md))
 - IP substitution: `sed 's/127.0.0.1/<real-ip>/g'` in rke2_manager module
 
 **Requirements:**
@@ -315,8 +327,10 @@ terraform output rancher_url
 
 # Open in browser and login:
 # Username: admin
-# Password: <from rancher_password in tfvars>
+# Password: <from rancher_password in tfvars>  (bootstrap; change it after first login)
 ```
+
+After SSO is configured, the login page offers the SAML (Authentik) button; local login stays available under **Log in with Local User**. See [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
 
 ## Disaster Recovery
 
@@ -345,13 +359,13 @@ terraform apply -auto-approve
 
 | File | Purpose |
 |------|---------|
-| `apply.sh` | Deploy with automatic logging (root dir) |
+| `scripts/apply.sh` | Deploy with automatic logging |
 | `terraform/main.tf` | Cluster definitions |
 | `terraform/provider.tf` | Proxmox provider config |
 | `terraform/variables.tf` | Input variables |
 | `terraform/terraform.tfvars` | Environment configuration |
 | `terraform/modules/proxmox_vm/` | VM creation module |
-| `terraform/modules/rke2_cluster/` | RKE2 installation module |
+| `terraform/modules/rke2_manager_cluster/`, `rke2_downstream_cluster/` | RKE2 installation modules |
 
 ## Environment Variables
 
@@ -373,7 +387,8 @@ PROXMOX_VE_INSECURE=true     # Skip TLS verification (dev only)
 
 ## Related Documentation
 
-- [TERRAFORM_VARIABLES.md](TERRAFORM_VARIABLES.md) - Complete variable reference
+- [`terraform/terraform.tfvars.example`](../terraform/terraform.tfvars.example) - Variable reference
+- [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md) - kubectl / Rancher login and break-glass
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
 - [CLOUD_IMAGE_SETUP.md](CLOUD_IMAGE_SETUP.md) - VM template setup
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design and networking

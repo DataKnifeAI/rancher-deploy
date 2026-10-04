@@ -2,6 +2,8 @@
 
 Common issues and solutions when deploying Rancher clusters on Proxmox.
 
+**kubectl / Rancher login problems** (SSO link, `inappropriate ioctl for device`, expired tokens, SAML config): see [CLUSTER_ACCESS_AND_SSO.md § Troubleshooting](CLUSTER_ACCESS_AND_SSO.md#troubleshooting). Current known issues: [OPS_NOTES.md](OPS_NOTES.md#known-issues-2026-10-04).
+
 ## Terraform Issues
 
 ### Issue: "terraform init" fails with provider error
@@ -390,14 +392,14 @@ Failed to enable unit: Unit file rke2-server.service does not exist
 ```
 
 **Root Cause:**
-The RKE2 installer cannot download a release called "latest". Only specific version tags (e.g., v1.34.3+rke2r1) are available as downloadable releases.
+The RKE2 installer cannot download a release called "latest". Only specific version tags (e.g., v1.36.2+rke2r1) are available as downloadable releases.
 
 **Solutions:**
 
 1. **Verify using actual release version:**
    ```hcl
-   # In terraform/main.tf, use specific version:
-   rke2_version = "v1.34.3+rke2r1"  # CORRECT - actual released version
+   # In terraform/terraform.tfvars (variable rke2_version; default in variables.tf):
+   rke2_version = "v1.36.2+rke2r1"  # CORRECT - actual released version
    rke2_version = "latest"          # WRONG - not a downloadable release
    ```
 
@@ -408,24 +410,17 @@ The RKE2 installer cannot download a release called "latest". Only specific vers
    # Or browse: https://github.com/rancher/rke2/tags
    ```
 
-3. **Latest stable version examples:**
-   - v1.35.0+rke2r1 (latest)
-   - v1.34.3+rke2r1 (stable)
-   - v1.33.7+rke2r1 (supported)
-   - v1.32.11+rke2r1 (supported)
+3. **Version pins in use (2026-10):**
+   - v1.36.2+rke2r1 (repo default, all clusters; needs Rancher v2.15+)
+   - v1.35.6+rke2r1 (intermediate step used during the 1.34 → 1.36 upgrade)
 
 4. **Update terraform.tfvars if needed:**
    ```hcl
    # terraform/terraform.tfvars
-   rke2_version = "v1.34.3+rke2r1"
+   rke2_version = "v1.36.2+rke2r1"
    ```
 
-5. **Clean state and redeploy:**
-   ```bash
-   cd terraform
-   rm -f terraform.tfstate*
-   terraform apply -auto-approve
-   ```
+5. **Re-run the apply** (a new pin only affects new nodes; existing nodes follow [UPGRADE_PLAN.md](UPGRADE_PLAN.md)). Do not delete `terraform.tfstate` on a live deployment — only on a throwaway first install that never succeeded.
 
 **Prevention:**
 Always use specific version tags. Check GitHub releases before setting `rke2_version` variable.
@@ -825,9 +820,10 @@ When using RBD-backed storage in Proxmox.
 
 1. **Verify API token is valid:**
    ```bash
-   curl -sk -H "Authorization: Bearer $(cat ~/.kube/.rancher-api-token)" \
+   curl -sk -H "Authorization: Bearer $(cat config/.rancher-api-token)" \
      https://rancher.example.com/v3/clusters
-   # Should return cluster list without error
+   # Should return cluster list without error; 401 = expired (90-day max TTL) —
+   # see RANCHER_API_TOKEN_CREATION.md
    ```
 
 2. **Verify cluster ID is correct:**

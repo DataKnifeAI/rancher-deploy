@@ -1,9 +1,15 @@
 # Rancher Downstream Cluster Management
 
-**Last Updated**: January 4, 2026  
+**Last Updated**: October 4, 2026 (current-state notes; body largely from January 2026)  
 **Status**: ✅ **FULLY AUTOMATED** with Manifest-Based Registration
 
 This guide explains how to automatically register downstream (NPRD Apps) clusters with Rancher Manager using Terraform.
+
+> **Current state (2026-10-04)**
+> - Rancher `v2.15.0`; downstream clusters `nprd-apps` (`c-wnfsj`), `prd-apps` (`c-ps6zm`), `poc-apps` (`c-k7zls`), all RKE2 `v1.36.2+rke2r1`. Same flow applies to all three (examples below say nprd-apps).
+> - Code path: `null_resource.create_<cluster>_cluster` (POST `/v3/clusters`) → cluster ID saved to `config/.<cluster>-cluster-id` → `module.rancher_downstream_registration_<cluster>` (manifest-based). The "API-based / cloud-init system-agent" sketches further down are historical.
+> - Token: `config/.rancher-api-token` (90-day max TTL), but the registration modules use the **hard-coded** path `/home/lee/git/rancher-deploy/config/.rancher-api-token`. The current token is **expired** — refresh it first; see [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md#current-facts-verified-2026-10-04).
+> - `~/.kube/<cluster>.yaml` below are the RKE2 admin kubeconfigs Terraform writes; for interactive access use `kubectl --context <cluster>` ([CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md)).
 
 ## Overview
 
@@ -52,7 +58,7 @@ The manifest provided by `manifestUrl` includes:
 
 # Agent deployment
 - Deployment: "cattle-cluster-agent"
-  - Image: docker.io/rancher/rancher-agent:v2.13.1
+  - Image: docker.io/rancher/rancher-agent:<rancher version, e.g. v2.15.0>
   - Env: CATTLE_SERVER, CATTLE_TOKEN, CATTLE_CA_CHECKSUM
   - Replicas: (distributed across cluster)
 
@@ -87,7 +93,7 @@ clusters = {
 ### 2. Deploy Everything Automatically
 
 ```bash
-cd /home/lee/git/rancher-deploy
+# from the repo root
 ./scripts/apply.sh -auto-approve
 
 # Or manually
@@ -423,11 +429,9 @@ export KUBECONFIG=~/.kube/nprd-apps.yaml
 kubectl get nodes
 # Should show all 3 nodes in Ready state
 
-kubectl get pods -n kube-system | grep system-agent
-# Should show system-agent pod running on all nodes
+kubectl -n cattle-system get pods -l app=cattle-cluster-agent
+# Should show cattle-cluster-agent pods Running
 ```
-
-````
 
 ## Troubleshooting
 
@@ -618,25 +622,8 @@ kubectl logs -n cattle-system -l app=rancher --tail=50 -f
 # Check cluster status
 kubectl get clusters.management.cattle.io -w
 
-# Monitor system-agent registration
-kubectl logs -n cattle-system -l app=rancher-system-agent -f --all-containers
-
-      --etcd --controlplane --worker"
-  ]
-}
-```
-
-### Custom Agent Configuration
-
-Place custom agent config at `/var/lib/rancher/agent` before registration:
-
-```bash
-ssh ubuntu@192.168.1.110
-sudo mkdir -p /var/lib/rancher/agent
-
-# Create custom agent config
-sudo cat > /var/lib/rancher/agent/agent.yaml << 'EOF'
-kind: AgentConfig
+# Monitor the agent on the downstream cluster
+kubectl --kubeconfig ~/.kube/nprd-apps.yaml -n cattle-system logs -l app=cattle-cluster-agent -f
 ```
 
 ## Disable Automatic Registration
@@ -754,5 +741,5 @@ sudo systemctl status rancher-system-agent
 ---
 
 **Status**: ✅ Ready for Production Use  
-**Last Tested**: January 3, 2026  
-**Compatibility**: Rancher v2.13.1+, RKE2 v1.34.3+rke2r1, Proxmox VE 8.0+
+**Last Tested (end-to-end registration)**: January 3, 2026 on Rancher v2.13.1 / RKE2 v1.34.3+rke2r1  
+**Running on**: Rancher v2.15.0, RKE2 v1.36.2+rke2r1 (upgraded in place 2026-08-01; registration not re-run since), Proxmox VE 8.0+
