@@ -143,7 +143,7 @@ data:
   defaultPool: "${default_pool}"
   nfsServer: "${nfs_server}"
   iscsiPortal: "${iscsi_portal}"
-  iscsiIQNBase: "iqn.2000-01.io.truenas"
+  iscsiIQNBase: "iqn.2005-10.org.freenas.ctl"
 ---
 # Controller Deployment
 apiVersion: apps/v1

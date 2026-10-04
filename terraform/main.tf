@@ -2925,17 +2925,6 @@ environment = {
 }
 }
 
-provisioner "local-exec" {
-  when       = destroy
-  on_failure = continue
-  command    = <<-EOT
-      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
-      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
-      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
-      echo "✓ TrueNAS CSI removed"
-    EOT
-}
-
 depends_on = [
   null_resource.merge_kubeconfigs,
   module.rke2_nprd_apps
@@ -2953,6 +2942,31 @@ triggers = {
   template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
   storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
 }
+}
+
+# Removes the driver namespace and StorageClass when TrueNAS CSI is uninstalled
+# from nprd-apps. Kept apart from deploy_truenas_csi_nprd_apps so that replacing the
+# deploy resource (image, template or credential changes) re-runs its
+# idempotent kubectl apply as a rolling update instead of tearing the driver down.
+resource "null_resource" "truenas_csi_cleanup_nprd_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/nprd-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [null_resource.deploy_truenas_csi_nprd_apps]
+
+  triggers = {
+    truenas_csi_storage_class = var.truenas_csi_storage_class_name
+  }
 }
 
 resource "null_resource" "deploy_truenas_csi_prd_apps" {
@@ -3050,17 +3064,6 @@ environment = {
 }
 }
 
-provisioner "local-exec" {
-  when       = destroy
-  on_failure = continue
-  command    = <<-EOT
-      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
-      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
-      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
-      echo "✓ TrueNAS CSI removed"
-    EOT
-}
-
 depends_on = [
   null_resource.merge_kubeconfigs,
   module.rke2_prd_apps
@@ -3078,6 +3081,31 @@ triggers = {
   template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
   storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
 }
+}
+
+# Removes the driver namespace and StorageClass when TrueNAS CSI is uninstalled
+# from prd-apps. Kept apart from deploy_truenas_csi_prd_apps so that replacing the
+# deploy resource (image, template or credential changes) re-runs its
+# idempotent kubectl apply as a rolling update instead of tearing the driver down.
+resource "null_resource" "truenas_csi_cleanup_prd_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/prd-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [null_resource.deploy_truenas_csi_prd_apps]
+
+  triggers = {
+    truenas_csi_storage_class = var.truenas_csi_storage_class_name
+  }
 }
 
 resource "null_resource" "deploy_truenas_csi_poc_apps" {
@@ -3175,17 +3203,6 @@ environment = {
 }
 }
 
-provisioner "local-exec" {
-  when       = destroy
-  on_failure = continue
-  command    = <<-EOT
-      export KUBECONFIG="$HOME/.kube/poc-apps.yaml"
-      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
-      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
-      echo "✓ TrueNAS CSI removed"
-    EOT
-}
-
 depends_on = [
   null_resource.merge_kubeconfigs,
   module.rke2_poc_apps
@@ -3203,6 +3220,31 @@ triggers = {
   template_file                      = filemd5("${path.module}/templates/truenas-csi-driver.yaml.tpl")
   storage_class_params               = "nfs-mapall-empty-0777" # Bump when changing NFS permission params
 }
+}
+
+# Removes the driver namespace and StorageClass when TrueNAS CSI is uninstalled
+# from poc-apps. Kept apart from deploy_truenas_csi_poc_apps so that replacing the
+# deploy resource (image, template or credential changes) re-runs its
+# idempotent kubectl apply as a rolling update instead of tearing the driver down.
+resource "null_resource" "truenas_csi_cleanup_poc_apps" {
+  count = var.install_truenas_csi && var.truenas_csi_host != "" && var.truenas_csi_api_key != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      export KUBECONFIG="$HOME/.kube/poc-apps.yaml"
+      kubectl delete storageclass ${self.triggers.truenas_csi_storage_class} --ignore-not-found 2>/dev/null || true
+      kubectl delete namespace truenas-csi --timeout=2m 2>/dev/null || true
+      echo "✓ TrueNAS CSI removed"
+    EOT
+  }
+
+  depends_on = [null_resource.deploy_truenas_csi_poc_apps]
+
+  triggers = {
+    truenas_csi_storage_class = var.truenas_csi_storage_class_name
+  }
 }
 
 # ============================================================================
