@@ -6,6 +6,7 @@ Short operational truths that do not belong in the README.
 
 - Rancher `v2.15.0` at `https://rancher.dataknife.net`; auth providers **local** + **Keycloak (SAML)** pointed at Authentik (`https://auth.dataknife.net`, on prd-apps). Full guide: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
 - kubectl: `./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass`, then `kubectl --context <local|nprd-apps|prd-apps|poc-apps>`. Kubeconfigs embed no tokens; `rancher token` caches one (≤ 90 days) in `~/.rancher/cli2.json`.
+- SAML site access is **`required`** by design: only principals in `allowedPrincipalIds` may log in via SSO (currently `keycloak_user://4` = akadmin). Allow people via an Authentik group, `keycloak_group://<exact group name>`; single users are `keycloak_user://<Authentik numeric pk>`, not the username. Local logins are unaffected. See [CLUSTER_ACCESS_AND_SSO.md § Site access](CLUSTER_ACCESS_AND_SSO.md#site-access-required).
 - Break-glass: `<cluster>-local` contexts (Rancher local user), UI **Log in with Local User**, RKE2 admin kubeconfigs `~/.kube/<cluster>.yaml` (independent of Rancher/Authentik), Authentik recovery key.
 - Global settings: `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600`, `auth-token-max-ttl-minutes=129600` (default) — so **every** Rancher API token, including Terraform's `ttl: 0` one, expires in 90 days.
 - Unattended jobs: use a dedicated scoped API token or RKE2 admin kubeconfigs, never a personal SSO token cache.

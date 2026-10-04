@@ -106,15 +106,60 @@ Configured under **Users & Authentication → Auth Provider → Keycloak (SAML)*
 | ACS URL | `https://rancher.dataknife.net/v1-saml/keycloak/saml/acs` |
 | IdP metadata | Downloaded from `https://auth.dataknife.net/api/v3/providers/saml/1/metadata/?download` (Rancher stores the XML) |
 | SP certificate / key | 10-year self-signed (`CN=rancher.dataknife.net`, expires 2036-10-01). Kept **out of git** at `~/.config/rancher-saml/sp.crt` / `sp.key` (with `authentik-idp-metadata.xml`). Rancher stores the key in Secret `cattle-global-data/keycloakconfig-spkey` |
-| Site access | See below |
+| Site access | **`required`** (intended) — allowed principals: `keycloak_user://4` (akadmin) |
 
-**Site access.** The intended mode is `unrestricted` (any Authentik user can log in and gets Rancher's new-user default global role). On 2026-10-04 the live authconfig reported `accessMode: required` with only `keycloak_user://4` (akadmin) allowed — i.e. only akadmin (plus local users) can log in via SSO. Check and change it in the UI (**Site Access**) or inspect with:
+### Site access (`required`)
+
+The keycloak SAML provider is deliberately set to **`required`** ("Restrict access to only the authorized users & groups"): having an Authentik account is **not** enough to get into Rancher. At SSO login Rancher allows the user only if their user principal, or one of the group principals in the SAML assertion, is in `allowedPrincipalIds`. Everyone else is rejected before a Rancher user is created. As of 2026-10-04 the only allowed principal is akadmin.
+
+| Mode | Who can log in via SSO |
+|------|------------------------|
+| `required` (**ours**) | Only principals in `allowedPrincipalIds` (users, or members of listed groups) |
+| `restricted` | Allowed principals **plus** anyone already a member of a cluster/project |
+| `unrestricted` | Any Authentik user who can reach the `rancher` application (gets the new-user default global role) |
+
+Site access only governs SAML logins. The **local** provider (`admin`, the `<cluster>-local` contexts, **Log in with Local User**) is not subject to it (in Rancher v2.15 the access check only runs in the SAML login path), so break-glass keeps working.
+
+Check the current setting (keep this in your verification routine):
 
 ```bash
 kubectl --context local get authconfigs.management.cattle.io keycloak -o jsonpath='{.accessMode} {.allowedPrincipalIds}{"\n"}'
+# required ["keycloak_user://4"]
 ```
 
-`restricted` = allowed principals plus anyone who is a member of a cluster/project; `required` = allowed principals only.
+**Principal ID format** (verified from the live config and Rancher's user attributes):
+
+| Kind | Format | Example | Where the value comes from |
+|------|--------|---------|----------------------------|
+| User | `keycloak_user://<uid>` | `keycloak_user://4` (akadmin) | The SAML `uid` attribute. Authentik's default mapping returns `request.user.pk`, the **numeric user ID**, not the username |
+| Group | `keycloak_group://<group name>` | `keycloak_group://authentik Admins` | The Authentik group **name**, exactly (case and spaces included), sent in the `Group` attribute |
+
+**Allowing more people.** Prefer **groups**: create an Authentik group (e.g. `rancher-users`), add people to it in Authentik, and allow `keycloak_group://rancher-users` once. Group membership is read from the SAML assertion at each login, so new members get in without any Rancher change and without having logged in before. Then grant cluster/project roles to the same group principal.
+
+- **UI:** **Users & Authentication → Auth Provider → Keycloak (SAML)** → **Edit Config** → Site Access ("Authorized users & groups") → add the principal → Save. The edit form needs the SP private key again (**Read from a file** → `~/.config/rancher-saml/sp.key`); see Gotchas.
+- **kubectl** (edits the authconfig directly and leaves the SP key alone; add `--dry-run=server` first to preview):
+
+  ```bash
+  # Allow an Authentik group
+  kubectl --context local patch authconfigs.management.cattle.io keycloak --type=json \
+    -p '[{"op":"add","path":"/allowedPrincipalIds/-","value":"keycloak_group://rancher-users"}]'
+  # Allow a single user by Authentik numeric user ID
+  kubectl --context local patch authconfigs.management.cattle.io keycloak --type=json \
+    -p '[{"op":"add","path":"/allowedPrincipalIds/-","value":"keycloak_user://<pk>"}]'
+  ```
+
+- **v3 API:** `GET/PUT https://rancher.dataknife.net/v3/keyCloakConfigs/keycloak`, field `allowedPrincipalIds`. The GET returns `spKey` empty, so a naive GET → edit → PUT has the same missing-key problem as the UI form. Prefer the UI or `kubectl patch`.
+
+Find an Authentik user's numeric ID (`pk`) in the Authentik admin UI (**Directory → Users →** user; the ID is in the URL/details), or:
+
+```bash
+kubectl --context prd-apps -n authentik exec deploy/authentik-server -c server -- \
+  ak shell -c "from authentik.core.models import User; print(User.objects.get(username='alice').pk)"
+```
+
+**The "can't search" caveat.** SAML has no directory search, so Rancher can't validate principals. Its picker simply echoes what you type back as both `keycloak_user://<text>` and `keycloak_group://<text>`. Typing a **username** (e.g. `alice`) yields `keycloak_user://alice`, which never matches, because the uid is the numeric pk. Pick the **group** entry with the exact group name, or the **user** entry with the exact pk. Rancher only shows a friendly name for a user after they've logged in once. In `required` mode they can't log in until allowed, which is another reason to allow via a group (or by pk via `kubectl patch`) first.
+
+Removing a principal blocks new logins. Existing sessions and tokens are re-checked when Rancher refreshes the user's groups; delete the user's tokens to cut access immediately.
 
 **Admin linking.** The Rancher local `admin` (`user-f4528`) carries both `local://user-f4528` and `keycloak_user://4`, so logging in as Authentik `akadmin` *is* the Rancher admin. The link was created when the admin clicked **Enable** in the UI.
 
@@ -123,7 +168,7 @@ kubectl --context local get authconfigs.management.cattle.io keycloak -o jsonpat
 - After saving, the form shows the SP **private key empty**. When editing or re-enabling, supply it again (**Read from a file** → `~/.config/rancher-saml/sp.key`) or the save fails.
 - **Enable** must be clicked in a browser: the test-and-enable state lives in browser cookies, so a redirect URL generated with `curl` cannot be completed.
 - Allow pop-ups for `rancher.dataknife.net` (the SAML test opens one).
-- SAML has no user search API: a user or group shows up in Rancher's member pickers only after someone with that principal has logged in once. Have new users log in, then grant cluster/project roles (with `required`, add them or their Authentik group to Site Access first).
+- SAML has no search API: Rancher's member and Site Access pickers accept whatever you type, without validation. Use the exact Authentik group name or numeric user ID (see [Site access](#site-access-required)).
 
 **Regenerating the SP certificate** (only if lost or near expiry; then re-upload cert + key in Rancher and re-enable):
 
@@ -281,8 +326,9 @@ As of 2026-10-04 the poc-apps copy had **expired 2026-04-18**: the poc-apps entr
 | CLI asks which auth provider to use | Context written without `--auth-provider` | Re-run the setup script with `--auth-provider keyCloakProvider --break-glass` |
 | `no working Rancher API token found` (setup script) | No token source for the one-time lookup | `export RANCHER_TOKEN=...` (short-lived UI key) and re-run |
 | Names resolve to old IPs after DNS changes | Stale local resolver cache | `resolvectl flush-caches` |
-| SSO login rejected for a valid Authentik user | Site access is `required`/`restricted` and the user isn't allowed | Add the user/group in **Site Access**, or switch to `unrestricted` |
-| Can't find a user/group when granting roles | SAML has no search; principal unknown until first login | Have them log in once, then assign |
+| SSO login rejected for a valid Authentik user | Site access is `required` (by design) and neither the user nor any of their groups is allowed | Add `keycloak_group://<group>` (preferred) or `keycloak_user://<pk>` to `allowedPrincipalIds` ([Site access](#site-access-required)) |
+| Allowed a user but login is still rejected | Principal added by username (`keycloak_user://alice`) instead of numeric pk, or group name differs in case/spacing | Use the Authentik `pk` / exact group name; check with the verification command |
+| Can't find a user/group when granting roles | SAML has no search; picker echoes typed text | Type the exact group name or pk and pick the matching group/user entry |
 | SAML save fails / provider disabled after editing | SP private key not re-supplied | **Read from a file** → `sp.key`, save, re-enable in a browser |
 | SAML errors after an Authentik cert change | Rancher still has old IdP metadata | Re-download metadata into Rancher's SAML config |
 | Authentik login page down | prd-apps / ingress / Authentik pods unhealthy | Local login or `-local` contexts; `kubectl --context prd-apps-local -n authentik get pods`; `logs deploy/authentik-server` |
