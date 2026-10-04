@@ -76,6 +76,9 @@ Utility and maintenance scripts:
 ./scripts/setup-rancher-kubeconfig.sh --install-cli --merge
 kubectl --context prd-apps get nodes   # first call prompts for Rancher login, then cached
 
+# Same, but log in via Authentik SAML (prints a link) and add <cluster>-local break-glass contexts
+./scripts/setup-rancher-kubeconfig.sh --merge --auth-provider keyCloakProvider --break-glass
+
 # Install system agent on downstream nodes
 ./scripts/install-system-agent.sh \
   --rancher-url https://rancher.example.com \

@@ -11,6 +11,10 @@
 #   --merge                Merge into ~/.kube/config, replacing same-named entries (backup kept)
 #   --disable-ui-tokens    Set Rancher's kubeconfig-generate-token=false so UI downloads use the CLI too
 #   --install-cli          Install the rancher CLI into ~/.local/bin if missing
+#   --auth-provider NAME   Rancher auth provider for login, e.g. keyCloakProvider (SAML, prints a
+#                          login link) or localProvider (password). Required once more than one
+#                          provider is enabled, otherwise `rancher token` asks interactively.
+#   --break-glass          Also write <cluster>-local contexts that always use localProvider
 #
 # API access (used only to look up your user id and the cluster list) comes from, in order:
 #   $RANCHER_TOKEN, rancher_api_token in terraform/terraform.tfvars, an existing token in
@@ -31,9 +35,11 @@ OUTPUT="${HOME}/.kube/rancher.yaml"
 MERGE=0
 DISABLE_UI_TOKENS=0
 INSTALL_CLI=0
+AUTH_PROVIDER=""
+BREAK_GLASS=0
 
 usage() {
-  sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,21p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -43,6 +49,8 @@ while [ $# -gt 0 ]; do
     --merge) MERGE=1; shift ;;
     --disable-ui-tokens) DISABLE_UI_TOKENS=1; shift ;;
     --install-cli) INSTALL_CLI=1; shift ;;
+    --auth-provider) AUTH_PROVIDER="$2"; shift 2 ;;
+    --break-glass) BREAK_GLASS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo -e "${RED}Unknown option: $1${NC}" >&2; usage; exit 1 ;;
   esac
@@ -163,19 +171,30 @@ EXEC_ARGS=(--exec-arg=token "--exec-arg=--server=${RANCHER_HOST}" "--exec-arg=--
 
 kc() { kubectl --kubeconfig "$TMP_OUT" config "$@" >/dev/null; }
 
+# add_context <context/user name> <cluster name> <auth provider or empty>
+add_context() {
+  local ctx="$1" cluster="$2" provider="$3" ns
+  local args=("${EXEC_ARGS[@]}")
+  [ -n "$provider" ] && args+=("--exec-arg=--auth-provider=${provider}")
+  kc set-credentials "$ctx" \
+    --exec-api-version=client.authentication.k8s.io/v1beta1 \
+    --exec-command=rancher \
+    --exec-interactive-mode=IfAvailable \
+    "${args[@]}"
+  ns=$(jq -r --arg n "$ctx" '.contexts[]? | select(.name == $n) | .context.namespace // empty' <<<"$EXISTING_JSON")
+  kc set-context "$ctx" --cluster="$cluster" --user="$ctx" ${ns:+--namespace="$ns"}
+  echo "  + ${ctx}${provider:+ [${provider}]}${ns:+ namespace=${ns}}"
+}
+
 while read -r id name; do
   kc set-cluster "$name" --server="${RANCHER_URL}/k8s/clusters/${id}"
   if [ -n "$CA_FILE" ]; then
     kc set-cluster "$name" --certificate-authority="$CA_FILE" --embed-certs=true
   fi
-  kc set-credentials "$name" \
-    --exec-api-version=client.authentication.k8s.io/v1beta1 \
-    --exec-command=rancher \
-    --exec-interactive-mode=IfAvailable \
-    "${EXEC_ARGS[@]}"
-  ns=$(jq -r --arg n "$name" '.contexts[]? | select(.name == $n) | .context.namespace // empty' <<<"$EXISTING_JSON")
-  kc set-context "$name" --cluster="$name" --user="$name" ${ns:+--namespace="$ns"}
-  echo "  + ${name} (${id})${ns:+ namespace=${ns}}"
+  add_context "$name" "$name" "$AUTH_PROVIDER"
+  if [ "$BREAK_GLASS" -eq 1 ]; then
+    add_context "${name}-local" "$name" localProvider
+  fi
 done <<<"$CLUSTERS"
 
 install -m 0600 "$TMP_OUT" "$OUTPUT"
@@ -200,5 +219,6 @@ fi
 
 echo ""
 echo -e "${YELLOW}Next:${NC} run any kubectl command (e.g. kubectl --context <cluster> get nodes)."
-echo "  The first call prompts for your Rancher login; the token is cached in ~/.rancher/cli2.json"
+echo "  The first call asks you to log in (a link for SAML providers, a password prompt for local"
+echo "  users); the token is cached in ~/.rancher/cli2.json"
 echo "  and shared by all clusters. Clear it with: rancher token delete all"
