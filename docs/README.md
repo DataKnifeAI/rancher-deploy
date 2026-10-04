@@ -24,6 +24,7 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 | [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) | Rancher API tokens (Terraform automation) |
 | [OPS_NOTES.md](OPS_NOTES.md) | Short operational truths |
 | [UPGRADE_PLAN.md](UPGRADE_PLAN.md) | Poc-first Rancher / RKE2 / cert-manager upgrade runbook |
+| [RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md) | RKE2 leaf certificate rotation runbook (expiry 2027-01-08 / -15) |
 
 ## Storage
 

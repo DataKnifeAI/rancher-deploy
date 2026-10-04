@@ -13,7 +13,7 @@ Concrete day-2 upgrade path from **live** pins to **PR #15** targets. Review thi
 
 Related: [OPS_NOTES.md](OPS_NOTES.md) (pin summary), [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md), PRs [#14](https://github.com/DataKnifeAI/rancher-deploy/pull/14) / [#15](https://github.com/DataKnifeAI/rancher-deploy/pull/15).
 
-**Access for the next window (2026-10-04):** `kubectl --context <cluster>` now logs in through Rancher SSO, and those contexts go through cattle-cluster-agent just like the old proxied kubeconfigs. For drains and wait loops use RKE2 admin kubeconfigs (`~/.kube/<cluster>.yaml` pulled from `/etc/rancher/rke2/rke2.yaml`; check/re-pull steps in [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass)). Log in once before starting so the token doesn't expire mid-run.
+**Access for the next window (2026-10-04):** `kubectl --context <cluster>` now logs in through Rancher SSO, and those contexts go through cattle-cluster-agent just like the old proxied kubeconfigs. For drains and wait loops use the break-glass RKE2 admin kubeconfigs `~/.kube/<cluster>-rke2.yaml` (pulled from `/etc/rancher/rke2/rke2.yaml` on a server node, server rewritten to `https://<cluster>.dataknife.net:6443`; fetch/re-fetch steps in [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass)). `~/.kube/<cluster>.yaml` is **not** reliably an RKE2 admin kubeconfig any more (on the main workstation those files are Rancher-proxied and `rancher-manager.yaml` is expired). Log in once before starting so the token doesn't expire mid-run.
 
 ---
 
@@ -104,7 +104,7 @@ Single Terraform var `cert_manager_version` feeds manager deploy + all apps modu
 |------|--------|------|
 | A.1 | Snapshot / backup etcd (or full VM snapshots) for **manager** control-plane VMs | [ ] |
 | A.2 | Snapshot / backup **poc-apps** (canary) control-plane VMs | [ ] |
-| A.3 | Export kubeconfigs: `~/.kube/rancher-manager.yaml`, `poc-apps.yaml`, `nprd-apps.yaml`, `prd-apps.yaml` | [ ] |
+| A.3 | Check the break-glass kubeconfigs work (`kubectl --kubeconfig ~/.kube/<cluster>-rke2.yaml get nodes` for `rancher-manager`, `poc-apps`, `nprd-apps`, `prd-apps`); re-fetch any that fail ([procedure](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass)) | [ ] |
 | A.4 | Record live versions (paste into change ticket) | [ ] |
 | A.5 | Confirm SSH deploy key works to manager + poc nodes (see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md)) | [ ] |
 | A.6 | Freeze non-essential applies / app deploys on poc during canary window | [ ] |
@@ -131,7 +131,7 @@ done
 Prefer Helm on manager (avoids dragging apps modules):
 
 ```bash
-export KUBECONFIG=~/.kube/rancher-manager.yaml   # or --context local
+export KUBECONFIG=~/.kube/rancher-manager-rke2.yaml   # or --context local
 helm repo update
 helm upgrade cert-manager jetstack/cert-manager \
   --namespace cert-manager \
@@ -172,7 +172,7 @@ For each row: set **only** that `rancher_version` in tfvars (leave `rke2_version
 Example Helm (if not using Terraform for a step):
 
 ```bash
-export KUBECONFIG=~/.kube/rancher-manager.yaml
+export KUBECONFIG=~/.kube/rancher-manager-rke2.yaml
 helm repo update
 # Prefer stable when available; else rancher-latest for 2.15.0 only.
 # From 2.14 onward use --reset-then-reuse-values (not plain --reuse-values)
@@ -201,7 +201,7 @@ helm upgrade rancher rancher-stable/rancher \
 Canary Helm on poc only:
 
 ```bash
-export KUBECONFIG=~/.kube/poc-apps.yaml
+export KUBECONFIG=~/.kube/poc-apps-rke2.yaml
 helm upgrade cert-manager jetstack/cert-manager \
   --namespace cert-manager \
   --set installCRDs=true \
@@ -389,7 +389,7 @@ enable_os_patch      = false
 
 **Promote learnings (add to next window):**
 
-1. **Direct kubeconfig for drains:** Rancher-proxied kubeconfigs (`~/.kube/*-apps.yaml`) flap when cattle-cluster-agent is drained. Prefer admin kubeconfig from `/etc/rancher/rke2/rke2.yaml` rewritten to a CP IP for drain/wait loops.
+1. **Direct kubeconfig for drains:** Rancher-proxied kubeconfigs (`~/.kube/*-apps.yaml`) flap when cattle-cluster-agent is drained. Prefer the RKE2 admin kubeconfigs `~/.kube/<cluster>-rke2.yaml` (from `/etc/rancher/rke2/rke2.yaml`, rewritten to `<cluster>.dataknife.net:6443`) for drain/wait loops.
 2. **STRICT_VERIFY / agent CA:** After manager RKE2 roll, prd `cattle-cluster-agent` CrashLoopBackOff with `STRICT_VERIFY=true` and missing `/etc/kubernetes/ssl/certs/serverca`. Patched deploy env `STRICT_VERIFY=false` (nprd already false). `apply-system-agent-upgrader-*` Error pods from same CA strict path are noisy but non-blocking once cluster-agent is up.
 3. **OpenSearch kube-rbac-proxy:** Patched all apps clusters to `quay.io/brancz/kube-rbac-proxy:v0.15.0` (gcr image not found). Helm release still `opensearch-operator-2.8.0` — re-apply chart values or keep the set-image patch across helm upgrades.
 4. **PDB blockers:** nprd Harbor postgres PDBs (`minAvailable: 1`) blocked drains; temporarily `minAvailable: 0` then restore. prd: `coder-postgres-primary` / `high-command-postgres-primary` same pattern. Prefer `--force --disable-eviction` with short timeout when PDB softens are in place.

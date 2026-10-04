@@ -17,7 +17,7 @@ rancher token delete all                     # forget cached tokens (forces a fr
 - First `kubectl` call after the cache is empty prints `Login to Rancher Server at https://rancher.dataknife.net/dashboard/auth/login?cli=true&requestId=...`. Open it, finish the Authentik login, and the CLI picks up the token by polling — no TTY needed after the click.
 - One login covers **all** clusters (the cache entry is not cluster-scoped) and lasts up to 90 days.
 - Rancher UI: <https://rancher.dataknife.net> → the SAML button (provider is named **Keycloak**, it is Authentik behind it). Fallback: **Log in with Local User** (`admin`).
-- Use `--context` (or `kubectx`) against `~/.kube/config`. Do not `export KUBECONFIG=~/.kube/<cluster>.yaml` for daily work — those files are the Terraform/break-glass kubeconfigs (see [Fallback](#fallback-and-break-glass)).
+- Use `--context` (or `kubectx`) against `~/.kube/config`. Do not `export KUBECONFIG=~/.kube/<cluster>.yaml` or `~/.kube/<cluster>-rke2.yaml` for daily work — those are Terraform-written and break-glass (RKE2 admin) kubeconfigs (see [Fallback](#fallback-and-break-glass)).
 
 ## Architecture
 
@@ -203,7 +203,7 @@ kubectl --context prd-apps -n authentik exec deploy/authentik-server -- ak creat
 kubectl --context prd-apps -n authentik exec -it deploy/authentik-server -- ak changepassword akadmin
 ```
 
-If SSO is unavailable, run these with `--context prd-apps-local` or `--kubeconfig ~/.kube/prd-apps.yaml` (RKE2 admin).
+If SSO is unavailable, run these with `--context prd-apps-local` or `--kubeconfig ~/.kube/prd-apps-rke2.yaml` (RKE2 admin).
 
 **SAML provider for Rancher**
 
@@ -243,27 +243,56 @@ Use the first layer that works:
 |---|------|------------|-----|
 | 1 | Rancher UI local login | Rancher | **Log in with Local User** → `admin` |
 | 2 | `<cluster>-local` kubectl contexts | Rancher | `kubectl --context prd-apps-local get nodes`; password prompt (needs a TTY) |
-| 3 | RKE2 admin kubeconfigs | SSH or existing files only | `kubectl --kubeconfig ~/.kube/prd-apps.yaml get nodes` |
+| 3 | RKE2 admin kubeconfigs | SSH or existing files only | `kubectl --kubeconfig ~/.kube/prd-apps-rke2.yaml get nodes` |
 | 4 | Authentik recovery key | prd-apps API (any path above) | `ak create_recovery_key` (see [Authentik](#authentik)) |
 
-**RKE2 admin kubeconfigs (layer 3).** Terraform (`get_kubeconfig` in the `rke2_*_cluster` modules) copies `/etc/rancher/rke2/rke2.yaml` over SSH to `~/.kube/rancher-manager.yaml`, `nprd-apps.yaml`, `prd-apps.yaml`, `poc-apps.yaml`, rewritten to `<cluster>_cluster_hostname:6443`, and `merge_kubeconfigs` merges them into `~/.kube/config`. They are `system:masters` client certs: independent of Rancher and Authentik, valid about a year, and **cluster-admin** — keep them for break-glass, drains during upgrades, and automation only.
+**RKE2 admin kubeconfigs (layer 3).** `~/.kube/<cluster>-rke2.yaml` (`rancher-manager`, `nprd-apps`, `prd-apps`, `poc-apps`) are copies of `/etc/rancher/rke2/rke2.yaml` from a server node: `system:masters` client certs talking straight to the apiserver on `:6443`. They are independent of Rancher and Authentik, **cluster-admin**, and expire with the RKE2 leaf certs (about a year; see the [calendar](#certificate-and-expiry-calendar)) — keep them for break-glass, drains during upgrades, and infra automation only. They are deliberately **not** merged into `~/.kube/config`.
 
-These paths are easy to overwrite with UI-downloaded Rancher kubeconfigs (that happened on the main workstation). Check, and re-pull if the server is `rancher.dataknife.net/k8s/clusters/...`:
+| File | Cluster / user / context | Server | Client cert expires |
+|------|--------------------------|--------|---------------------|
+| `~/.kube/rancher-manager-rke2.yaml` | `rancher-manager-rke2` | `https://manager.dataknife.net:6443` | 2027-01-08 |
+| `~/.kube/nprd-apps-rke2.yaml` | `nprd-apps-rke2` | `https://nprd-apps.dataknife.net:6443` | 2027-01-08 |
+| `~/.kube/prd-apps-rke2.yaml` | `prd-apps-rke2` | `https://prd-apps.dataknife.net:6443` | 2027-01-08 |
+| `~/.kube/poc-apps-rke2.yaml` | `poc-apps-rke2` | `https://poc-apps.dataknife.net:6443` | 2027-09-19 (pulled from poc-apps-1, already renewed) |
+
+The `<cluster>.dataknife.net` names are round-robin DNS over the three control-plane nodes and are in every node's apiserver cert SANs (`tls-san`), so the files survive the loss of one server. There is no control-plane VIP: kube-vip runs with `cp_enable=false` (Service VIPs only). If DNS is down, point `server` at a control-plane IP (each node's own IP is in its SANs) — that is a single-node dependency.
+
+**Fetch / re-fetch** (first setup, after an RKE2 cert rotation, or if a file stops working):
+
+```bash
+# CLUSTER / HOST / NODE: rancher-manager manager.dataknife.net 192.168.14.100
+#                        nprd-apps nprd-apps.dataknife.net 192.168.14.110
+#                        prd-apps  prd-apps.dataknife.net  192.168.14.120
+#                        poc-apps  poc-apps.dataknife.net  192.168.14.130
+CLUSTER=prd-apps HOST=prd-apps.dataknife.net NODE=192.168.14.120
+OUT=~/.kube/$CLUSTER-rke2.yaml
+(umask 077
+ ssh -i .keys/id_rsa ubuntu@"$NODE" 'sudo cat /etc/rancher/rke2/rke2.yaml' \
+   | sed -e "s#https://127.0.0.1:6443#https://$HOST:6443#" \
+         -e "s#^\(\s*\)\(name\|cluster\|user\): default\$#\1\2: $CLUSTER-rke2#" \
+         -e "s#^- name: default\$#- name: $CLUSTER-rke2#" \
+         -e "s#^current-context: default\$#current-context: $CLUSTER-rke2#" > "$OUT")
+chmod 600 "$OUT"
+kubectl --kubeconfig "$OUT" get nodes
+# Check the endpoint is in the SANs and when the client cert expires
+echo | openssl s_client -connect "$HOST:6443" 2>/dev/null | openssl x509 -noout -ext subjectAltName -enddate
+kubectl --kubeconfig "$OUT" config view --raw -o jsonpath='{.users[0].user.client-certificate-data}' \
+  | base64 -d | openssl x509 -noout -enddate
+```
+
+After re-fetching, rebuild the gitops-core `cert-sync-kubeconfig` Secret from the same files (`gitops-core/scripts/create-cert-sync-kubeconfig-secret.sh`, which reads `~/.kube/<cluster>-rke2.yaml`).
+
+**`~/.kube/<cluster>.yaml` are not break-glass any more.** Terraform (`get_kubeconfig` in the `rke2_*_cluster` modules) writes RKE2 admin kubeconfigs to `~/.kube/rancher-manager.yaml`, `nprd-apps.yaml`, `prd-apps.yaml`, `poc-apps.yaml` and some add-on steps read those paths, but on the main workstation they were overwritten with Rancher-proxied kubeconfigs (`server: https://rancher.dataknife.net/k8s/clusters/...`; `rancher-manager.yaml` holds an expired token). A `terraform apply` that re-runs `get_kubeconfig` will overwrite them again. Check what a file is with:
 
 ```bash
 for f in rancher-manager nprd-apps prd-apps poc-apps; do
-  printf '%-16s %s\n' "$f" "$(kubectl --kubeconfig ~/.kube/$f.yaml config view -o jsonpath='{.clusters[0].cluster.server}')"
+  for s in "" -rke2; do
+    printf '%-22s %s\n' "$f$s" "$(kubectl --kubeconfig ~/.kube/$f$s.yaml config view -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null)"
+  done
 done
-
-# Re-pull one cluster (same rewrite Terraform does); node = any server of that cluster
-CLUSTER=prd-apps HOST=prd-apps.dataknife.net NODE=<prd-apps-1 IP>
-ssh -i .keys/id_rsa ubuntu@"$NODE" 'sudo cat /etc/rancher/rke2/rke2.yaml' \
-  | sed "s/127.0.0.1/$HOST/; s/: default\$/: $CLUSTER/" > ~/.kube/$CLUSTER.yaml
-chmod 600 ~/.kube/$CLUSTER.yaml
-kubectl --kubeconfig ~/.kube/$CLUSTER.yaml get nodes
 ```
 
-Terraform add-on steps also read `~/.kube/<cluster>.yaml`, so leave those paths holding RKE2 admin kubeconfigs. For the manager use `CLUSTER=rancher-manager HOST=manager.dataknife.net`. If SSH is broken too, see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
+If SSH is broken too, see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
 
 ## Automation
 
@@ -300,7 +329,8 @@ The script logs in through the local provider, so it keeps working with SAML ena
 | `rancher.dataknife.net` (`cattle-system/tls-rancher-ingress`, cert-manager, LE) | 2026-11-15 | Auto-renews (~2026-10-16) | Rancher UI/API TLS errors; CLI login fails |
 | Authentik SAML signing cert (`authentik Self-signed Certificate`) | **2027-10-04** | Manual: create a new cert in Authentik, set it on the `Rancher` provider, re-download metadata, paste it into Rancher's SAML config (re-supply the SP key) and re-enable | **All SSO logins fail** |
 | Rancher SP cert (`~/.config/rancher-saml/sp.crt`) | 2036-10-01 | Regenerate (above) and re-upload | SSO logins fail |
-| RKE2 admin client certs (`system:admin`) used by `cert-sync` | 2027-01-08 | Re-pull `rke2.yaml` after RKE2 rotates certs and refresh the `cert-sync-kubeconfig` Secret (gitops-core) | `cert-sync` stops updating downstream wildcard copies |
+| RKE2 leaf certs (apiserver `:6443` serving, `client-admin`, `client-kube-apiserver`, `auth-proxy`, etcd, controller-manager, scheduler, supervisor) on control-plane nodes | **2027-01-08** (manager, nprd, prd); **2027-01-15** (poc-apps-2/-3; poc-apps-1 already renewed to 2027-09-19) | Not automatic unless rke2-server restarts within 120 days of expiry. Planned rolling renewal: [RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md) | Apiservers stop serving / components can't authenticate — cluster down |
+| RKE2 admin client certs (`system:admin`) in `~/.kube/<cluster>-rke2.yaml` and the gitops-core `cert-sync-kubeconfig` Secret | 2027-01-08 (poc: 2027-09-19) | Re-fetch `rke2.yaml` after each RKE2 rotation ([fetch](#fallback-and-break-glass)) and re-run `gitops-core/scripts/create-cert-sync-kubeconfig-secret.sh` | Break-glass access fails; the `cert-sync` Job fails (it now exits non-zero) and downstream wildcard copies go stale |
 | Rancher API / kubeconfig tokens | ≤ 90 days from issue | Re-login (humans) / recreate (automation, `config/.rancher-api-token`) | 401s; exec plugin asks for login |
 
 Spot checks:
@@ -312,7 +342,9 @@ kubectl --context poc-apps -n kube-system get secret wildcard-dataknife-net-tls 
   -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -enddate
 ```
 
-As of 2026-10-04 the poc-apps copy had **expired 2026-04-18**: the poc-apps entry in `cert-sync-kubeconfig` uses a Rancher-proxy URL with a deleted kubeconfig token, and the job's `alpine/k8s:1.29.4` image fails x509 verification against `rancher.dataknife.net` (likely an outdated CA bundle for the newer Let's Encrypt chain). nprd/prd/manager entries use RKE2 client certs and are current. Fix in gitops-core (switch poc-apps to an RKE2 admin kubeconfig entry).
+Until 2026-10-04 the poc-apps copy had been **expired since 2026-04-18**: the poc-apps entry in `cert-sync-kubeconfig` was a Rancher-proxy URL with a token and an old pinned dynamiclistener CA (`x509: certificate signed by unknown authority`), and the script swallowed the error and still reported success. Fixed in gitops-core ([#6](https://github.com/DataKnifeAI/gitops-core/pull/6)): all four entries are now RKE2 admin client certs against `:6443`, built from `~/.kube/<cluster>-rke2.yaml`, and the Job exits non-zero if any cluster fails. Check the latest run with `kubectl --context local -n cert-manager get jobs -l purpose=cert-sync`.
+
+The `wildcard-dataknife-ai-tls` copies (`cert-manager` on all four clusters, plus `high-command` on prd-apps) expired 2026-04-17 and are no longer renewed (dataknife.ai automation was removed from gitops-core). Nothing serves them: the prd-apps `high-command-gateway` uses its own cert-manager cert `high-command-gateway-https-dataknife-ai`. Only an unused ReferenceGrant `cert-manager/allow-cert-manager-secrets` on prd-apps (from the high-command repo) still names the secret.
 
 ## Troubleshooting
 
@@ -336,6 +368,7 @@ As of 2026-10-04 the poc-apps copy had **expired 2026-04-18**: the poc-apps entr
 ## Related
 
 - [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md) — deploy keys, SSH recovery via `kubectl debug`
+- [RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md) — RKE2 leaf certificate rotation runbook
 - [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md) — Terraform automation token
 - [RANCHER_DOWNSTREAM_MANAGEMENT.md](RANCHER_DOWNSTREAM_MANAGEMENT.md) — downstream registration
 - [OPS_NOTES.md](OPS_NOTES.md) — short operational truths and known issues
