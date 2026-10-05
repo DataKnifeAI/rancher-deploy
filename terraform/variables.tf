@@ -92,7 +92,7 @@ variable "vm_id_start_poc_apps" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.19.2"
+  default     = "v1.21.2"
 }
 
 variable "ubuntu_cloud_image_url" {
