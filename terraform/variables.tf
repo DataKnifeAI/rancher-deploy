@@ -55,13 +55,13 @@ variable "clusters" {
     large_worker_memory_mb    = optional(number, null)
     large_worker_disk_size_gb = optional(number, null)
     large_worker_proxmox_node = optional(string, null) # Override node for large workers (e.g. after migrate)
-    domain         = string
-    ip_subnet      = string
-    ip_start_octet = number # Starting IP octet (e.g., 100 for 192.168.1.100)
-    gateway        = string
-    dns_servers    = list(string)
-    storage        = string
-    vlan_id        = number # VLAN ID for network interface
+    domain                    = string
+    ip_subnet                 = string
+    ip_start_octet            = number # Starting IP octet (e.g., 100 for 192.168.1.100)
+    gateway                   = string
+    dns_servers               = list(string)
+    storage                   = string
+    vlan_id                   = number # VLAN ID for network interface
   }))
 }
 
@@ -378,15 +378,15 @@ variable "install_envoy_gateway" {
 }
 
 variable "gateway_api_version" {
-  description = "Gateway API CRDs version (deprecated - Envoy Gateway install.yaml includes CRDs automatically). Kept for compatibility but not used."
+  description = "Gateway API CRD bundle version shipped by envoy_gateway_version's install.yaml (checked after apply, not installed separately)"
   type        = string
-  default     = "v1.1.0"
+  default     = "v1.6.1"
 }
 
 variable "envoy_gateway_version" {
-  description = "Envoy Gateway Helm chart version"
+  description = "Envoy Gateway release (install.yaml). Upgrade one minor version at a time."
   type        = string
-  default     = "v1.6.1"
+  default     = "v1.9.2"
 }
 
 variable "opensearch_operator_version" {

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Script to deploy Envoy Gateway and Gateway API CRDs to a Kubernetes cluster
 # Usage: deploy-envoy-gateway.sh <kubeconfig_path> <gateway_api_version> <envoy_gateway_version> <namespace> <cluster_name>
@@ -19,7 +19,7 @@ echo "Kubeconfig: $KUBECONFIG"
 echo "Cluster: $CLUSTER_NAME"
 echo "Envoy Gateway Version: $ENVOY_GATEWAY_VERSION"
 echo "Namespace: $NAMESPACE"
-echo "Note: Envoy Gateway install.yaml includes Gateway API CRDs automatically"
+echo "Expected Gateway API bundle: $GATEWAY_API_VERSION (shipped in Envoy Gateway install.yaml)"
 echo ""
 
 # Verify cluster is accessible
@@ -72,99 +72,60 @@ sleep 5
 echo "✓ Cluster is stable, proceeding with installation"
 echo ""
 
-# Step 1: Check for and handle existing Gateway API CRDs
-# Envoy Gateway install.yaml includes Gateway API CRDs. If CRDs from a previous install exist,
-# we need to handle them to avoid annotation size conflicts.
-echo "[1/2] Checking for existing Gateway API CRDs..."
-GATEWAY_CRDS_EXIST=false
+# Step 1: Download the release manifest and split CRDs from the rest.
+# install.yaml bundles the Gateway API (experimental channel) and Envoy Gateway CRDs.
+# Existing CRDs are only ever updated in place: deleting a CRD deletes every
+# Gateway/Route/Policy object of that kind cluster-wide.
+echo "[1/3] Downloading Envoy Gateway $ENVOY_GATEWAY_VERSION manifest..."
+MANIFEST_URL="https://github.com/envoyproxy/gateway/releases/download/${ENVOY_GATEWAY_VERSION}/install.yaml"
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+curl -fsSL -o "$WORKDIR/install.yaml" "$MANIFEST_URL"
+awk -v crds="$WORKDIR/crds.yaml" -v rest="$WORKDIR/rest.yaml" '
+  function flush() { if (doc != "") { print "---\n" doc > (is_crd ? crds : rest) } doc = ""; is_crd = 0 }
+  /^---/ { flush(); next }
+  /^kind: CustomResourceDefinition$/ { is_crd = 1 }
+  { doc = doc $0 "\n" }
+  END { flush() }
+' "$WORKDIR/install.yaml"
+echo "  ✓ $(grep -c '^kind: CustomResourceDefinition$' "$WORKDIR/crds.yaml") CRDs, $(grep -c '^kind:' "$WORKDIR/rest.yaml") other resources"
+echo ""
+
+# Step 2: CRDs first. Envoy Gateway >= v1.9 requires the matching Gateway API CRDs
+# (TCPRoute/UDPRoute v1) before the controller is upgraded, otherwise those routes are skipped.
+echo "[2/3] Applying CRDs (server-side)..."
 if kubectl get crd gateways.gateway.networking.k8s.io &>/dev/null; then
-  GATEWAY_CRDS_EXIST=true
-  echo "  ⚠ Gateway API CRDs already exist"
-  # Check if these are from Envoy Gateway (will have envoy-specific labels) or from a separate install
-  if kubectl get crd gateways.gateway.networking.k8s.io -o yaml | grep -q "gateway.envoyproxy.io" 2>/dev/null; then
-    echo "  CRDs appear to be from Envoy Gateway - will update via server-side apply"
-  else
-    echo "  CRDs appear to be from a separate Gateway API installation"
-    echo "  Will delete and recreate to ensure compatibility with Envoy Gateway"
-    echo "  Deleting existing Gateway API CRDs..."
-    kubectl delete crd \
-      gateways.gateway.networking.k8s.io \
-      httproutes.gateway.networking.k8s.io \
-      gatewayclasses.gateway.networking.k8s.io \
-      grpcroutes.gateway.networking.k8s.io \
-      tcproutes.gateway.networking.k8s.io \
-      tlsroutes.gateway.networking.k8s.io \
-      udproutes.gateway.networking.k8s.io \
-      referencegrants.gateway.networking.k8s.io \
-      backendtlspolicies.gateway.networking.k8s.io \
-      --ignore-not-found=true --wait=true --timeout=60s || {
-      echo "  ⚠ Some CRDs may still exist, continuing with installation..."
-    }
-    echo "  ✓ Existing Gateway API CRDs removed"
-    GATEWAY_CRDS_EXIST=false
-  fi
+  CURRENT_BUNDLE=$(kubectl get crd gateways.gateway.networking.k8s.io \
+    -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')
+  echo "  Existing Gateway API CRDs: bundle ${CURRENT_BUNDLE:-unknown}"
+fi
+kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/crds.yaml"
+kubectl wait --for=condition=Established --timeout=120s -f "$WORKDIR/crds.yaml"
+NEW_BUNDLE=$(kubectl get crd gateways.gateway.networking.k8s.io \
+  -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')
+echo "  ✓ CRDs established (Gateway API bundle $NEW_BUNDLE)"
+if [ -n "$GATEWAY_API_VERSION" ] && [ "$NEW_BUNDLE" != "$GATEWAY_API_VERSION" ]; then
+  echo "  ⚠ gateway_api_version is $GATEWAY_API_VERSION but Envoy Gateway $ENVOY_GATEWAY_VERSION ships $NEW_BUNDLE"
 fi
 echo ""
 
-# Step 2: Install Envoy Gateway using official installation manifest
-echo "[2/2] Installing Envoy Gateway (version $ENVOY_GATEWAY_VERSION)..."
-MANIFEST_URL="https://github.com/envoyproxy/gateway/releases/download/${ENVOY_GATEWAY_VERSION}/install.yaml"
+# Step 3: Envoy Gateway controller, RBAC, webhook and certgen job
+echo "[3/3] Installing Envoy Gateway (version $ENVOY_GATEWAY_VERSION)..."
 
 # Check if Envoy Gateway is already installed
 if kubectl get namespace "$NAMESPACE" &>/dev/null && kubectl get deployment envoy-gateway -n "$NAMESPACE" &>/dev/null; then
   echo "  Envoy Gateway already installed, applying updated manifest with server-side apply..."
-  # Use server-side apply for updates to handle CRD conflicts properly
-  kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$MANIFEST_URL" 2>&1 | grep -v "Too long: may not be more than" || {
-    echo "  ⚠ Server-side apply had some conflicts, checking if resources were applied..."
-    # Check if deployment was updated despite conflicts
-    kubectl get deployment envoy-gateway -n "$NAMESPACE" || {
-      echo "ERROR: Deployment not found after apply attempt."
-      exit 1
-    }
-  }
+  # The certgen Job template is immutable; a finished Job from a previous version must go first.
+  # certgen does not overwrite existing control-plane cert secrets.
+  kubectl delete job eg-gateway-helm-certgen -n "$NAMESPACE" --ignore-not-found=true --wait=true
+  kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/rest.yaml"
+  kubectl rollout status deployment/envoy-gateway -n "$NAMESPACE" --timeout=5m
   echo "  ✓ Envoy Gateway resources updated"
 else
   echo "  Installing Envoy Gateway from official manifest (first time installation)..."
-  # For new installations, use server-side apply which handles CRDs better
-  kubectl apply --server-side --field-manager=envoy-gateway-installer -f "$MANIFEST_URL" || {
-    echo "  ⚠ Server-side apply failed, trying regular apply..."
-    # Regular apply, but filter out CRD annotation size errors (they're warnings, not fatal)
-    kubectl apply -f "$MANIFEST_URL" 2>&1 | grep -v "Too long: may not be more than" || {
-      echo "ERROR: Failed to install Envoy Gateway from manifest."
-      echo ""
-      echo "If you see CRD annotation errors above, the existing Gateway API CRDs conflict with Envoy Gateway's CRDs."
-      echo "To resolve:"
-      echo "  1. Delete existing Gateway API CRDs:"
-      echo "     kubectl delete crd -l gateway.networking.k8s.io/bundle-version"
-      echo "  2. Then re-run terraform apply"
-      exit 1
-    }
-  }
+  kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/rest.yaml"
   echo "  ✓ Envoy Gateway manifest applied"
-  
-  # Wait for Gateway API CRDs to be established
-  echo "  Waiting for Gateway API CRDs to be established..."
-  CRD_ESTABLISHED=0
-  for i in {1..30}; do
-    if kubectl wait --for=condition=Established crd/gateways.gateway.networking.k8s.io \
-       crd/httproutes.gateway.networking.k8s.io \
-       crd/gatewayclasses.gateway.networking.k8s.io \
-       --timeout=60s &>/dev/null 2>&1; then
-      CRD_ESTABLISHED=1
-      break
-    fi
-    if [ $((i % 5)) -eq 0 ]; then
-      echo "    Waiting for CRDs... attempt $i/30"
-    fi
-    sleep 2
-  done
-  
-  if [ "$CRD_ESTABLISHED" -eq 1 ]; then
-    echo "  ✓ Gateway API CRDs established"
-  else
-    echo "  ⚠ Gateway API CRDs may not be fully established yet (installation continues)"
-  fi
-  
+
   # Wait for deployment to be available
   echo "  Waiting for Envoy Gateway deployment to be ready..."
   kubectl wait --for=condition=available deployment/envoy-gateway -n "$NAMESPACE" --timeout=5m || {

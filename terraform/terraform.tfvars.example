@@ -316,15 +316,15 @@ rke2_registries_yaml_file = "config/rke2-registries.yaml"
 # Install Envoy Gateway on downstream clusters (recommended for Gateway API)
 install_envoy_gateway = true
 
-# Gateway API CRDs version (default: v1.1.0)
-# Envoy Gateway 1.6.1 uses Gateway API 1.4.1 internally
-# v1.1.0 is the latest stable Gateway API CRDs and is compatible
-# Alternatively, set to "helm" to let Envoy Gateway Helm chart install CRDs automatically
-gateway_api_version = "v1.1.0"
+# Gateway API CRD bundle shipped by the Envoy Gateway release below (experimental channel).
+# Not installed separately; the deploy script warns if the installed bundle differs.
+# Envoy Gateway v1.7.x -> v1.4.1, v1.8.x -> v1.5.1, v1.9.x -> v1.6.1
+gateway_api_version = "v1.6.1"
 
-# Envoy Gateway Helm chart version (default: v1.6.1)
+# Envoy Gateway release (install.yaml). Upgrade one minor version at a time
+# (e.g. v1.6 -> v1.7 -> v1.8 -> v1.9); never delete the CRDs to "reinstall".
 # Check latest version: https://github.com/envoyproxy/gateway/releases
-envoy_gateway_version = "v1.6.1"
+envoy_gateway_version = "v1.9.2"
 
 # ============================================================================
 # KUBE-VIP CONFIGURATION
