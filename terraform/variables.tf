@@ -104,7 +104,7 @@ variable "ubuntu_cloud_image_url" {
 variable "rancher_version" {
   description = "Rancher Helm chart / image version (stable). New installs use this pin. Live upgrades from older minors must step latest-patch-of-current-minor → next minor (e.g. v2.14.3 → v2.14.4 → v2.15.0). Rancher 2.15+ required for Kubernetes/RKE2 1.36."
   type        = string
-  default     = "v2.15.0"
+  default     = "v2.15.2"
 }
 
 variable "rke2_version" {

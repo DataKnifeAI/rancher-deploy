@@ -177,7 +177,7 @@ cert_manager_version = "v1.21.2"
 # Set to false to deploy manager and apps clusters without Rancher
 install_rancher = true
 
-rancher_version = "v2.15.0"
+rancher_version = "v2.15.2"
 # Live upgrade path (Rancher minor stepping): latest patch of current minor → next minor.
 # Example from 2.14.3: first set v2.14.4 and apply Rancher only, then set v2.15.0.
 # Rancher 2.14.x only certifies RKE2 through 1.35; 1.36 needs Rancher 2.15+.

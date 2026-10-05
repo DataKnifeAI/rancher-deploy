@@ -2,7 +2,7 @@
 
 How people and tools log in to Rancher and the RKE2 clusters, and what to do when that breaks.
 
-**Last verified:** 2026-10-04 — Rancher `v2.15.0`, RKE2 `v1.36.2+rke2r1` on all clusters, Rancher CLI `v2.15.2`, Authentik `2026.8.3`.
+**Last verified:** 2026-10-04 — Rancher `v2.15.2`, RKE2 `v1.36.2+rke2r1` on all clusters, Rancher CLI `v2.15.2`, Authentik `2026.8.3`.
 
 Kubeconfigs no longer embed long-lived Rancher tokens. `kubectl` calls the Rancher CLI (`rancher token`) as an exec credential plugin, the CLI logs you in through Authentik (SAML) and caches a token. Break-glass paths do not depend on Authentik.
 
@@ -250,10 +250,10 @@ Use the first layer that works:
 
 | File | Cluster / user / context | Server | Client cert expires |
 |------|--------------------------|--------|---------------------|
-| `~/.kube/rancher-manager-rke2.yaml` | `rancher-manager-rke2` | `https://manager.dataknife.net:6443` | 2027-01-08 |
-| `~/.kube/nprd-apps-rke2.yaml` | `nprd-apps-rke2` | `https://nprd-apps.dataknife.net:6443` | 2027-01-08 |
-| `~/.kube/prd-apps-rke2.yaml` | `prd-apps-rke2` | `https://prd-apps.dataknife.net:6443` | 2027-01-08 |
-| `~/.kube/poc-apps-rke2.yaml` | `poc-apps-rke2` | `https://poc-apps.dataknife.net:6443` | 2027-09-19 (pulled from poc-apps-1, already renewed) |
+| `~/.kube/rancher-manager-rke2.yaml` | `rancher-manager-rke2` | `https://manager.dataknife.net:6443` | 2027-10-05 (re-fetched 2026-10-04 from rancher-manager-2) |
+| `~/.kube/nprd-apps-rke2.yaml` | `nprd-apps-rke2` | `https://nprd-apps.dataknife.net:6443` | 2027-10-05 (re-fetched 2026-10-04 from nprd-apps-2) |
+| `~/.kube/prd-apps-rke2.yaml` | `prd-apps-rke2` | `https://prd-apps.dataknife.net:6443` | 2027-10-05 (re-fetched 2026-10-04 from prd-apps-1) |
+| `~/.kube/poc-apps-rke2.yaml` | `poc-apps-rke2` | `https://poc-apps.dataknife.net:6443` | 2027-10-05 (re-fetched 2026-10-04 from poc-apps-2) |
 
 The `<cluster>.dataknife.net` names are round-robin DNS over the three control-plane nodes and are in every node's apiserver cert SANs (`tls-san`), so the files survive the loss of one server. There is no control-plane VIP: kube-vip runs with `cp_enable=false` (Service VIPs only). If DNS is down, point `server` at a control-plane IP (each node's own IP is in its SANs) — that is a single-node dependency.
 
@@ -329,8 +329,8 @@ The script logs in through the local provider, so it keeps working with SAML ena
 | `rancher.dataknife.net` (`cattle-system/tls-rancher-ingress`, cert-manager, LE) | 2026-11-15 | Auto-renews (~2026-10-16) | Rancher UI/API TLS errors; CLI login fails |
 | Authentik SAML signing cert (`authentik Self-signed Certificate`) | **2027-10-04** | Manual: create a new cert in Authentik, set it on the `Rancher` provider, re-download metadata, paste it into Rancher's SAML config (re-supply the SP key) and re-enable | **All SSO logins fail** |
 | Rancher SP cert (`~/.config/rancher-saml/sp.crt`) | 2036-10-01 | Regenerate (above) and re-upload | SSO logins fail |
-| RKE2 leaf certs (apiserver `:6443` serving, `client-admin`, `client-kube-apiserver`, `auth-proxy`, etcd, controller-manager, scheduler, supervisor) on control-plane nodes | **2027-01-08** (manager, nprd, prd); **2027-01-15** (poc-apps-2/-3; poc-apps-1 already renewed to 2027-09-19) | Not automatic unless rke2-server restarts within 120 days of expiry. Planned rolling renewal: [RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md) | Apiservers stop serving / components can't authenticate — cluster down |
-| RKE2 admin client certs (`system:admin`) in `~/.kube/<cluster>-rke2.yaml` and the gitops-core `cert-sync-kubeconfig` Secret | 2027-01-08 (poc: 2027-09-19) | Re-fetch `rke2.yaml` after each RKE2 rotation ([fetch](#fallback-and-break-glass)) and re-run `gitops-core/scripts/create-cert-sync-kubeconfig-secret.sh` | Break-glass access fails; the `cert-sync` Job fails (it now exits non-zero) and downstream wildcard copies go stale |
+| RKE2 leaf certs (apiserver `:6443` serving, `client-admin`, `client-kube-apiserver`, `auth-proxy`, etcd, controller-manager, scheduler, supervisor) on control-plane nodes; agent certs on all nodes | **2027-10-05** (renewed 2026-10-04 by the rolling reboots); poc-apps-1 server certs **2027-09-19** | Renewed automatically only when rke2 restarts within 120 days of expiry (from 2027-05-22 on poc-apps-1, 2027-06-07 elsewhere): plan a rolling reboot/RKE2 upgrade by 2027-09-01, or `rke2 certificate rotate` ([RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md)) | Apiservers stop serving / components can't authenticate — cluster down |
+| RKE2 admin client certs (`system:admin`) in `~/.kube/<cluster>-rke2.yaml` and the gitops-core `cert-sync-kubeconfig` Secret | 2027-10-05 (all four, re-fetched 2026-10-04) | Re-fetch `rke2.yaml` after each RKE2 rotation ([fetch](#fallback-and-break-glass)) and re-run `gitops-core/scripts/create-cert-sync-kubeconfig-secret.sh` | Break-glass access fails; the `cert-sync` Job fails (it now exits non-zero) and downstream wildcard copies go stale |
 | Rancher API / kubeconfig tokens | ≤ 90 days from issue | Re-login (humans) / recreate (automation, `config/.rancher-api-token`) | 401s; exec plugin asks for login |
 
 Spot checks:

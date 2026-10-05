@@ -1,12 +1,49 @@
 # RKE2 certificate rotation runbook
 
-RKE2 leaf certificates (client and server) are valid for 365 days. On the control-plane nodes of every cluster they expire in **January 2027**, and every server already emits `CertificateExpirationWarning` events. This runbook renews them one cluster at a time, poc-apps first. CA certificates (10 years, to 2036) are **not** touched.
+RKE2 leaf certificates (client and server) are valid for 365 days. On the control-plane nodes of every cluster they were due to expire in **January 2027**. This runbook renews them one cluster at a time, poc-apps first. CA certificates (10 years, to 2036) are **not** touched.
 
-**Status:** plan only — not executed yet. Recommended window [below](#recommended-window).
+**Status: done 2026-10-04.** The certs were renewed by restart during the rolling OS reboots ([UPGRADE_PLAN.md #4](UPGRADE_PLAN.md#executed-2026-10-04-items-16)), not by `rke2 certificate rotate`. Everything now expires **2027-10-05**; poc-apps-1's server certs stay at 2027-09-19. See [Renewal on 2026-10-04](#renewal-on-2026-10-04). The rest of this page is the runbook for next time.
 
-## Current expiries
+## Renewal on 2026-10-04
 
-Read on 2026-10-04 with `sudo rke2 certificate check --output table` on every server and one agent per cluster (all nodes run `v1.36.2+rke2r1`).
+Method: restart-triggered renewal. Every server was drained, patched and rebooted one at a time (etcd leader last), so `rke2-server` started inside the 120-day window and renewed every leaf cert on that node. The private keys were reused. Agents reissue their certs on every start, so the agent reboots refreshed those too. Pre-reboot backups: an etcd snapshot per cluster (`~/backups/etcd/pre-reboots-<cluster>-*`) and `/root/rke2-tls-pre-reboot-2026100{4,5}.tgz` on every server.
+
+| Cluster | Server | `:6443` cert notAfter (was) | Now |
+|---------|--------|-----------------------------|-----|
+| poc-apps | poc-apps-1 (.130) | 2027-09-19 05:26 UTC | unchanged (renewed 2026-09-19, outside the window) |
+| | poc-apps-3 (.132) | 2027-01-15 | **2027-10-05 01:39 UTC** |
+| | poc-apps-2 (.131, leader) | 2027-01-15 | **2027-10-05 01:44 UTC** |
+| nprd-apps | nprd-apps-1 (.110) | 2027-01-08 | **2027-10-05 02:16 UTC** |
+| | nprd-apps-3 (.112) | 2027-01-08 | **2027-10-05 02:21 UTC** |
+| | nprd-apps-2 (.111, leader) | 2027-01-08 | **2027-10-05 02:38 UTC** |
+| prd-apps | prd-apps-2 (.121) | 2027-01-08 | **2027-10-05 03:19 UTC** |
+| | prd-apps-3 (.122) | 2027-01-08 | **2027-10-05 03:24 UTC** |
+| | prd-apps-1 (.120, leader) | 2027-01-08 | **2027-10-05 03:29 UTC** |
+| rancher-manager | rancher-manager-1 (.100) | 2027-01-08 | **2027-10-05 04:11 UTC** |
+| | rancher-manager-3 (.102) | 2027-01-08 | **2027-10-05 04:16 UTC** |
+| | rancher-manager-2 (.101, leader) | 2027-01-08 | **2027-10-05 04:22 UTC** |
+
+`sudo rke2 certificate check` afterwards showed:
+- all 17 leaf certs on every server at 2027-10-05 (poc-apps-1: 13 at 2027-09-19 and 4 at 2027-10-05);
+- the agent certs on the sampled workers (one per cluster) at 2027-10-05;
+- no warnings.
+
+After each cluster's servers:
+- the break-glass `~/.kube/<cluster>-rke2.yaml` was re-fetched from a renewed server, with its client cert now expiring 2027-10-05 (old files kept as `~/.kube/<cluster>-rke2.yaml.bak-<ts>`);
+- `gitops-core/scripts/create-cert-sync-kubeconfig-secret.sh` was re-run;
+- a manual `cert-sync` job synced all four clusters.
+
+Old `system:admin` client certs (earlier `rke2.yaml` copies) remain valid until their own `notAfter` (2027-01-08, poc 2027-09-19); nothing was revoked.
+
+**Next renewal.** Any rke2-server restart inside the 120-day window renews again:
+- from **2027-05-22** on poc-apps-1;
+- from **2027-06-07** everywhere else.
+
+Plan a rolling reboot or RKE2 upgrade between 2027-06-07 and **2027-09-01**, or run `rke2 certificate rotate` at any time.
+
+## Expiries before the renewal
+
+Read on 2026-10-04 (before the renewal) with `sudo rke2 certificate check --output table` on every server and one agent per cluster (all nodes run `v1.36.2+rke2r1`).
 
 | Cluster | Node(s) | Server leaf certs¹ | kubelet / kube-proxy / rke2-controller | rke2 last started |
 |---------|---------|--------------------|----------------------------------------|-------------------|
@@ -48,6 +85,8 @@ Source: [RKE2 docs: Certificate Management](https://docs.rke2.io/security/certif
 Neither method revokes anything. Kubernetes has no CRL, so old `system:admin` client certs (old `rke2.yaml` copies, the old break-glass files, the old `cert-sync-kubeconfig`) stay valid until their own `notAfter` (2027-01-08). Revoking them would take a CA rotation (`rke2 certificate rotate-ca`), which is out of scope.
 
 ## Recommended window
+
+Superseded: the 2026-10-04 reboots did the renewal. The plan below was for the January 2027 expiry.
 
 - **Prerequisite:** the TrueNAS CSI v0.22 rollout and the Terraform state repair (in progress 2026-10-04) are finished, with at least one quiet week afterwards. No `terraform apply` runs during the window.
 - **poc-apps:** Saturday **2026-10-24** (only poc-apps-2 and -3 need it).
@@ -121,7 +160,7 @@ echo | openssl s_client -connect $NODE:6443 2>/dev/null | openssl x509 -noout -e
 $SSH ubuntu@$NODE 'sudo rke2 certificate check --output table | grep -v CertSign'          # no WARNING rows
 ```
 
-**Agents:** no action required in this window (their certs run to 2027-08-01 / 2027-09-09 and are reissued on every agent start, e.g. the next RKE2 upgrade or OS-patch reboot). To refresh them anyway: `sudo systemctl restart rke2-agent` one node at a time, waiting for `Ready`. Put **2027-07-01** on the calendar as the latest date for a rolling agent restart if none has happened by then (prd-apps agents expire first, 2027-08-01).
+**Agents:** no action required in this window (their certs run to 2027-08-01 / 2027-09-09 and are reissued on every agent start, e.g. the next RKE2 upgrade or OS-patch reboot). To refresh them anyway: `sudo systemctl restart rke2-agent` one node at a time, waiting for `Ready`. Since the 2026-10-04 reboots every agent's certs run to 2027-10-05; put **2027-09-01** on the calendar as the latest date for a rolling agent restart if none has happened by then.
 
 ## After each cluster
 
