@@ -491,13 +491,13 @@ kubectl logs -n cnpg-system deployment/cnpg-controller-manager
 
 ```bash
 # Verify storage class exists
-kubectl get storageclass truenas-nfs
+kubectl get storageclass truenas-csi-nfs
 
 # Check PVC binding
 kubectl describe pvc my-postgres-cluster-1
 
 # Verify TrueNAS connectivity
-kubectl get pods -n democratic-csi
+kubectl get pods -n truenas-csi
 ```
 
 ### Replication Issues

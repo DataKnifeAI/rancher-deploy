@@ -34,13 +34,6 @@ GitHub Actions Runner Controller installation and configuration:
 - **`suggest-github-app-name.sh`** - Suggest unique GitHub App names to avoid conflicts
 - **`generate-jwt.sh`** - Generate JWT for GitHub App authentication
 
-### Storage Setup Scripts
-
-Storage and CSI driver installation:
-
-- **`install-democratic-csi.sh`** - Install Democratic CSI driver for TrueNAS
-- **`generate-helm-values-from-tfvars.sh`** - Generate Helm values from Terraform variables
-
 ### Database Setup Scripts
 
 Database operator installation:
@@ -102,17 +95,6 @@ rancher token delete all               # clear the cache / force re-login
 ./scripts/complete-arc-setup.sh
 ```
 
-### Storage Setup
-
-```bash
-# Generate Helm values from Terraform
-./scripts/generate-helm-values-from-tfvars.sh
-
-# Install Democratic CSI
-export KUBECONFIG=~/.kube/nprd-apps.yaml
-./scripts/install-democratic-csi.sh
-```
-
 ### Database Setup
 
 ```bash
@@ -142,6 +124,5 @@ Some scripts require:
 ## Related Documentation
 
 - **[../docs/GITHUB_ARC_SETUP.md](../docs/GITHUB_ARC_SETUP.md)** - Complete GitHub ARC setup guide
-- **[../docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md](../docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md)** - TrueNAS storage setup guide
 - **[../docs/RANCHER_API_TOKEN_CREATION.md](../docs/RANCHER_API_TOKEN_CREATION.md)** - Rancher API token documentation
 - **[../docs/CLUSTER_ACCESS_AND_SSO.md](../docs/CLUSTER_ACCESS_AND_SSO.md)** - kubectl / Rancher SSO access and break-glass

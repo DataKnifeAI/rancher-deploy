@@ -23,14 +23,6 @@ After changing args, roll the controller/node pods, clear stuck `VolumeAttachmen
 
 ## Alternatives
 
-### 1. Use Democratic CSI (truenas-nfs) for flexible scheduling
-
-Democratic CSI works on any node. Use it for workloads that need scheduling flexibility:
-
-```yaml
-storageClassName: truenas-nfs  # Democratic CSI
-```
-
-### 2. Hard-delete patch (legacy / optional)
+### Hard-delete patch (legacy / optional)
 
 Older local workaround before upstream mode flags: remove the node check in `ControllerPublishVolume` and rebuild a patched image. Prefer the upstream `--mode=controller` / `--mode=node` deploy flags instead; keep this only if you cannot run a mode-split deploy.

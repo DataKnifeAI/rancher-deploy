@@ -76,7 +76,7 @@ The script will:
 - RKE2 installation (NPRD Apps): ~5-10 minutes
 - RKE2 installation (PRD Apps): ~5-10 minutes
 - RKE2 installation (POC Apps): ~5-10 minutes
-- Democratic CSI deployment (all apps clusters): ~2-3 minutes per cluster
+- TrueNAS CSI deployment (all apps clusters): ~2-3 minutes per cluster
 - **Total: 50-70 minutes** (fully automated, no manual steps)
 
 ### 3. Monitor Progress

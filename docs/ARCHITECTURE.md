@@ -50,9 +50,8 @@ Break-glass paths (Rancher local user, RKE2 admin kubeconfigs) bypass Authentik.
 
 - **VM disks**: Proxmox datastore from `clusters.*.storage` (example: `local-vm-zfs`).
 - **Persistent volumes** (apps clusters):
-  - **Democratic CSI** → storage class `truenas-nfs` (vars: `democratic_csi_*`)
   - **Official TrueNAS CSI** → `truenas-csi-nfs` (vars: `truenas_csi_*`; SCALE 25.10+)
-  - Migration between drivers: [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md)
+  - democratic-csi (`truenas-nfs`) was retired; migration history: [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md)
 
 For a visual of an example two-node Proxmox homelab (hosts, MD1420 shelves, bonds, Ceph/ZFS, TrueNAS CSI, guest clusters), see [../examples/homelab/index.html](../examples/homelab/index.html).
 

@@ -1,6 +1,8 @@
 # TrueNAS CSI Migration – Workload Inventory & Priority
 
-All workloads below use **Democratic CSI** (`truenas-nfs`). Migrate to **TrueNAS CSI** (`truenas-csi-nfs`) in the order shown.
+> **Done.** All workloads below were migrated and democratic-csi was removed on 2026-10-04. Kept as history.
+
+All workloads below used **Democratic CSI** (`truenas-nfs`) and were migrated to **TrueNAS CSI** (`truenas-csi-nfs`) in the order shown.
 
 ---
 

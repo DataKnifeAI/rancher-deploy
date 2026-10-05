@@ -281,23 +281,6 @@ poc_apps_cluster_aliases    = ["poc.example.com"] # Alias for poc apps cluster a
 rancher_manager_ip = "192.168.1.100"
 
 # ============================================================================
-# DEMOCRATIC CSI CONFIGURATION (community driver: democratic-csi)
-# ============================================================================
-
-install_democratic_csi = true
-
-democratic_csi_host = "truenas.example.com"
-democratic_csi_api_key = "your-truenas-api-key-here"
-democratic_csi_dataset = "/mnt/SAS/RKE2"
-democratic_csi_user = "rke2"
-democratic_csi_protocol = "https"
-democratic_csi_port = 443
-democratic_csi_allow_insecure = false
-
-democratic_csi_storage_class_name = "truenas-nfs"
-democratic_csi_storage_class_default = true
-
-# ============================================================================
 # TRUENAS CSI CONFIGURATION (official driver: truenas/truenas-csi)
 # ============================================================================
 
