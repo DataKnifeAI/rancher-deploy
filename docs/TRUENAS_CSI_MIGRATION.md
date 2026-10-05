@@ -122,9 +122,8 @@ democratic-csi used the `freenas-api-nfs` driver against `192.168.9.10`. TrueNAS
 | Dataset `SAS/RKE2` and children `SAS/RKE2/pvc-*` (e.g. `pvc-25d4289c-38a0-4c20-96ef-35d2cd91356d`, the old nprd Loki ingester) | Check nothing you want is left, then delete recursively |
 | Dataset `SAS/RKE2-snapshots` (detached snapshots parent), if present | Delete |
 | NFS shares with paths under `/mnt/SAS/RKE2/` | Delete (before the datasets) |
-| democratic-csi API key (was `democratic_csi_api_key`, user `rke2`) | Revoke. TrueNAS CSI uses its own key (`truenas_csi_api_key` → secret `truenas-api-credentials`) |
-
-Before revoking, confirm in **Credentials → API Keys** that the key's last-used time is not recent. If the same key value was ever pasted into `truenas_csi_api_key`, revoking it would break TrueNAS CSI on all app clusters.
+| Last democratic-csi API key (was `democratic_csi_api_key`, user `rke2`) | **Don't revoke.** It is the same key as `truenas_csi_api_key` (TrueNAS key ID 4), live in secret `truenas-csi/truenas-api-credentials` on nprd, prd and poc (checked 2026-10-04). Revoking it breaks TrueNAS CSI on every app cluster. To retire it, create a new key, roll it into `truenas_csi_api_key` and the three secrets, confirm the CSI pods are healthy, then revoke ID 4 |
+| Older democratic-csi API keys (TrueNAS key IDs 1 and 2) | Revoke; nothing uses them |
 
 ---
 

@@ -21,8 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): prioritized next upgrade wave (reviewed 2026-10-04: live vs latest for Rancher, RKE2, Envoy Gateway, CNPG, OS, monitoring, apps, Terraform providers) and the cert-manager v1.21.2 rollout log; the completed 2.13→2.15 / 1.34→1.36 runbook is kept as history
 - **cert-manager** pin `v1.19.2` → **`v1.21.2`** (latest 1.21 patch; supports Kubernetes 1.33–1.36). Live clusters were already on `v1.21.1` via manual Helm (2026-07-31); Terraform now owns the version again
 - cert-manager module: Helm values `crds.enabled=true,crds.keep=true` (replaces deprecated `installCRDs`) and `config.gatewayAPI.enabled=true` for the gateway-shim (replaces `--controllers=*,gateway-shim`, which has not started the shim since cert-manager 1.15)
+- **Rancher** pin `v2.15.0` → **`v2.15.2`** (live since 2026-10-04)
+- **Envoy Gateway** `v1.6.1` → **`v1.9.2`** and **Gateway API** CRDs `v1.4.1` → **`v1.6.1`**. The module applies the CRDs server-side and waits for them before the controller, re-runs when the script changes, and verifies the controller by its real label ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40), [#42](https://github.com/DataKnifeAI/rancher-deploy/pull/42))
+- **CloudNativePG** default `1.28.0` → **`1.30.1`** ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
+- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): execution log for items #1–#6 of the 2026-10-04 wave (Rancher, democratic-csi, Envoy Gateway, CNPG, Grafana, rolling OS reboots of all 31 nodes); [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md): renewal results; [docs/OPS_NOTES.md](docs/OPS_NOTES.md): new known issues
 
 ### Fixed
+- CloudNativePG resources no longer have destroy provisioners: a version bump replaced the resource and deleted the operator manifest, CRDs included, and with them every Cluster/Backup ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
+- Envoy Gateway module no longer deletes Gateway API CRDs on a version mismatch ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40))
 - cert-manager module no longer deletes the cert-manager CRDs/namespace (and with them every Certificate/Issuer) when it cannot see the Helm release; it fails unless `cleanup_unmanaged_install = true`. Release detection uses `helm status` instead of grepping `helm list`
 - Broken doc links (`TERRAFORM_VARIABLES.md`) and an unterminated code fence in `RANCHER_DOWNSTREAM_MANAGEMENT.md`
 - Docs no longer claim `~/.kube/<cluster>.yaml` are RKE2 admin kubeconfigs (they were overwritten by Rancher-proxied ones); break-glass is `~/.kube/<cluster>-rke2.yaml`
@@ -34,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known issues
 - Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`
-- RKE2 leaf certs on all control-plane nodes expire 2027-01-08 (poc-apps 2027-01-15) — rotate per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
+- RKE2 leaf certs were renewed on 2026-10-04 and now expire 2027-10-05 (poc-apps-1 2027-09-19); renew again from 2027-06-07 per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
+- Do **not** revoke the TrueNAS API key that was in `democratic_csi_api_key`: it is the key TrueNAS CSI uses ([docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual))
 - TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
 
 ## [1.2.0-beta.1] - 2026-08-31
