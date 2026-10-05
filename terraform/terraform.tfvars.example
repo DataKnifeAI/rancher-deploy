@@ -385,14 +385,14 @@ github_arc_controller_version = "0.13.1"
 # PalworldServer game CRs (e.g. game-servers/palworld-server).
 #
 # Harbor currently publishes :latest (plus ad-hoc tags); pin the live digest below.
-# Digest matches prd imageID as of 2026-07-31:
-#   harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b
+# Digest matches prd imageID as of 2026-10-04 (Harbor tag 57e7f73):
+#   harbor.dataknife.net/library/palworld-operator@sha256:8036766feeb4f30c28228ebfa50be96b259b4c3ee50536cd5aec0b5eaed7a639
 
 install_palworld_operator_nprd = false
 install_palworld_operator_prd  = true
 install_palworld_operator_poc  = false
 
-palworld_operator_image = "harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b"
+palworld_operator_image = "harbor.dataknife.net/library/palworld-operator@sha256:8036766feeb4f30c28228ebfa50be96b259b4c3ee50536cd5aec0b5eaed7a639"
 palworld_operator_image_pull_secret      = "harbor-registry-secret"
 palworld_operator_image_pull_secret_file = "config/harbor-registry-secret.yaml"
 

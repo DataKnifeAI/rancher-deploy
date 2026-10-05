@@ -438,7 +438,7 @@ variable "install_palworld_operator_poc" {
 variable "palworld_operator_image" {
   description = "Palworld operator image (Harbor). Prefer digest pin; Harbor currently only publishes :latest besides ad-hoc tags."
   type        = string
-  default     = "harbor.dataknife.net/library/palworld-operator@sha256:89efffac532f9e44dfcde415be8c2103d7baa05762b96c60d47926252072650b"
+  default     = "harbor.dataknife.net/library/palworld-operator@sha256:8036766feeb4f30c28228ebfa50be96b259b4c3ee50536cd5aec0b5eaed7a639"
 }
 
 variable "palworld_operator_image_pull_secret" {
