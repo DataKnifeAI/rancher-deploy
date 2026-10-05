@@ -48,7 +48,7 @@ while [ "$CLUSTER_READY" = false ] && [ $READY_RETRY -lt $READY_MAX_RETRIES ]; d
   fi
   
   # Check that we have at least one node in Ready state
-  READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+  READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || true)
   if [ "$READY_NODES" -eq 0 ]; then
     echo "  Attempt $READY_RETRY/$READY_MAX_RETRIES - No nodes in Ready state, waiting..."
     sleep 5
@@ -131,7 +131,7 @@ else
   kubectl wait --for=condition=available deployment/envoy-gateway -n "$NAMESPACE" --timeout=5m || {
     echo "  ⚠ Deployment may still be starting, checking status..."
     kubectl get deployment envoy-gateway -n "$NAMESPACE" || true
-    echo "  Check logs with: kubectl logs -n $NAMESPACE -l app.kubernetes.io/name=envoy-gateway"
+    echo "  Check logs with: kubectl logs -n $NAMESPACE -l control-plane=envoy-gateway"
   }
 fi
 
@@ -142,8 +142,8 @@ sleep 5
 
 PODS_READY=0
 for i in {1..30}; do
-  READY_PODS=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=envoy-gateway --no-headers 2>/dev/null | grep -c " Running " || echo "0")
-  TOTAL_PODS=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=envoy-gateway --no-headers 2>/dev/null | wc -l || echo "0")
+  READY_PODS=$(kubectl get pods -n "$NAMESPACE" -l control-plane=envoy-gateway --no-headers 2>/dev/null | grep -c " Running " || true)
+  TOTAL_PODS=$(kubectl get pods -n "$NAMESPACE" -l control-plane=envoy-gateway --no-headers 2>/dev/null | wc -l || echo "0")
   
   if [ "$TOTAL_PODS" -gt 0 ] && [ "$READY_PODS" -eq "$TOTAL_PODS" ]; then
     PODS_READY=1
@@ -151,18 +151,18 @@ for i in {1..30}; do
   fi
   if [ $((i % 5)) -eq 0 ]; then
     echo "  Waiting for pods to be ready... ($READY_PODS/$TOTAL_PODS ready, attempt $i/30)"
-    kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=envoy-gateway || true
+    kubectl get pods -n "$NAMESPACE" -l control-plane=envoy-gateway || true
   fi
   sleep 2
 done
 
 if [ "$PODS_READY" -eq 1 ]; then
   echo "  ✓ Envoy Gateway pods are ready"
-  kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=envoy-gateway
+  kubectl get pods -n "$NAMESPACE" -l control-plane=envoy-gateway
 else
   echo "  ⚠ Envoy Gateway pods may not be fully ready yet"
   echo "  Current pod status:"
-  kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=envoy-gateway || kubectl get pods -n "$NAMESPACE" || true
+  kubectl get pods -n "$NAMESPACE" -l control-plane=envoy-gateway || kubectl get pods -n "$NAMESPACE" || true
   echo "  Check status with: kubectl get pods -n $NAMESPACE"
 fi
 
