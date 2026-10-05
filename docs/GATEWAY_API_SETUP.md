@@ -22,17 +22,16 @@ This guide covers setting up Gateway API on RKE2 clusters managed by Rancher. Ga
 Envoy Gateway can be installed using the official installation manifest:
 
 ```bash
-# Install Gateway API CRDs first (if not already installed)
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
-
-# Install Envoy Gateway using official manifest (version 1.6.1)
+# install.yaml bundles the Gateway API CRDs (experimental channel); don't install
+# standard-install.yaml separately - it would downgrade/strip the experimental CRDs.
+# Install Envoy Gateway using official manifest (version 1.9.2, Gateway API v1.6.1)
 # On manager cluster
 export KUBECONFIG=~/.kube/rancher-manager.yaml
-kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
+kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.2/install.yaml
 
 # On nprd-apps cluster
 export KUBECONFIG=~/.kube/nprd-apps.yaml
-kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
+kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.2/install.yaml
 
 # Wait for deployment to be ready
 kubectl wait --for=condition=available deployment/envoy-gateway -n envoy-gateway-system --timeout=5m
@@ -44,7 +43,7 @@ kubectl get gatewayclass
 
 **Note:** The Helm repository method is not currently available. Use the manifest installation method shown above.
 
-**Note:** Envoy Gateway v1.6.1 uses Gateway API v1.4.1 internally, but Gateway API v1.0.0 CRDs are fully compatible.
+**Note:** Envoy Gateway v1.9.x ships and requires Gateway API v1.6.x CRDs (TCPRoute/UDPRoute `v1`). Terraform (`modules/envoy_gateway`) applies the CRDs first, then the controller; upgrade one minor version at a time and never delete the Gateway API CRDs (that deletes every Gateway and Route).
 
 **Basic Gateway Configuration:**
 
@@ -144,24 +143,14 @@ helm install traefik traefik/traefik \
 ### Prerequisites
 
 ```bash
-# Ensure Gateway API CRDs are installed
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
-
-# Note: Envoy Gateway v1.6.1 supports Gateway API v1.0.0
-
-# Verify CRDs
+# Gateway API CRDs come with the Envoy Gateway install.yaml (Step 2).
+# Verify CRDs (after install)
 kubectl get crd | grep gateway
 ```
 
-### Step 1: Install Gateway API CRDs (if not already installed)
+### Step 1: Gateway API CRDs
 
-```bash
-# Install Gateway API CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
-
-# Verify CRDs are installed
-kubectl get crd | grep gateway
-```
+Bundled in the Envoy Gateway `install.yaml` (experimental channel, `v1.6.1` for Envoy Gateway `v1.9.x`). Don't apply `standard-install.yaml` on top.
 
 ### Step 2: Install Envoy Gateway
 
@@ -170,7 +159,7 @@ kubectl get crd | grep gateway
 export KUBECONFIG=~/.kube/rancher-manager.yaml
 
 # Install Envoy Gateway using official manifest
-kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.6.1/install.yaml
+kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.2/install.yaml
 
 # Wait for deployment to be ready
 kubectl wait --for=condition=available deployment/envoy-gateway -n envoy-gateway-system --timeout=5m

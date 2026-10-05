@@ -24,15 +24,15 @@ variable "install_envoy_gateway" {
 }
 
 variable "gateway_api_version" {
-  description = "Gateway API CRDs version (not used - Envoy Gateway install.yaml includes CRDs)"
+  description = "Gateway API CRD bundle version shipped by envoy_gateway_version's install.yaml (checked after apply, not installed separately)"
   type        = string
-  default     = "v1.1.0"
+  default     = "v1.6.1"
 }
 
 variable "envoy_gateway_version" {
-  description = "Envoy Gateway Helm chart version"
+  description = "Envoy Gateway release (install.yaml). Upgrade one minor version at a time."
   type        = string
-  default     = "v1.6.1"
+  default     = "v1.9.2"
 }
 
 variable "namespace" {
@@ -54,6 +54,14 @@ output "cluster_name" {
 resource "null_resource" "deploy_envoy_gateway" {
   count = var.install_envoy_gateway ? 1 : 0
 
+  # Re-run the (idempotent, server-side apply) install script on version changes.
+  # No destroy provisioner: replacing this resource must never uninstall Envoy Gateway.
+  triggers = {
+    envoy_gateway_version = var.envoy_gateway_version
+    gateway_api_version   = var.gateway_api_version
+    script_sha            = filesha256("${path.module}/deploy-envoy-gateway.sh")
+  }
+
   provisioner "local-exec" {
     command = <<-EOT
       chmod +x ${path.module}/deploy-envoy-gateway.sh
@@ -70,6 +78,10 @@ resource "null_resource" "deploy_envoy_gateway" {
 # Verify Envoy Gateway deployment
 resource "null_resource" "verify_envoy_gateway" {
   count = var.install_envoy_gateway ? 1 : 0
+
+  triggers = {
+    deploy_id = null_resource.deploy_envoy_gateway[0].id
+  }
 
   provisioner "local-exec" {
     command = <<-EOT
