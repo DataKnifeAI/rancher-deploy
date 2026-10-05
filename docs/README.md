@@ -30,7 +30,6 @@ Guides for deploying and operating Rancher / RKE2 on Proxmox with this repo.
 
 | Doc | Topic |
 |-----|--------|
-| [DEMOCRATIC_CSI_TRUENAS_SETUP.md](DEMOCRATIC_CSI_TRUENAS_SETUP.md) | Democratic CSI + TrueNAS |
 | [STORAGE_CLASS_DEFAULT.md](STORAGE_CLASS_DEFAULT.md) | Default storage class |
 | [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) | Democratic → official TrueNAS CSI |
 | [TRUENAS_CSI_MIGRATION_PRIORITY.md](TRUENAS_CSI_MIGRATION_PRIORITY.md) | Migration ordering |

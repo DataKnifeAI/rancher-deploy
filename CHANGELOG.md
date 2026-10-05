@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs no longer claim `~/.kube/<cluster>.yaml` are RKE2 admin kubeconfigs (they were overwritten by Rancher-proxied ones); break-glass is `~/.kube/<cluster>-rke2.yaml`
 - poc-apps wildcard certificate copy re-synced: gitops-core `cert-sync` uses direct RKE2 admin credentials for all clusters and fails loudly ([gitops-core#6](https://github.com/DataKnifeAI/gitops-core/pull/6))
 
+### Removed
+- **democratic-csi**: `democratic_csi_*` variables, the `deploy_democratic_csi_{nprd,prd,poc}_apps` resources (never in state; count was 0), the `democratic_csi_config` output, `scripts/install-democratic-csi.sh`, `scripts/generate-helm-values-from-tfvars.sh` and `docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md`. Nothing on any cluster used the driver; TrueNAS CSI is the only storage driver. Remove the `democratic_csi_*` entries from your local `terraform.tfvars`
+
 ### Known issues
 - Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`
 - RKE2 leaf certs on all control-plane nodes expire 2027-01-08 (poc-apps 2027-01-15) — rotate per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)

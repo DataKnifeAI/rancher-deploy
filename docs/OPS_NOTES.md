@@ -18,8 +18,8 @@ Short operational truths that do not belong in the README.
 
 ## Storage
 
-- **Democratic CSI** (`democratic_csi_*`, class `truenas-nfs`) is the common default path.
-- **Official TrueNAS CSI** (`truenas_csi_*`, class `truenas-csi-nfs`) is optional and can coexist during migration; old Democratic volumes are not mountable by the new driver. See [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) and [TRUENAS_CSI_MULTI_NODE.md](TRUENAS_CSI_MULTI_NODE.md).
+- **Official TrueNAS CSI** (`truenas_csi_*`, driver `csi.truenas.io`, class `truenas-csi-nfs`) is the only CSI driver on the app clusters. See [TRUENAS_CSI_MULTI_NODE.md](TRUENAS_CSI_MULTI_NODE.md).
+- **democratic-csi removed (2026-10-04).** No driver, StorageClass, PV, Helm release or namespace left on any cluster; the last orphaned `Released` PV on nprd (`pvc-25d4289c…`, old Loki ingester) was deleted (its dataset `/mnt/SAS/RKE2/pvc-25d4289c-38a0-4c20-96ef-35d2cd91356d` is still on TrueNAS). The `democratic_csi_*` variables, resources, output and scripts are gone from this repo. Migration history: [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md).
 - Apps-cluster nodes get label `topology.truenas.io/pool=<truenas_csi_pool>` via RKE2 `node-label` at bootstrap, plus a post-kubeconfig `null_resource` that labels all nodes. Manager nodes are not labeled (CSI is apps-side).
 
 ## Version pins (RKE2 / Rancher / OS)
@@ -87,7 +87,6 @@ Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`
 | `terraform/terraform.tfvars` | API tokens, passwords (gitignored) |
 | `.keys/` | SSH deploy keys (gitignored) |
 | `config/` | Tokens (incl. `.rancher-api-token`), registry pull secrets (gitignored) |
-| `helm-values/democratic-csi-truenas.yaml` | Generated CSI values (gitignored) |
 | `~/.config/rancher-saml/` | Rancher SAML SP cert/key + Authentik IdP metadata (outside the repo) |
 | `~/.rancher/cli2.json` | Rancher CLI token cache (`rancher token delete all` to clear) |
 | `~/.kube/*.yaml`, `~/.kube/config*` | Kubeconfigs; RKE2 admin ones are cluster-admin |

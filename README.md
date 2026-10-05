@@ -19,7 +19,7 @@ Also automated when enabled in `terraform.tfvars`:
 
 - **cert-manager** + **Rancher** on the manager cluster
 - Downstream registration into Rancher
-- **Democratic CSI** (TrueNAS NFS) and/or official **TrueNAS CSI** on app clusters
+- Official **TrueNAS CSI** (NFS) on app clusters
 - **Envoy Gateway** + **kube-vip** LoadBalancer IPs on app clusters
 - Operators: CloudNativePG, MongoDB Community, OpenSearch, GitHub ARC
 - Optional **Palworld operator** (default: **prd-apps** only)
@@ -92,8 +92,8 @@ Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 | SSH keys & recovery | [SSH_AND_ACCESS.md](docs/SSH_AND_ACCESS.md) |
 | Cluster access, SSO & break-glass | [CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md) |
 | DNS | [DNS_CONFIGURATION.md](docs/DNS_CONFIGURATION.md) |
-| TrueNAS / Democratic CSI | [DEMOCRATIC_CSI_TRUENAS_SETUP.md](docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md) |
-| TrueNAS CSI migration | [TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md) |
+| TrueNAS CSI | [TRUENAS_CSI_MULTI_NODE.md](docs/TRUENAS_CSI_MULTI_NODE.md) |
+| TrueNAS CSI migration (done) | [TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md) |
 | Troubleshooting | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Ops notes | [OPS_NOTES.md](docs/OPS_NOTES.md) |
 | Example homelab diagram | [examples/homelab/index.html](examples/homelab/index.html) |

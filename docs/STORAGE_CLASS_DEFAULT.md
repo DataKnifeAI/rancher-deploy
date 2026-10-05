@@ -2,84 +2,43 @@
 
 ## Current Configuration
 
-The `truenas-nfs` storage class is configured as **default** in your Helm values:
+On the app clusters the default StorageClass is **`truenas-csi-nfs`** (official TrueNAS CSI driver, `csi.truenas.io`). Terraform sets it with `truenas_csi_storage_class_default = true` in `terraform.tfvars` (the variable defaults to `false`).
 
-```yaml
-storageClasses:
-  - name: truenas-nfs
-    default: true  # ← This makes it the default
-```
+prd-apps also has two non-default classes from the same driver: `truenas-csi-nfs-no-mapall` and `truenas-csi-nfs-postgres`.
 
 ## What "Default" Means
 
 When a storage class is marked as **default**:
-- ✅ PVCs created **without** specifying `storageClassName` will automatically use it
-- ✅ Rancher UI will show it as the default option
-- ✅ It's marked with the annotation: `storageclass.kubernetes.io/is-default-class: "true"`
+- PVCs created **without** `storageClassName` use it
+- Rancher UI shows it as the default option
+- It carries the annotation `storageclass.kubernetes.io/is-default-class: "true"`
 
-## Important: Only One Default Allowed
+## Only One Default Allowed
 
-⚠️ **Kubernetes only allows ONE default storage class at a time.**
+Kubernetes expects exactly **one** default StorageClass. RKE2 doesn't ship a default one on these clusters, so `truenas-csi-nfs` is the only one.
 
-If you already have a default storage class in your cluster, you have two options:
-
-### Option 1: Replace Existing Default (Recommended)
-
-Make `truenas-nfs` the new default:
+To move the default to another class:
 
 ```bash
-export KUBECONFIG=~/.kube/nprd-apps.yaml
+export KUBECONFIG=~/.kube/nprd-apps-rke2.yaml
 
 # Find current default
 kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}'
 
-# Remove default from existing storage class (replace <existing-sc> with actual name)
-kubectl patch storageclass <existing-sc> -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}'
-
-# Set truenas-nfs as default
-kubectl patch storageclass truenas-nfs -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}'
+# Remove default from the current class, then set it on the new one
+kubectl patch storageclass truenas-csi-nfs -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}'
+kubectl patch storageclass <new-sc> -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "true"}}}'
 ```
 
-### Option 2: Keep Existing Default, Make truenas-nfs Non-Default
-
-If you want to keep your current default storage class:
-
-1. **Before installation**, edit `helm-values/democratic-csi-truenas.yaml`:
-   ```yaml
-   storageClasses:
-     - name: truenas-nfs
-       default: false  # ← Change to false
-   ```
-
-2. **Or after installation**, remove the default annotation:
-   ```bash
-   kubectl patch storageclass truenas-nfs -p '{"metadata": {"annotations": {"storageclass.kubernetes.io/is-default-class": "false"}}}'
-   ```
+Change `truenas_csi_storage_class_default` in `terraform.tfvars` too, or the next Terraform apply puts it back.
 
 ## Check Current Default Storage Class
 
 ```bash
-export KUBECONFIG=~/.kube/nprd-apps.yaml
-
-# List all storage classes with default status
 kubectl get storageclass
-
-# Find which one is default
-kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}'
 ```
 
-## RKE2 Default Storage Class
-
-RKE2 typically comes with a **local-path** storage class that may be set as default. This is fine for development but not ideal for production workloads that need shared storage.
-
-**Recommendation:** Make `truenas-nfs` the default for production workloads that need:
-- Shared storage across nodes
-- Persistent data that survives pod restarts
-- NFS-backed volumes
-
-## Using Non-Default Storage Class
-
-Even if `truenas-nfs` is not the default, you can still use it by explicitly specifying it:
+## Using a Non-Default Storage Class
 
 ```yaml
 apiVersion: v1
@@ -87,30 +46,12 @@ kind: PersistentVolumeClaim
 metadata:
   name: my-pvc
 spec:
-  storageClassName: truenas-nfs  # ← Explicitly specify
+  storageClassName: truenas-csi-nfs-postgres
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
 ```
 
-## Verification After Installation
-
-After installing democratic-csi, verify the default:
-
-```bash
-kubectl get storageclass truenas-nfs -o yaml | grep -A 1 "is-default-class"
-```
-
-Should show:
-```yaml
-storageclass.kubernetes.io/is-default-class: "true"
-```
-
-## Summary
-
-- ✅ **Configured as default** in your Helm values
-- ⚠️ **May conflict** with existing default storage class
-- 🔧 **Installation script** will warn you if there's a conflict
-- 📝 **You can change it** before or after installation
+democratic-csi (`truenas-nfs`) was removed on 2026-10-04; see [TRUENAS_CSI_MIGRATION.md](TRUENAS_CSI_MIGRATION.md) for the history.

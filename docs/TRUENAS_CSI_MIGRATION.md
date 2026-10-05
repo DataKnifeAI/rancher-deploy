@@ -1,5 +1,7 @@
 # Migration: Democratic CSI → TrueNAS CSI
 
+> **Done.** Every workload runs on TrueNAS CSI and democratic-csi was removed from all clusters and from this repo on 2026-10-04. Kept as history and as a template for future volume moves.
+
 ## Can we create new PVCs and remount?
 
 **Yes.** The migration flow is: create new PVC with `truenas-csi-nfs` → copy data → update the workload to use the new PVC → delete the old PVC. The pod is updated to reference the new PVC; Kubernetes recreates the pod with the new volume mounted.
