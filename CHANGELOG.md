@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **democratic-csi**: `democratic_csi_*` variables, the `deploy_democratic_csi_{nprd,prd,poc}_apps` resources (never in state; count was 0), the `democratic_csi_config` output, `scripts/install-democratic-csi.sh`, `scripts/generate-helm-values-from-tfvars.sh` and `docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md`. Nothing on any cluster used the driver; TrueNAS CSI is the only storage driver. Remove the `democratic_csi_*` entries from your local `terraform.tfvars`
+- **democratic-csi** `democratic_csi_config` output dropped from Terraform state (state edit only, no apply; resources unchanged). Remaining TrueNAS-side cleanup is listed in [docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual)
 
 ### Known issues
 - Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`

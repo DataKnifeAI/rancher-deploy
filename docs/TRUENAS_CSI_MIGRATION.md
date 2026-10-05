@@ -111,30 +111,33 @@ For StatefulSets with `volumeClaimTemplates`, you cannot change the storage clas
 
 ## Cleanup After Migration
 
-When no PVCs use `truenas-nfs`:
+Kubernetes and Terraform cleanup is complete (2026-10-04): no democratic-csi namespace, Helm release, CSIDriver, StorageClass, PV/PVC, CRD, RBAC or Fleet bundle on any cluster, and the stale `democratic_csi_config` output was removed from Terraform state.
 
-1. Verify:
-   ```bash
-   kubectl get pv -o json | jq -r '.items[] | select(.spec.storageClassName=="truenas-nfs") | .metadata.name'
-   # Should return nothing
-   ```
+### TrueNAS (manual)
 
-2. Set `install_democratic_csi = false` in terraform.tfvars.
+democratic-csi used the `freenas-api-nfs` driver against `192.168.9.10`. TrueNAS CSI creates its volumes directly under the pool (`SAS/pvc-*`), so nothing below is used by it:
 
-3. Run `terraform apply` to remove Democratic CSI.
+| Object | What to do |
+|--------|------------|
+| Dataset `SAS/RKE2` and children `SAS/RKE2/pvc-*` (e.g. `pvc-25d4289c-38a0-4c20-96ef-35d2cd91356d`, the old nprd Loki ingester) | Check nothing you want is left, then delete recursively |
+| Dataset `SAS/RKE2-snapshots` (detached snapshots parent), if present | Delete |
+| NFS shares with paths under `/mnt/SAS/RKE2/` | Delete (before the datasets) |
+| democratic-csi API key (was `democratic_csi_api_key`, user `rke2`) | Revoke. TrueNAS CSI uses its own key (`truenas_csi_api_key` → secret `truenas-api-credentials`) |
+
+Before revoking, confirm in **Credentials → API Keys** that the key's last-used time is not recent. If the same key value was ever pasted into `truenas_csi_api_key`, revoking it would break TrueNAS CSI on all app clusters.
 
 ---
 
-## Current Democratic CSI PVCs (poc-apps)
+## Democratic CSI PVCs on poc-apps (migrated)
 
-From your cluster:
+At the time of migration:
 
 | PVC | Size | Use |
 |-----|------|-----|
 | pvc-874bd628... | 200Gi | prometheus (managed-syslog) |
 | pvc-9ef4cd52... | 20Gi | alertmanager (managed-syslog) |
 
-These require Democratic CSI to remain installed until migrated.
+Both were migrated to `truenas-csi-nfs`.
 
 ---
 
