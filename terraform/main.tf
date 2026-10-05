@@ -2914,7 +2914,7 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
       # Verify installation
       echo ""
       echo "Verifying CloudNativePG installation..."
-      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m || true
+      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m
       
       echo ""
       echo "CloudNativePG Pods:"
@@ -2931,30 +2931,9 @@ resource "null_resource" "deploy_cloudnativepg_nprd_apps" {
     EOT
   }
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
-      echo "=========================================="
-      echo "Removing CloudNativePG from NPRD Apps Cluster"
-      echo "=========================================="
-      
-      export KUBECONFIG="$${HOME}/.kube/nprd-apps.yaml"
-      
-      if kubectl get namespace cnpg-system &>/dev/null; then
-        echo "Removing CloudNativePG operator..."
-        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
-        kubectl delete -f "$${CNPG_MANIFEST_URL}" --ignore-not-found=true || true
-        
-        echo "Deleting namespace..."
-        kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
-        
-        echo "✓ CloudNativePG removed"
-      else
-        echo "✓ Namespace already removed"
-      fi
-    EOT
-  }
+  # No destroy provisioner: a version bump replaces this resource, and deleting the
+  # operator manifest would delete the CNPG CRDs and with them every Cluster/Backup.
+  # Uninstalling CloudNativePG is a manual operation.
 
   depends_on = [
     null_resource.merge_kubeconfigs,
@@ -3012,7 +2991,7 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
       # Verify installation
       echo ""
       echo "Verifying CloudNativePG installation..."
-      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m || true
+      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m
       
       echo ""
       echo "CloudNativePG Pods:"
@@ -3029,30 +3008,9 @@ resource "null_resource" "deploy_cloudnativepg_prd_apps" {
     EOT
   }
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
-      echo "=========================================="
-      echo "Removing CloudNativePG from PRD Apps Cluster"
-      echo "=========================================="
-      
-      export KUBECONFIG="$${HOME}/.kube/prd-apps.yaml"
-      
-      if kubectl get namespace cnpg-system &>/dev/null; then
-        echo "Removing CloudNativePG operator..."
-        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
-        kubectl delete -f "$${CNPG_MANIFEST_URL}" --ignore-not-found=true || true
-        
-        echo "Deleting namespace..."
-        kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
-        
-        echo "✓ CloudNativePG removed"
-      else
-        echo "✓ Namespace already removed"
-      fi
-    EOT
-  }
+  # No destroy provisioner: a version bump replaces this resource, and deleting the
+  # operator manifest would delete the CNPG CRDs and with them every Cluster/Backup.
+  # Uninstalling CloudNativePG is a manual operation.
 
   depends_on = [
     null_resource.merge_kubeconfigs,
@@ -3110,7 +3068,7 @@ resource "null_resource" "deploy_cloudnativepg_poc_apps" {
       # Verify installation
       echo ""
       echo "Verifying CloudNativePG installation..."
-      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m || true
+      kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=5m
       
       echo ""
       echo "CloudNativePG Pods:"
@@ -3127,30 +3085,9 @@ resource "null_resource" "deploy_cloudnativepg_poc_apps" {
     EOT
   }
 
-  provisioner "local-exec" {
-    when       = destroy
-    on_failure = continue
-    command    = <<-EOT
-      echo "=========================================="
-      echo "Removing CloudNativePG from POC Apps Cluster"
-      echo "=========================================="
-      
-      export KUBECONFIG="$${HOME}/.kube/poc-apps.yaml"
-      
-      if kubectl get namespace cnpg-system &>/dev/null; then
-        echo "Removing CloudNativePG operator..."
-        CNPG_MANIFEST_URL="https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml"
-        kubectl delete -f "$${CNPG_MANIFEST_URL}" --ignore-not-found=true || true
-        
-        echo "Deleting namespace..."
-        kubectl delete namespace cnpg-system --timeout=2m 2>/dev/null || true
-        
-        echo "✓ CloudNativePG removed"
-      else
-        echo "✓ Namespace already removed"
-      fi
-    EOT
-  }
+  # No destroy provisioner: a version bump replaces this resource, and deleting the
+  # operator manifest would delete the CNPG CRDs and with them every Cluster/Backup.
+  # Uninstalling CloudNativePG is a manual operation.
 
   depends_on = [
     null_resource.merge_kubeconfigs,

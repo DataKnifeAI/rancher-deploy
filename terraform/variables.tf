@@ -404,7 +404,7 @@ variable "mongodb_operator_version" {
 variable "cloudnativepg_operator_version" {
   description = "CloudNativePG Operator version (installed via manifest)"
   type        = string
-  default     = "1.28.0"
+  default     = "1.30.1"
 }
 
 variable "github_arc_controller_version" {
