@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rancher login via Authentik SAML (Rancher "Keycloak (SAML)" provider, site access `required`, allow-listed principals only) alongside local auth; `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600` (live settings, not managed by Terraform)
 - Docs: Rancher API token path is `config/.rancher-api-token` and expires after 90 days (`auth-token-max-ttl-minutes`), not "never"; current-state notes in downstream registration, deployment, troubleshooting, ops notes; RKE2/Rancher version examples updated to `v1.36.2+rke2r1` / `v2.15.0`; README license corrected to Apache-2.0
 
+- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): prioritized next upgrade wave (reviewed 2026-10-04: live vs latest for Rancher, RKE2, Envoy Gateway, CNPG, OS, monitoring, apps, Terraform providers) and the cert-manager v1.21.2 rollout log; the completed 2.13→2.15 / 1.34→1.36 runbook is kept as history
 - **cert-manager** pin `v1.19.2` → **`v1.21.2`** (latest 1.21 patch; supports Kubernetes 1.33–1.36). Live clusters were already on `v1.21.1` via manual Helm (2026-07-31); Terraform now owns the version again
 - cert-manager module: Helm values `crds.enabled=true,crds.keep=true` (replaces deprecated `installCRDs`) and `config.gatewayAPI.enabled=true` for the gateway-shim (replaces `--controllers=*,gateway-shim`, which has not started the shim since cert-manager 1.15)
 
