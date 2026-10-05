@@ -20,13 +20,25 @@ variable "kubeconfig_path" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.19.2"
+  default     = "v1.21.2"
 }
 
 variable "namespace" {
   description = "Namespace for cert-manager"
   type        = string
   default     = "cert-manager"
+}
+
+variable "cleanup_unmanaged_install" {
+  description = "Delete a non-Helm cert-manager install (CRDs, RBAC, webhooks, namespace) before installing. Deleting the CRDs deletes every Certificate/Issuer on the cluster."
+  type        = bool
+  default     = false
+}
+
+locals {
+  # Gateway API support (gateway-shim) is enabled via controller config since cert-manager 1.15;
+  # --controllers=*,gateway-shim alone registers the shim but never starts its informers.
+  helm_set_args = "--set crds.enabled=true --set crds.keep=true --set config.gatewayAPI.enabled=true"
 }
 
 output "kubeconfig_path" {
@@ -42,11 +54,10 @@ resource "null_resource" "deploy_cert_manager" {
   # Trigger recreation when version changes or Helm configuration changes
   triggers = {
     cert_manager_version = var.cert_manager_version
-    cluster_name        = var.cluster_name
-    kubeconfig_path     = var.kubeconfig_path
-    namespace           = var.namespace
-    # Include extraArgs in trigger to force upgrade when gateway-shim is enabled
-    extra_args_config   = "--controllers=*,gateway-shim"
+    cluster_name         = var.cluster_name
+    kubeconfig_path      = var.kubeconfig_path
+    namespace            = var.namespace
+    helm_set_args        = local.helm_set_args
   }
 
   provisioner "local-exec" {
@@ -117,7 +128,7 @@ resource "null_resource" "deploy_cert_manager" {
       
       # Check if Helm release exists
       HELM_RELEASE_EXISTS=false
-      if helm list -n ${var.namespace} 2>/dev/null | grep -q cert-manager; then
+      if helm status cert-manager -n ${var.namespace} >/dev/null 2>&1; then
         HELM_RELEASE_EXISTS=true
       fi
       
@@ -128,8 +139,7 @@ resource "null_resource" "deploy_cert_manager" {
           echo "  Enabling controllers: ingress-shim (default) + gateway-shim (for Gateway API)"
           helm upgrade cert-manager jetstack/cert-manager \
             --namespace ${var.namespace} \
-            --set installCRDs=true \
-            --set 'extraArgs[0]=--controllers=*\,gateway-shim' \
+            ${local.helm_set_args} \
             --version "${var.cert_manager_version}" \
             --wait \
             --timeout 10m \
@@ -138,9 +148,13 @@ resource "null_resource" "deploy_cert_manager" {
               exit 1
             }
         else
-          echo "  ⚠ cert-manager exists but is not managed by Helm"
+          echo "  ⚠ cert-manager exists but no Helm release 'cert-manager' was found in ${var.namespace}"
+          if [ "${var.cleanup_unmanaged_install}" != "true" ]; then
+            echo "ERROR: refusing to delete the existing install (deleting the CRDs deletes all Certificates and Issuers)."
+            echo "       Check 'helm status cert-manager -n ${var.namespace}' and kubeconfig access, or set cleanup_unmanaged_install = true."
+            exit 1
+          fi
           echo "  Cleaning up existing installation to ensure clean Helm-managed installation..."
-          echo "  (This is safe - cert-manager will be reinstalled immediately)"
           
           # Delete cert-manager CRDs first (cluster-scoped, not in namespace)
           if [ "$CERT_MANAGER_CRDS_EXIST" = "true" ]; then
@@ -327,13 +341,12 @@ resource "null_resource" "deploy_cert_manager" {
       fi
       
       # Install cert-manager (either fresh install or after cleanup)
-      if ! helm list -n ${var.namespace} 2>/dev/null | grep -q cert-manager; then
+      if ! helm status cert-manager -n ${var.namespace} >/dev/null 2>&1; then
         echo "  Installing cert-manager ${var.cert_manager_version}..."
         echo "  Enabling controllers: ingress-shim (default) + gateway-shim (for Gateway API)"
         helm upgrade --install cert-manager jetstack/cert-manager \
           --namespace ${var.namespace} \
-          --set installCRDs=true \
-          --set 'extraArgs[0]=--controllers=*\,gateway-shim' \
+          ${local.helm_set_args} \
           --version "${var.cert_manager_version}" \
           --wait \
           --timeout 10m \
@@ -364,10 +377,10 @@ resource "null_resource" "deploy_cert_manager" {
       if kubectl get clusterrole cert-manager-controller-ingress-shim &>/dev/null; then
         echo "  ✓ ingress-shim controller enabled"
       fi
-      if kubectl get clusterrole cert-manager-controller-gateway-shim &>/dev/null; then
-        echo "  ✓ gateway-shim controller enabled"
+      if kubectl get configmap cert-manager -n ${var.namespace} -o jsonpath='{.data.config\.yaml}' 2>/dev/null | grep -A1 '^gatewayAPI:' | grep -q 'enabled: true'; then
+        echo "  ✓ gateway-shim controller enabled (config gatewayAPI.enabled)"
       else
-        echo "  ⚠ gateway-shim controller not found (may need upgrade)"
+        echo "  ⚠ gatewayAPI.enabled not found in cert-manager controller config"
       fi
       echo ""
       echo "=========================================="
@@ -398,11 +411,11 @@ resource "null_resource" "verify_cert_manager" {
   # Trigger recreation when version changes (will also be recreated when deploy_cert_manager changes due to depends_on)
   triggers = {
     cert_manager_version = var.cert_manager_version
-    cluster_name        = var.cluster_name
-    kubeconfig_path     = var.kubeconfig_path
-    namespace           = var.namespace
-    deploy_resource_id  = null_resource.deploy_cert_manager.id
-    extra_args_config   = "--controllers=*,gateway-shim"
+    cluster_name         = var.cluster_name
+    kubeconfig_path      = var.kubeconfig_path
+    namespace            = var.namespace
+    deploy_resource_id   = null_resource.deploy_cert_manager.id
+    helm_set_args        = local.helm_set_args
   }
 
   provisioner "local-exec" {

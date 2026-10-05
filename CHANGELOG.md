@@ -18,7 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rancher login via Authentik SAML (Rancher "Keycloak (SAML)" provider, site access `required`, allow-listed principals only) alongside local auth; `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600` (live settings, not managed by Terraform)
 - Docs: Rancher API token path is `config/.rancher-api-token` and expires after 90 days (`auth-token-max-ttl-minutes`), not "never"; current-state notes in downstream registration, deployment, troubleshooting, ops notes; RKE2/Rancher version examples updated to `v1.36.2+rke2r1` / `v2.15.0`; README license corrected to Apache-2.0
 
+- **cert-manager** pin `v1.19.2` → **`v1.21.2`** (latest 1.21 patch; supports Kubernetes 1.33–1.36). Live clusters were already on `v1.21.1` via manual Helm (2026-07-31); Terraform now owns the version again
+- cert-manager module: Helm values `crds.enabled=true,crds.keep=true` (replaces deprecated `installCRDs`) and `config.gatewayAPI.enabled=true` for the gateway-shim (replaces `--controllers=*,gateway-shim`, which has not started the shim since cert-manager 1.15)
+
 ### Fixed
+- cert-manager module no longer deletes the cert-manager CRDs/namespace (and with them every Certificate/Issuer) when it cannot see the Helm release; it fails unless `cleanup_unmanaged_install = true`. Release detection uses `helm status` instead of grepping `helm list`
 - Broken doc links (`TERRAFORM_VARIABLES.md`) and an unterminated code fence in `RANCHER_DOWNSTREAM_MANAGEMENT.md`
 - Docs no longer claim `~/.kube/<cluster>.yaml` are RKE2 admin kubeconfigs (they were overwritten by Rancher-proxied ones); break-glass is `~/.kube/<cluster>-rke2.yaml`
 - poc-apps wildcard certificate copy re-synced: gitops-core `cert-sync` uses direct RKE2 admin credentials for all clusters and fails loudly ([gitops-core#6](https://github.com/DataKnifeAI/gitops-core/pull/6))
