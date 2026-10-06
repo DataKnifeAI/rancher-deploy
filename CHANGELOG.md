@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Envoy Gateway** `v1.6.1` → **`v1.9.2`** and **Gateway API** CRDs `v1.4.1` → **`v1.6.1`**. The module applies the CRDs server-side and waits for them before the controller, re-runs when the script changes, and verifies the controller by its real label ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40), [#42](https://github.com/DataKnifeAI/rancher-deploy/pull/42))
 - **CloudNativePG** default `1.28.0` → **`1.30.1`** ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
 - [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): execution log for items #1–#6 of the 2026-10-04 wave (Rancher, democratic-csi, Envoy Gateway, CNPG, Grafana, rolling OS reboots of all 31 nodes); [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md): renewal results; [docs/OPS_NOTES.md](docs/OPS_NOTES.md): new known issues
+- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): execution log for the 2026-10-05 app wave (Postgres 18.6 / Harbor Postgres 16.15, pgbouncer 1.26.0, high-command-ui v0.29, proxmox-ve-mcp v0.43, unifi-network-mcp v0.12, Vector 0.58, removals); items #12, #18 and #20 marked done; [docs/OPS_NOTES.md](docs/OPS_NOTES.md): 2026-10-05 known issues
 
 ### Fixed
 - CloudNativePG resources no longer have destroy provisioners: a version bump replaced the resource and deleted the operator manifest, CRDs included, and with them every Cluster/Backup ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
@@ -36,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **democratic-csi**: `democratic_csi_*` variables, the `deploy_democratic_csi_{nprd,prd,poc}_apps` resources (never in state; count was 0), the `democratic_csi_config` output, `scripts/install-democratic-csi.sh`, `scripts/generate-helm-values-from-tfvars.sh` and `docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md`. Nothing on any cluster used the driver; TrueNAS CSI is the only storage driver. Remove the `democratic_csi_*` entries from your local `terraform.tfvars`
+- **GitHub ARC, MongoDB Community operator, OpenSearch operator**: the 9 `deploy_{arc,mongodb_community_operator,opensearch_operator}_{nprd,prd,poc}_apps` resources, the `github_arc_controller_version`, `mongodb_operator_version` and `opensearch_operator_version` variables, the ARC/GitHub App helper scripts and `install-mongodb-community-operator.sh`. Uninstalled live from all clusters and dropped from state on 2026-10-05; nothing used them. Remove those three entries from your local `terraform.tfvars` ([#46](https://github.com/DataKnifeAI/rancher-deploy/pull/46))
 - **democratic-csi** `democratic_csi_config` output dropped from Terraform state (state edit only, no apply; resources unchanged). Remaining TrueNAS-side cleanup is listed in [docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual)
 
 ### Known issues
@@ -43,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RKE2 leaf certs were renewed on 2026-10-04 and now expire 2027-10-05 (poc-apps-1 2027-09-19); renew again from 2027-06-07 per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
 - Do **not** revoke the TrueNAS API key that was in `democratic_csi_api_key`: it is the key TrueNAS CSI uses ([docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual))
 - TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
+- Orphaned graylog `opensearch-bootstrap-password-webhook` (MutatingWebhookConfiguration, `failurePolicy: Fail`) and its RBAC on nprd-apps; delete them — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md#known-issues-2026-10-05)
 
 ## [1.2.0-beta.1] - 2026-08-31
 

@@ -89,6 +89,15 @@ Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`
 - **Terraform's Rancher API token is expired** (`config/.rancher-api-token` = `rancher_api_token` in tfvars, HTTP 401), and the registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`. Refresh before any `register_downstream_cluster` apply — [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md).
 - **Break-glass kubeconfigs — resolved 2026-10-04.** Break-glass now lives in `~/.kube/<cluster>-rke2.yaml` (RKE2 admin, straight to `https://<cluster>.dataknife.net:6443`; `manager.dataknife.net` for rancher-manager). The old `~/.kube/<cluster>.yaml` files on the main workstation are Rancher-proxied token kubeconfigs (`rancher-manager.yaml`'s token is expired); don't use them for break-glass. Terraform's `get_kubeconfig` will overwrite them with RKE2 admin kubeconfigs on the next full apply. See [CLUSTER_ACCESS_AND_SSO.md § Fallback](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass).
 
+## Known issues (2026-10-05)
+
+- **Postgres images are pinned in git now.** Every CNPG Cluster sets `imageName`: coder, high-command and authentik on `ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie`, Harbor on `16.15-standard-trixie`. The high-command Pooler pins `pgbouncer:1.26.0` through its pod template. Change minors in the owning repo (gitops-dev, gitops-mcp, gitops-tools); CNPG rolls replicas first, then switches the primary over. The `system` flavor is deprecated: move the 18.x clusters to `standard` in a later window (Barman plugin backups don't need the in-image barman tools). See [UPGRADE_PLAN.md § Executed 2026-10-05](UPGRADE_PLAN.md#executed-2026-10-05-app-wave).
+- **Coder restarts once about 5 minutes after a Postgres switchover.** Its pubsub watchdog times out ("pubsub Watchdog timed out") and the process exits; Kubernetes restarts it and it comes back in about 10 s. Expect it after every coder-postgres switchover (operator upgrades, drains, minors).
+- **Orphaned graylog webhook on nprd-apps.** `MutatingWebhookConfiguration/opensearch-bootstrap-password-webhook` and `ClusterRole`/`ClusterRoleBinding` `opensearch-bootstrap-webhook-ca-bundle-injector` are left over from an old Fleet graylog release (created 2026-01-15). The webhook has `failurePolicy: Fail` and points at a service in `managed-graylog`, which no longer exists. It only selects namespaces labelled `name=managed-graylog`, so nothing is blocked today, but a namespace with that label would have every pod CREATE rejected. Delete all three objects.
+- **Vector never parses UniFi CEF fields (nprd `vector-syslog`).** In the gitops-tools grafana overlay's VRL, `match!(message_text, r'CEF:.*')` returns a boolean, not the matched text, so `cef_message` becomes `"true"`/`"false"` and the `^CEF:` branch never runs. Syslog still reaches Loki, just without `device_vendor`, `signature_id`, `severity` and the other CEF labels. Fix with `parse_regex` (capture `CEF:.*`) and test with `vector vrl` before rolling. Present before the 0.58 upgrade.
+- **high-command-ui runs blue/green.** Green (`v0.29`) is live behind `high-command-ui` Service; blue stays on `v0.23` as the rollback (switch the Service selector back). Bring blue to the current tag once green has soaked. Releases are applied with `kubectl apply` from the high-command-ui repo's `k8s/`, not by Fleet.
+- **ARC, MongoDB and OpenSearch operators are gone** from all clusters (2026-10-05). Nothing used them. If you need one again, install it fresh at the current version; don't restore the old Terraform resources.
+
 ## Secrets hygiene
 
 | Path | Purpose |
@@ -102,3 +111,5 @@ Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`
 | `state/terraform.tfstate*` | Local Terraform state (backend path `../state/`); holds secrets in plaintext (gitignored) |
 
 On the main workstation `state/terraform.tfstate*` were mode `0777` on 2026-10-04 (and `terraform/terraform.tfstate.*.backup` `0644`). Fix with `chmod 600 state/terraform.tfstate* terraform/terraform.tfstate.*.backup`; keep `terraform.tfvars` at `0600`.
+
+`terraform state rm` and `terraform state mv` write a full-state backup `terraform.tfstate.<epoch>.backup` into the current directory at mode `0644`. Move it into `~/terraform-state-backups/` (mode 600) or delete it right after.
