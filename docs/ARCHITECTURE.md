@@ -34,7 +34,7 @@ IPs, VLANs, storage, and sizing come from the `clusters` map in `terraform.tfvar
 3. Join manager-2/3; verify cluster; optionally install cert-manager + Rancher.
 4. Create each apps cluster the same way (primary → token → additional servers → workers).
 5. Register downstream clusters with Rancher (when `register_downstream_cluster = true`).
-6. Install platform add-ons on apps clusters when flags are set (CSI, Envoy Gateway, kube-vip, CNPG, MongoDB, OpenSearch, GitHub ARC, Palworld operator).
+6. Install platform add-ons on apps clusters when flags are set (CSI, Envoy Gateway, kube-vip, CNPG, Palworld operator).
 
 RKE2 version comes from `rke2_version` (default `v1.36.2+rke2r1`) and the Rancher chart from `rancher_version` (default `v2.15.0`); both live clusters and defaults match as of 2026-10. Upgrades: [UPGRADE_PLAN.md](UPGRADE_PLAN.md).
 
@@ -69,9 +69,6 @@ Enabled via Terraform flags / versions in tfvars:
 | Component | Notes |
 |-----------|--------|
 | CloudNativePG | PostgreSQL operator on apps clusters |
-| MongoDB Community Operator | For charts that need MongoDB CRs |
-| OpenSearch Operator | Search / logging stacks |
-| GitHub ARC | Actions runners (see [GITHUB_ARC_SETUP.md](GITHUB_ARC_SETUP.md)) |
 | Palworld operator | Manifests from Harbor; **default on prd-apps only** (`install_palworld_operator_prd`) |
 
 ## Terraform layout

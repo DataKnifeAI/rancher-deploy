@@ -21,7 +21,7 @@ Also automated when enabled in `terraform.tfvars`:
 - Downstream registration into Rancher
 - Official **TrueNAS CSI** (NFS) on app clusters
 - **Envoy Gateway** + **kube-vip** LoadBalancer IPs on app clusters
-- Operators: CloudNativePG, MongoDB Community, OpenSearch, GitHub ARC
+- Operators: CloudNativePG (MongoDB Community, OpenSearch and GitHub ARC were removed on 2026-10-05)
 - Optional **Palworld operator** (default: **prd-apps** only)
 
 Topology detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -102,7 +102,7 @@ Full walkthrough: [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md).
 
 ```
 ├── Makefile                 # init / plan / apply / destroy helpers
-├── scripts/                 # apply.sh, destroy.sh, CSI/ARC helpers
+├── scripts/                 # apply.sh, destroy.sh, CSI helpers
 ├── docs/                    # guides + assets/
 ├── examples/                # reference diagrams (e.g. homelab topology)
 ├── helm-values/             # examples (generated values are gitignored)

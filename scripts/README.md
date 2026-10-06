@@ -21,25 +21,11 @@ Rancher-specific configuration and management:
 - **`install-system-agent.sh`** - Install Rancher system-agent on downstream cluster nodes
 - **`check-agent-status.sh`** - Check cattle-cluster-agent status and troubleshoot DNS issues
 
-### GitHub ARC (Actions Runner Controller) Scripts
-
-GitHub Actions Runner Controller installation and configuration:
-
-- **`install-github-arc.sh`** - Install official GitHub ARC controller and CRDs
-- **`setup-github-app-arc.sh`** - Interactive script for GitHub App creation and secret setup
-- **`complete-arc-setup.sh`** - Complete ARC setup with existing GitHub App
-- **`create-github-app-secrets.sh`** - Create Kubernetes secrets for GitHub App authentication
-- **`get-github-app-installation-id.sh`** - Get GitHub App Installation ID using JWT
-- **`list-github-apps.sh`** - List GitHub Apps for an organization
-- **`suggest-github-app-name.sh`** - Suggest unique GitHub App names to avoid conflicts
-- **`generate-jwt.sh`** - Generate JWT for GitHub App authentication
-
 ### Database Setup Scripts
 
 Database operator installation:
 
 - **`install-cloudnativepg.sh`** - Install CloudNativePG operator for PostgreSQL
-- **`install-mongodb-community-operator.sh`** - Install MongoDB Community Operator CRDs and operator for MongoDB management (required for Graylog Helm chart)
 
 ### Utility Scripts
 
@@ -82,29 +68,12 @@ rancher token delete all               # clear the cache / force re-login
   --nodes 192.168.14.110 192.168.14.111
 ```
 
-### GitHub ARC Setup
-
-```bash
-# Interactive setup (recommended)
-./scripts/setup-github-app-arc.sh
-
-# Install ARC controller
-./scripts/install-github-arc.sh nprd-apps
-
-# Complete setup with existing GitHub App
-./scripts/complete-arc-setup.sh
-```
-
 ### Database Setup
 
 ```bash
 # Install CloudNativePG
 export KUBECONFIG=~/.kube/nprd-apps.yaml
 ./scripts/install-cloudnativepg.sh nprd-apps
-
-# Install MongoDB Community Operator (for Graylog)
-export KUBECONFIG=~/.kube/nprd-apps.yaml
-./scripts/install-mongodb-community-operator.sh nprd-apps
 ```
 
 ## Script Dependencies
@@ -117,12 +86,9 @@ Most scripts require:
 - Access to Terraform variables (usually `terraform/terraform.tfvars`)
 
 Some scripts require:
-- `gh` CLI - GitHub CLI (for GitHub-related scripts)
-- `openssl` - SSL/TLS toolkit (for JWT generation)
 - SSH access to cluster nodes (for agent installation)
 
 ## Related Documentation
 
-- **[../docs/GITHUB_ARC_SETUP.md](../docs/GITHUB_ARC_SETUP.md)** - Complete GitHub ARC setup guide
 - **[../docs/RANCHER_API_TOKEN_CREATION.md](../docs/RANCHER_API_TOKEN_CREATION.md)** - Rancher API token documentation
 - **[../docs/CLUSTER_ACCESS_AND_SSO.md](../docs/CLUSTER_ACCESS_AND_SSO.md)** - kubectl / Rancher SSO access and break-glass

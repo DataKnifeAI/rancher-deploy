@@ -389,28 +389,10 @@ variable "envoy_gateway_version" {
   default     = "v1.9.2"
 }
 
-variable "opensearch_operator_version" {
-  description = "OpenSearch Kubernetes Operator Helm chart version"
-  type        = string
-  default     = "2.8.0"
-}
-
-variable "mongodb_operator_version" {
-  description = "MongoDB Community Operator Helm chart version"
-  type        = string
-  default     = "0.13.0"
-}
-
 variable "cloudnativepg_operator_version" {
   description = "CloudNativePG Operator version (installed via manifest)"
   type        = string
   default     = "1.30.1"
-}
-
-variable "github_arc_controller_version" {
-  description = "GitHub Actions Runner Controller (ARC) Helm chart version"
-  type        = string
-  default     = "0.13.1"
 }
 
 # ============================================================================
