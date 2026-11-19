@@ -69,7 +69,10 @@ Enabled via Terraform flags / versions in tfvars:
 | Component | Notes |
 |-----------|--------|
 | CloudNativePG | PostgreSQL operator on apps clusters |
+| Shared data operators | Percona PSMDB + OpsTree Redis + RabbitMQ Cluster on **prd-apps** (`install_shared_data_operators_prd`) for Stoat HA |
+| DataKnife app operators | Stoat, Satisfactory, Terraria, Bedrock, Dragonwilds on **prd-apps** (`install_dataknife_operators_prd`) |
 | Palworld operator | Manifests from Harbor; **default on prd-apps only** (`install_palworld_operator_prd`) |
+| Stoat HA data CRs | Optional `install_stoat_ha_data_prd` (mongo/redis/rabbit CRs in `stoat`; secrets still manual) |
 
 ## Terraform layout
 

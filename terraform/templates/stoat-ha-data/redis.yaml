@@ -1,0 +1,61 @@
+# OpsTree Redis replication for Stoat (primary + 2 replicas).
+# Stoat speaks plain redis:// — use the master Service (stoat-redis).
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: RedisReplication
+metadata:
+  name: stoat-redis
+  namespace: stoat
+spec:
+  clusterSize: 3
+  kubernetesConfig:
+    image: quay.io/opstree/redis:v7.0.15
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: stoat-ha-redis
+      key: password
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: truenas-csi-nfs-no-mapall
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: RedisSentinel
+metadata:
+  name: stoat-redis
+  namespace: stoat
+spec:
+  clusterSize: 3
+  redisSentinelConfig:
+    redisReplicationName: stoat-redis
+    redisReplicationPassword:
+      secretKeyRef:
+        name: stoat-ha-redis
+        key: password
+  kubernetesConfig:
+    image: quay.io/opstree/redis-sentinel:v7.0.15
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: stoat-ha-redis
+      key: password
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000

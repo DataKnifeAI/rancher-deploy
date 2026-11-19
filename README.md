@@ -22,7 +22,8 @@ Also automated when enabled in `terraform.tfvars`:
 - Official **TrueNAS CSI** (NFS) on app clusters
 - **Envoy Gateway** + **kube-vip** LoadBalancer IPs on app clusters
 - Operators: CloudNativePG (MongoDB Community, OpenSearch and GitHub ARC were removed on 2026-10-05)
-- Optional **Palworld operator** (default: **prd-apps** only)
+- **Shared data operators** on prd-apps (Percona Mongo, OpsTree Redis, RabbitMQ Cluster) for Stoat HA
+- **DataKnife app operators** on prd-apps (Stoat, Satisfactory, Terraria, Bedrock, Dragonwilds) + optional **Palworld**
 
 Topology detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

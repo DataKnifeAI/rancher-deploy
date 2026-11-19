@@ -436,6 +436,99 @@ variable "palworld_operator_image_pull_secret_file" {
 }
 
 # ============================================================================
+# SHARED DATA OPERATORS (Percona Mongo / OpsTree Redis / RabbitMQ Cluster)
+# Required for Stoat HA data-plane; reusable by other apps via CRDs.
+# ============================================================================
+
+variable "install_shared_data_operators_prd" {
+  description = "Install Percona psmdb-operator, OpsTree redis-operator, and RabbitMQ Cluster Operator on prd-apps"
+  type        = bool
+  default     = true
+}
+
+variable "install_stoat_ha_data_prd" {
+  description = "Apply Stoat HA data CRs (stoat-mongo / stoat-redis / stoat-rabbit) into namespace stoat on prd-apps. Requires install_shared_data_operators_prd and pre-created user secrets (see stoat-operator/deploy/ha/README.md)."
+  type        = bool
+  default     = false
+}
+
+variable "psmdb_operator_chart_version" {
+  description = "Helm chart version for percona/psmdb-operator"
+  type        = string
+  default     = "1.23.2"
+}
+
+variable "psmdb_operator_crds_version" {
+  description = "Helm chart version for percona/psmdb-operator-crds"
+  type        = string
+  default     = "1.23.1"
+}
+
+variable "redis_operator_chart_version" {
+  description = "Helm chart version for ot-helm/redis-operator"
+  type        = string
+  default     = "0.27.0"
+}
+
+variable "rabbitmq_cluster_operator_version" {
+  description = "RabbitMQ Cluster Operator release tag (without v), applied from GitHub release YAML"
+  type        = string
+  default     = "2.23.3"
+}
+
+# ============================================================================
+# DATAKNIFE APP OPERATORS (Stoat + game servers) — prd-apps
+# ============================================================================
+
+variable "install_dataknife_operators_prd" {
+  description = "Install Stoat, Satisfactory, Terraria, Bedrock, and Dragonwilds operators on prd-apps"
+  type        = bool
+  default     = true
+}
+
+variable "dataknife_operator_image_pull_secret" {
+  description = "Harbor pull secret name copied into each DataKnife operator namespace"
+  type        = string
+  default     = "harbor-registry-secret"
+}
+
+variable "dataknife_operator_image_pull_secret_file" {
+  description = "Path to local Harbor secret YAML (gitignored); namespace rewritten per operator"
+  type        = string
+  default     = "config/harbor-registry-secret.yaml"
+}
+
+variable "stoat_operator_image" {
+  description = "Stoat operator image (Harbor). Pins should match a known-good tag/digest."
+  type        = string
+  default     = "harbor.dataknife.net/library/stoat-operator:9bdea64"
+}
+
+variable "satisfactory_operator_image" {
+  description = "Satisfactory operator image (Harbor)"
+  type        = string
+  default     = "harbor.dataknife.net/library/satisfactory-operator:v0.1.0"
+}
+
+variable "terraria_operator_image" {
+  description = "Terraria operator image (Harbor)"
+  type        = string
+  default     = "harbor.dataknife.net/library/terraria-operator:phase3-parity"
+}
+
+variable "bedrock_operator_image" {
+  description = "Bedrock operator image (Harbor)"
+  type        = string
+  default     = "harbor.dataknife.net/library/bedrock-operator:joinfix-20261117084844"
+}
+
+variable "dragonwilds_operator_image" {
+  description = "Dragonwilds operator image (Harbor)"
+  type        = string
+  default     = "harbor.dataknife.net/library/dragonwilds-operator:v0.2.3"
+}
+
+# ============================================================================
 # KUBE-VIP CONFIGURATION
 # ============================================================================
 
