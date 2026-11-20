@@ -66,7 +66,8 @@ resource "null_resource" "deploy_dataknife_operator_prd_apps" {
       MANIFEST=$(mktemp)
       cat << 'DKAI_OPERATOR_MANIFEST_END' > "$MANIFEST"
 ${templatefile(each.value.template, {
-  operator_image = each.value.image
+  operator_image     = each.value.image
+  image_pull_secret  = var.dataknife_operator_image_pull_secret
 })}
 DKAI_OPERATOR_MANIFEST_END
 

@@ -23,14 +23,16 @@ resource "null_resource" "deploy_shared_data_operators_prd_apps" {
 
   depends_on = [
     null_resource.merge_kubeconfigs,
-    module.rke2_prd_apps
+    module.rke2_prd_apps,
+    module.cert_manager_prd_apps, # RabbitMQ Cluster Operator ≥2.20 needs cert-manager CRDs
   ]
 
   triggers = {
-    script = filemd5("${path.module}/../scripts/install-shared-data-operators.sh")
-    psmdb  = var.psmdb_operator_chart_version
-    redis  = var.redis_operator_chart_version
-    rabbit = var.rabbitmq_cluster_operator_version
+    script     = filemd5("${path.module}/../scripts/install-shared-data-operators.sh")
+    psmdb      = var.psmdb_operator_chart_version
+    psmdb_crds = var.psmdb_operator_crds_version
+    redis      = var.redis_operator_chart_version
+    rabbit     = var.rabbitmq_cluster_operator_version
   }
 }
 

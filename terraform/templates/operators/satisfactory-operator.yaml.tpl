@@ -933,7 +933,7 @@ spec:
             - ALL
         volumeMounts: []
       imagePullSecrets:
-      - name: harbor-registry-secret
+      - name: ${image_pull_secret}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

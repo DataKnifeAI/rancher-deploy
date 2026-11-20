@@ -87,8 +87,11 @@ for op in $OPERATORS; do
   ensure_pull_secret "$ns"
 
   MANIFEST=$(mktemp)
-  # Templates use ${operator_image} for terraform templatefile; for this script substitute here.
-  sed "s|\${operator_image}|${image}|g" "$tpl" > "$MANIFEST"
+  pull_secret="${IMAGE_PULL_SECRET:-harbor-registry-secret}"
+  # Templates use ${operator_image} / ${image_pull_secret} for terraform templatefile.
+  sed -e "s|\${operator_image}|${image}|g" \
+      -e "s|\${image_pull_secret}|${pull_secret}|g" \
+      "$tpl" > "$MANIFEST"
   kubectl apply --server-side --force-conflicts -f "$MANIFEST"
   rm -f "$MANIFEST"
 

@@ -889,5 +889,7 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+      - name: ${image_pull_secret}
       serviceAccountName: stoat-operator-controller-manager
       terminationGracePeriodSeconds: 10
