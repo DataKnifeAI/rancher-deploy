@@ -1,0 +1,50 @@
+# Percona Server for MongoDB — 3-member replica set for Stoat.
+# Prerequisites:
+#   kubectl -n stoat create secret generic stoat-ha-mongo-users … (system users)
+#   kubectl -n stoat create secret generic stoat-ha-mongo-app --from-literal=password=…
+apiVersion: psmdb.percona.com/v1
+kind: PerconaServerMongoDB
+metadata:
+  name: stoat-mongo
+  namespace: stoat
+  finalizers:
+    - percona.com/delete-psmdb-pods-in-order
+spec:
+  crVersion: "1.23.1"
+  image: percona/percona-server-mongodb:8.0.32-14
+  imagePullPolicy: IfNotPresent
+  secrets:
+    users: stoat-ha-mongo-users
+  replsets:
+    - name: rs0
+      size: 3
+      affinity:
+        antiAffinityTopologyKey: kubernetes.io/hostname
+      volumeSpec:
+        persistentVolumeClaim:
+          storageClassName: truenas-csi-nfs-no-mapall
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          memory: 2Gi
+  sharding:
+    enabled: false
+  users:
+    - name: stoat
+      db: revolt
+      passwordSecretRef:
+        name: stoat-ha-mongo-app
+        key: password
+      roles:
+        - name: readWrite
+          db: revolt
+        - name: dbAdmin
+          db: revolt
+        - name: readWrite
+          db: revolt_hr

@@ -385,6 +385,32 @@ palworld_operator_image_pull_secret      = "harbor-registry-secret"
 palworld_operator_image_pull_secret_file = "config/harbor-registry-secret.yaml"
 
 # ============================================================================
+# SHARED DATA OPERATORS (prd) — Percona Mongo, OpsTree Redis, RabbitMQ Cluster
+# Needed for Stoat HA data-plane; cert-manager must already be present for RabbitMQ.
+# ============================================================================
+
+install_shared_data_operators_prd = true
+# Apply stoat-mongo / stoat-redis / stoat-rabbit CRs only after user secrets exist:
+install_stoat_ha_data_prd = false
+# psmdb_operator_chart_version = "1.23.2"
+# redis_operator_chart_version = "0.27.0"
+# rabbitmq_cluster_operator_version = "2.23.3"
+
+# ============================================================================
+# DATAKNIFE APP OPERATORS (prd) — Stoat + game operators (not instance CRs)
+# ============================================================================
+
+install_dataknife_operators_prd = true
+dataknife_operator_image_pull_secret      = "harbor-registry-secret"
+dataknife_operator_image_pull_secret_file = "config/harbor-registry-secret.yaml"
+
+stoat_operator_image         = "harbor.dataknife.net/library/stoat-operator:9bdea64"
+satisfactory_operator_image  = "harbor.dataknife.net/library/satisfactory-operator:v0.1.0"
+terraria_operator_image      = "harbor.dataknife.net/library/terraria-operator:phase3-parity"
+bedrock_operator_image       = "harbor.dataknife.net/library/bedrock-operator:joinfix-20261117084844"
+dragonwilds_operator_image   = "harbor.dataknife.net/library/dragonwilds-operator:v0.2.3"
+
+# ============================================================================
 # NOTES FOR PRODUCTION
 # ============================================================================
 

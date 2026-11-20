@@ -1,0 +1,39 @@
+# Official RabbitMQ Cluster Operator — 3-node cluster for Stoat.
+# Default user secret is auto-created as stoat-rabbit-default-user.
+#
+# rabbitmq:4.1.x lacks /api/health/checks/reached-target-cluster-size (needs 4.2.4+),
+# so legacy-startup-probe is required with Cluster Operator ≥2.22.
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: stoat-rabbit
+  namespace: stoat
+  annotations:
+    rabbitmq.com/legacy-startup-probe: "true"
+spec:
+  replicas: 3
+  image: rabbitmq:4.1.3-management
+  persistence:
+    storageClassName: truenas-csi-nfs-no-mapall
+    storage: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      # Operator warns unless request == limit for memory.
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: stoat-rabbit
+            topologyKey: kubernetes.io/hostname
+  rabbitmq:
+    additionalConfig: |
+      cluster_partition_handling = pause_minority
+      queue_master_locator = min-masters
+      disk_free_limit.relative = 1.5
