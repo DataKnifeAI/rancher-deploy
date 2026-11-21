@@ -3,11 +3,26 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.90"
+      # Keep 0.93.x until #9 proxmox window (0.115+); ~> 0.90 would float to 0.123+.
+      version = "~> 0.93.0"
     }
     rancher2 = {
       source  = "rancher/rancher2"
       version = "~> 3.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.38"
+    }
+    # Phase 1 of #9: bump null/local within major. rancher2→15.x and proxmox→0.115
+    # and kubernetes→3.x need separate windows (refresh fixes + plan review).
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.2.4, < 4.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.6.1, < 3.0"
     }
   }
 }

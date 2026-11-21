@@ -1,6 +1,7 @@
 # Terraform
 .terraform
-.terraform.lock.hcl
+# Tracked for reproducible provider pins (#9)
+# .terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 tfplan
