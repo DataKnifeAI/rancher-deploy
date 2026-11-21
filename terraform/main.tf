@@ -488,10 +488,10 @@ module "nprd_apps_large_workers" {
   for_each = local.cluster_large_worker_count["nprd-apps"] > 0 ? {
     for i in range(1, local.cluster_large_worker_count["nprd-apps"] + 1) :
     "nprd-apps-large-worker-${i}" => {
-      vm_id      = var.vm_id_start_nprd_apps + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
-      hostname   = "nprd-apps-large-worker-${i}"
-      ip_address = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1}/24"
-      node_index = local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
+      vm_id        = var.vm_id_start_nprd_apps + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
+      hostname     = "nprd-apps-large-worker-${i}"
+      ip_address   = "${var.clusters["nprd-apps"].ip_subnet}.${var.clusters["nprd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1}/24"
+      node_index   = local.cluster_large_worker_slot_offset["nprd-apps"] + i - 1
       proxmox_node = coalesce(var.clusters["nprd-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
@@ -884,10 +884,10 @@ module "prd_apps_large_workers" {
   for_each = local.cluster_large_worker_count["prd-apps"] > 0 ? {
     for i in range(1, local.cluster_large_worker_count["prd-apps"] + 1) :
     "prd-apps-large-worker-${i}" => {
-      vm_id      = var.vm_id_start_prd_apps + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
-      hostname   = "prd-apps-large-worker-${i}"
-      ip_address = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1}/24"
-      node_index = local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
+      vm_id        = var.vm_id_start_prd_apps + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
+      hostname     = "prd-apps-large-worker-${i}"
+      ip_address   = "${var.clusters["prd-apps"].ip_subnet}.${var.clusters["prd-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["prd-apps"] + i - 1}/24"
+      node_index   = local.cluster_large_worker_slot_offset["prd-apps"] + i - 1
       proxmox_node = coalesce(var.clusters["prd-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
@@ -970,7 +970,7 @@ module "rke2_prd_apps" {
   depends_on = [
     module.prd_apps_primary,
     module.prd_apps_additional,
-    module.prd_apps_workers,  # Always include (empty if worker_count = 0)
+    module.prd_apps_workers, # Always include (empty if worker_count = 0)
     module.prd_apps_large_workers,
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
@@ -1210,10 +1210,10 @@ module "poc_apps_large_workers" {
   for_each = local.cluster_large_worker_count["poc-apps"] > 0 ? {
     for i in range(1, local.cluster_large_worker_count["poc-apps"] + 1) :
     "poc-apps-large-worker-${i}" => {
-      vm_id      = var.vm_id_start_poc_apps + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
-      hostname   = "poc-apps-large-worker-${i}"
-      ip_address = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1}/24"
-      node_index = local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
+      vm_id        = var.vm_id_start_poc_apps + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
+      hostname     = "poc-apps-large-worker-${i}"
+      ip_address   = "${var.clusters["poc-apps"].ip_subnet}.${var.clusters["poc-apps"].ip_start_octet + local.cluster_large_worker_slot_offset["poc-apps"] + i - 1}/24"
+      node_index   = local.cluster_large_worker_slot_offset["poc-apps"] + i - 1
       proxmox_node = coalesce(var.clusters["poc-apps"].large_worker_proxmox_node, var.proxmox_node)
     }
   } : {}
@@ -1296,7 +1296,7 @@ module "rke2_poc_apps" {
   depends_on = [
     module.poc_apps_primary,
     module.poc_apps_additional,
-    module.poc_apps_workers,  # Always include (empty if worker_count = 0)
+    module.poc_apps_workers, # Always include (empty if worker_count = 0)
     module.poc_apps_large_workers,
     module.rancher_deployment # Wait for Rancher to be deployed first
   ]
@@ -1997,7 +1997,7 @@ module "rancher_downstream_registration_nprd_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = "${abspath("${path.root}/../config")}/.rancher-api-token"
   cluster_id           = trimspace(data.local_file.nprd_apps_cluster_id[0].content)
   ssh_private_key_path = var.ssh_private_key
   ssh_user             = "ubuntu"
@@ -2033,7 +2033,7 @@ module "rancher_downstream_registration_prd_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = "${abspath("${path.root}/../config")}/.rancher-api-token"
   cluster_id           = trimspace(data.local_file.prd_apps_cluster_id[0].content)
   ssh_private_key_path = var.ssh_private_key
   ssh_user             = "ubuntu"
@@ -2069,7 +2069,7 @@ module "rancher_downstream_registration_poc_apps" {
   source = "./modules/rancher_downstream_registration"
 
   rancher_url          = "https://${var.rancher_hostname}"
-  rancher_token_file   = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+  rancher_token_file   = "${abspath("${path.root}/../config")}/.rancher-api-token"
   cluster_id           = trimspace(data.local_file.poc_apps_cluster_id[0].content)
   ssh_private_key_path = var.ssh_private_key
   ssh_user             = "ubuntu"
@@ -2122,7 +2122,7 @@ module "rancher_downstream_registration_poc_apps" {
 #   source = "./modules/system_agent_install"
 #   
 #   rancher_url            = "https://${var.rancher_hostname}"
-#   rancher_token_file     = "/home/lee/git/rancher-deploy/config/.rancher-api-token"
+#   rancher_token_file     = "${abspath("${path.root}/../config")}/.rancher-api-token"
 #   cluster_id             = "c-7c2vb"
 #   install_script_path    = "${path.module}/../scripts/install-system-agent.sh"
 #   ssh_private_key_path   = var.ssh_private_key

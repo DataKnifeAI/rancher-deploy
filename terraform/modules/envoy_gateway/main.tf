@@ -32,7 +32,7 @@ variable "gateway_api_version" {
 variable "envoy_gateway_version" {
   description = "Envoy Gateway release (install.yaml). Upgrade one minor version at a time."
   type        = string
-  default     = "v1.9.2"
+  default     = "v1.9.4"
 }
 
 variable "namespace" {

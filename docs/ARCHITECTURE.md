@@ -36,7 +36,7 @@ IPs, VLANs, storage, and sizing come from the `clusters` map in `terraform.tfvar
 5. Register downstream clusters with Rancher (when `register_downstream_cluster = true`).
 6. Install platform add-ons on apps clusters when flags are set (CSI, Envoy Gateway, kube-vip, CNPG, Palworld operator).
 
-RKE2 version comes from `rke2_version` (default `v1.36.2+rke2r1`) and the Rancher chart from `rancher_version` (default `v2.15.0`); both live clusters and defaults match as of 2026-10. Upgrades: [UPGRADE_PLAN.md](UPGRADE_PLAN.md).
+RKE2 version comes from `rke2_version` (default `v1.36.6+rke2r1`) and the Rancher chart from `rancher_version` (default `v2.15.3`). Live clusters as of 2026-10 were still on `v1.36.2+rke2r1` / `v2.15.2` — see [UPGRADE_PLAN.md](UPGRADE_PLAN.md) for the next patch window.
 
 ## Access and authentication
 

@@ -48,7 +48,7 @@ variable "rancher_hostname" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.21.2"
+  default     = "v1.21.3"
 }
 
 output "kubeconfig_path" {
@@ -119,7 +119,7 @@ resource "null_resource" "verify_rancher" {
       echo "IMPORTANT: Change password immediately after first login!"
       echo "=========================================="
     EOT
-    
+
     environment = {
       KUBECONFIG = pathexpand(var.kubeconfig_path)
     }
@@ -137,7 +137,7 @@ resource "null_resource" "create_monitoring_namespace" {
       kubectl create namespace cattle-monitoring-system 2>/dev/null || true
       echo "✓ Monitoring namespace ready"
     EOT
-    
+
     environment = {
       KUBECONFIG = pathexpand(var.kubeconfig_path)
     }

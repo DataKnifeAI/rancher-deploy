@@ -179,7 +179,7 @@ Infrastructure-as-code using Terraform:
 **RECOMMENDED: Use the apply.sh script**
 
 ```bash
-cd /home/lee/git/rancher-deploy
+cd "$(git rev-parse --show-toplevel)"
 ./apply.sh
 ```
 

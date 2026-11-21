@@ -303,7 +303,7 @@ If SSH is broken too, see [SSH_AND_ACCESS.md](SSH_AND_ACCESS.md).
 **Terraform and the Rancher API token**
 
 - What Terraform actually reads is **`config/.rancher-api-token`** (repo root): the `rancher2` provider in `terraform/provider.tf` and the cluster-create / cluster-ID `null_resource`s in `terraform/main.tf`. `deploy-rancher.sh` writes that file on first install.
-- `module.rancher_downstream_registration_*` in `terraform/main.tf` passes a **hard-coded** `rancher_token_file = "/home/lee/git/rancher-deploy/config/.rancher-api-token"` (an older checkout path), not the file in this checkout.
+- `module.rancher_downstream_registration_*` in `terraform/main.tf` uses `rancher_token_file` under this checkout's `config/` (`abspath` from the Terraform root).
 - `var.rancher_api_token` (`terraform.tfvars`) is declared but not used by any Terraform resource; only `setup-rancher-kubeconfig.sh` reads it for its one-time lookup.
 - On 2026-10-04 the token in both `terraform.tfvars` and `config/.rancher-api-token` was the same expired **kubeconfig** token (HTTP 401). Downstream registration / `register_downstream_cluster` applies need a fresh token first.
 - `create-rancher-api-token.sh` and `deploy-rancher.sh` request `ttl: 0`, but `auth-token-max-ttl-minutes` caps it, so the token lasts **90 days**, not forever. Put a rotation reminder on the calendar.

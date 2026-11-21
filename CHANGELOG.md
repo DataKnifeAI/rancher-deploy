@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Repo defaults + **live window completed 2026-11-20/21**: **Rancher** `v2.15.2` → **`v2.15.3`**, **RKE2** `v1.36.2+rke2r1` → **`v1.36.6+rke2r1`** (31/31), **cert-manager** → **`v1.21.3`**, **Envoy Gateway** `v1.9.2` → **`v1.9.4`**, **CloudNativePG** `1.30.1` → **`1.30.2`**. See [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md#next-wave-reviewed-2026-11-20)
+- Downstream registration `rancher_token_file` uses `${abspath("${path.root}/../config")}/.rancher-api-token` instead of a hard-coded `/home/lee/git/...` path
+- kube-vip deploy script ClusterRole now includes `endpointslices` / `endpoints` (needed by v1.3.x); **default pin stays `v1.0.3`**
+
+### Fixed
+- Hard-coded Rancher API token path in `terraform/main.tf` registration modules
+
+### Known issues
+- Terraform Rancher API token still **expired** (admin password rotated past bootstrap secret) — create a fresh token in the UI and write `config/.rancher-api-token` before any `register_downstream_cluster` apply
+- **kube-vip `v1.3.2` blocked**: with control-plane-only DaemonSet affinity, `externalTrafficPolicy=Local` services lose their VIP when endpoints are only on workers (prd high-command / livekit). Rolled back to `v1.0.3`. Fix affinity (run DS on all nodes) before retrying
+- RKE2 leaf certs expire 2027-10-05 (poc-apps-1 2027-09-19); renew again from 2027-06-07 per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
+- Do **not** revoke the TrueNAS API key that was in `democratic_csi_api_key`: it is the key TrueNAS CSI uses ([docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual))
+- Orphaned graylog `opensearch-bootstrap-password-webhook` on nprd-apps; delete them — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md#known-issues-2026-10-05)
+- GitLab mirror (`dk-raas/dkai/devops/rancher-deploy`) last synced 2026-04-26 — investigate mirror push workflow
+
+## [Previous unreleased notes — kept until next tagged release]
+
 ### Added
 - `scripts/setup-rancher-kubeconfig.sh` (`make rancher-kubeconfig`): kubeconfigs that authenticate via the Rancher CLI (`rancher token` exec plugin) instead of embedded tokens; `--auth-provider` for SSO and `--break-glass` for `<cluster>-local` contexts
 - [docs/CLUSTER_ACCESS_AND_SSO.md](docs/CLUSTER_ACCESS_AND_SSO.md): Authentik → Rancher SAML → kubectl, first-time setup, SAML/Authentik reference, token settings, break-glass layers, automation guidance, certificate calendar, troubleshooting
@@ -14,38 +32,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md): per-node RKE2 cert expiry table and rolling leaf-cert rotation runbook (plan; expiry 2027-01-08 / 2027-01-15)
 - Break-glass RKE2 admin kubeconfigs `~/.kube/<cluster>-rke2.yaml` (direct `<cluster>.dataknife.net:6443`, kept out of `~/.kube/config`) with fetch procedure in CLUSTER_ACCESS_AND_SSO.md
 
-### Changed
+### Changed (2026-10 wave)
 - Rancher login via Authentik SAML (Rancher "Keycloak (SAML)" provider, site access `required`, allow-listed principals only) alongside local auth; `kubeconfig-generate-token=false`, `kubeconfig-default-token-ttl-minutes=129600` (live settings, not managed by Terraform)
 - Docs: Rancher API token path is `config/.rancher-api-token` and expires after 90 days (`auth-token-max-ttl-minutes`), not "never"; current-state notes in downstream registration, deployment, troubleshooting, ops notes; RKE2/Rancher version examples updated to `v1.36.2+rke2r1` / `v2.15.0`; README license corrected to Apache-2.0
-
-- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): prioritized next upgrade wave (reviewed 2026-10-04: live vs latest for Rancher, RKE2, Envoy Gateway, CNPG, OS, monitoring, apps, Terraform providers) and the cert-manager v1.21.2 rollout log; the completed 2.13→2.15 / 1.34→1.36 runbook is kept as history
-- **cert-manager** pin `v1.19.2` → **`v1.21.2`** (latest 1.21 patch; supports Kubernetes 1.33–1.36). Live clusters were already on `v1.21.1` via manual Helm (2026-07-31); Terraform now owns the version again
-- cert-manager module: Helm values `crds.enabled=true,crds.keep=true` (replaces deprecated `installCRDs`) and `config.gatewayAPI.enabled=true` for the gateway-shim (replaces `--controllers=*,gateway-shim`, which has not started the shim since cert-manager 1.15)
+- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): prioritized next upgrade wave (reviewed 2026-10-04) and the cert-manager v1.21.2 rollout log
+- **cert-manager** pin `v1.19.2` → **`v1.21.2`**. Live clusters were already on `v1.21.1` via manual Helm (2026-07-31); Terraform now owns the version again
+- cert-manager module: Helm values `crds.enabled=true,crds.keep=true` and `config.gatewayAPI.enabled=true` for the gateway-shim
 - **Rancher** pin `v2.15.0` → **`v2.15.2`** (live since 2026-10-04)
-- **Envoy Gateway** `v1.6.1` → **`v1.9.2`** and **Gateway API** CRDs `v1.4.1` → **`v1.6.1`**. The module applies the CRDs server-side and waits for them before the controller, re-runs when the script changes, and verifies the controller by its real label ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40), [#42](https://github.com/DataKnifeAI/rancher-deploy/pull/42))
+- **Envoy Gateway** `v1.6.1` → **`v1.9.2`** and **Gateway API** CRDs `v1.4.1` → **`v1.6.1`** ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40), [#42](https://github.com/DataKnifeAI/rancher-deploy/pull/42))
 - **CloudNativePG** default `1.28.0` → **`1.30.1`** ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
-- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): execution log for items #1–#6 of the 2026-10-04 wave (Rancher, democratic-csi, Envoy Gateway, CNPG, Grafana, rolling OS reboots of all 31 nodes); [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md): renewal results; [docs/OPS_NOTES.md](docs/OPS_NOTES.md): new known issues
-- [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md): execution log for the 2026-10-05 app wave (Postgres 18.6 / Harbor Postgres 16.15, pgbouncer 1.26.0, high-command-ui v0.29, proxmox-ve-mcp v0.43, unifi-network-mcp v0.12, Vector 0.58, removals); items #12, #18 and #20 marked done; [docs/OPS_NOTES.md](docs/OPS_NOTES.md): 2026-10-05 known issues
+- Execution logs for 2026-10-04 / 2026-10-05 waves in [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md)
 
-### Fixed
-- CloudNativePG resources no longer have destroy provisioners: a version bump replaced the resource and deleted the operator manifest, CRDs included, and with them every Cluster/Backup ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
+### Fixed (2026-10 wave)
+- CloudNativePG resources no longer have destroy provisioners ([#41](https://github.com/DataKnifeAI/rancher-deploy/pull/41))
 - Envoy Gateway module no longer deletes Gateway API CRDs on a version mismatch ([#40](https://github.com/DataKnifeAI/rancher-deploy/pull/40))
-- cert-manager module no longer deletes the cert-manager CRDs/namespace (and with them every Certificate/Issuer) when it cannot see the Helm release; it fails unless `cleanup_unmanaged_install = true`. Release detection uses `helm status` instead of grepping `helm list`
-- Broken doc links (`TERRAFORM_VARIABLES.md`) and an unterminated code fence in `RANCHER_DOWNSTREAM_MANAGEMENT.md`
-- Docs no longer claim `~/.kube/<cluster>.yaml` are RKE2 admin kubeconfigs (they were overwritten by Rancher-proxied ones); break-glass is `~/.kube/<cluster>-rke2.yaml`
-- poc-apps wildcard certificate copy re-synced: gitops-core `cert-sync` uses direct RKE2 admin credentials for all clusters and fails loudly ([gitops-core#6](https://github.com/DataKnifeAI/gitops-core/pull/6))
+- cert-manager module no longer deletes CRDs/namespace when it cannot see the Helm release unless `cleanup_unmanaged_install = true`
+- Broken doc links and break-glass kubeconfig docs; poc-apps wildcard cert sync ([gitops-core#6](https://github.com/DataKnifeAI/gitops-core/pull/6))
 
-### Removed
-- **democratic-csi**: `democratic_csi_*` variables, the `deploy_democratic_csi_{nprd,prd,poc}_apps` resources (never in state; count was 0), the `democratic_csi_config` output, `scripts/install-democratic-csi.sh`, `scripts/generate-helm-values-from-tfvars.sh` and `docs/DEMOCRATIC_CSI_TRUENAS_SETUP.md`. Nothing on any cluster used the driver; TrueNAS CSI is the only storage driver. Remove the `democratic_csi_*` entries from your local `terraform.tfvars`
-- **GitHub ARC, MongoDB Community operator, OpenSearch operator**: the 9 `deploy_{arc,mongodb_community_operator,opensearch_operator}_{nprd,prd,poc}_apps` resources, the `github_arc_controller_version`, `mongodb_operator_version` and `opensearch_operator_version` variables, the ARC/GitHub App helper scripts and `install-mongodb-community-operator.sh`. Uninstalled live from all clusters and dropped from state on 2026-10-05; nothing used them. Remove those three entries from your local `terraform.tfvars` ([#46](https://github.com/DataKnifeAI/rancher-deploy/pull/46))
-- **democratic-csi** `democratic_csi_config` output dropped from Terraform state (state edit only, no apply; resources unchanged). Remaining TrueNAS-side cleanup is listed in [docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual)
-
-### Known issues
-- Terraform Rancher API token expired; registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`
-- RKE2 leaf certs were renewed on 2026-10-04 and now expire 2027-10-05 (poc-apps-1 2027-09-19); renew again from 2027-06-07 per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
-- Do **not** revoke the TrueNAS API key that was in `democratic_csi_api_key`: it is the key TrueNAS CSI uses ([docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual))
-- TrueNAS CSI restarts; two prd CNPG replicas need re-cloning — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md)
-- Orphaned graylog `opensearch-bootstrap-password-webhook` (MutatingWebhookConfiguration, `failurePolicy: Fail`) and its RBAC on nprd-apps; delete them — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md#known-issues-2026-10-05)
+### Removed (2026-10 wave)
+- **democratic-csi** variables/resources/scripts/docs; TrueNAS CSI is the only storage driver
+- **GitHub ARC, MongoDB Community operator, OpenSearch operator** resources and helper scripts ([#46](https://github.com/DataKnifeAI/rancher-deploy/pull/46))
 
 ## [1.2.0-beta.1] - 2026-08-31
 

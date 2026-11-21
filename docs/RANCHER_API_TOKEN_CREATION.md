@@ -7,7 +7,7 @@ The Rancher API token is automatically created during the Rancher deployment pro
 ## Current facts (verified 2026-10-04)
 
 - **Where Terraform reads it:** `config/.rancher-api-token` (repo root) — the `rancher2` provider (`terraform/provider.tf`) and the cluster-create / cluster-ID `null_resource`s (`terraform/main.tf`). `deploy-rancher.sh` writes this file.
-- **Hard-coded path:** `module.rancher_downstream_registration_*` in `terraform/main.tf` uses `rancher_token_file = "/home/lee/git/rancher-deploy/config/.rancher-api-token"`, not this checkout's `config/`. Keep that path in sync (or fix the module call) before a registration apply.
+- **Token path:** `module.rancher_downstream_registration_*` in `terraform/main.tf` uses `rancher_token_file = "${abspath("${path.root}/../config")}/.rancher-api-token"` (repo `config/`). Refresh the file before a registration apply.
 - **`rancher_api_token` in `terraform.tfvars`** is declared in `variables.tf` but not used by any Terraform resource. `create-rancher-api-token.sh` writes it, and `setup-rancher-kubeconfig.sh` reads it for its one-time lookup — copy it into `config/.rancher-api-token` as well.
 - **Lifetime:** both scripts request `ttl: 0`, but Rancher's `auth-token-max-ttl-minutes` (`129600` = 90 days) caps every API token, so it **expires after 90 days**.
 - **Status:** the token in `terraform.tfvars` and `config/.rancher-api-token` was an expired kubeconfig token (HTTP 401). Create a fresh one before the next downstream registration apply — see [Automation in CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md#automation).
