@@ -333,12 +333,9 @@ envoy_gateway_version = "v1.9.4"
 # Install Kube-VIP on downstream clusters (provides LoadBalancer service type)
 install_kube_vip = true
 
-# Kube-VIP version (default: v1.0.3)
-# v1.3.x needs endpointslices RBAC (deploy script) and preferably DS on all nodes:
-# with control-plane-only affinity, externalTrafficPolicy=Local services lose their VIP
-# when endpoints sit only on workers. Bump after fixing affinity.
-# Check latest: https://github.com/kube-vip/kube-vip/releases
-kube_vip_version = "v1.0.3"
+# Kube-VIP version (default: v1.3.2)
+# DaemonSet runs on all nodes (required for v1.3.x + externalTrafficPolicy=Local).
+kube_vip_version = "v1.3.2"
 
 # IP address pools for Kube-VIP LoadBalancer services per cluster
 # Choose IP ranges that are:

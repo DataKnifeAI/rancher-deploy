@@ -10,15 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Repo defaults + **live window completed 2026-11-20/21**: **Rancher** `v2.15.2` → **`v2.15.3`**, **RKE2** `v1.36.2+rke2r1` → **`v1.36.6+rke2r1`** (31/31), **cert-manager** → **`v1.21.3`**, **Envoy Gateway** `v1.9.2` → **`v1.9.4`**, **CloudNativePG** `1.30.1` → **`1.30.2`**. See [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md#next-wave-reviewed-2026-11-20)
 - Downstream registration `rancher_token_file` uses `${abspath("${path.root}/../config")}/.rancher-api-token` instead of a hard-coded `/home/lee/git/...` path
-- kube-vip deploy script ClusterRole now includes `endpointslices` / `endpoints` (needed by v1.3.x); **default pin stays `v1.0.3`**
+- **kube-vip** `v1.0.3` → **`v1.3.2`**: DaemonSet runs on all nodes (CP-only affinity removed); endpointslices RBAC kept
+- Follow-up app patches (gitops-tools): Harbor **`2.15.4`**, GitLab runner **`0.93.3`** / `alpine-v19.4.4`
 
 ### Fixed
 - Hard-coded Rancher API token path in `terraform/main.tf` registration modules
+- Refreshed `config/.rancher-api-token` via manager Token CR + Rancher API (A7)
 
 ### Known issues
-- Terraform Rancher API token still **expired** (admin password rotated past bootstrap secret) — create a fresh token in the UI and write `config/.rancher-api-token` before any `register_downstream_cluster` apply
-- **kube-vip `v1.3.2` blocked**: with control-plane-only DaemonSet affinity, `externalTrafficPolicy=Local` services lose their VIP when endpoints are only on workers (prd high-command / livekit). Rolled back to `v1.0.3`. Fix affinity (run DS on all nodes) before retrying
 - RKE2 leaf certs expire 2027-10-05 (poc-apps-1 2027-09-19); renew again from 2027-06-07 per [docs/RKE2_CERT_ROTATION.md](docs/RKE2_CERT_ROTATION.md)
+- Traefik / Gateway API Ingress cutover still deferred (#8) — schedule after this patch wave
 - Do **not** revoke the TrueNAS API key that was in `democratic_csi_api_key`: it is the key TrueNAS CSI uses ([docs/TRUENAS_CSI_MIGRATION.md](docs/TRUENAS_CSI_MIGRATION.md#truenas-manual))
 - Orphaned graylog `opensearch-bootstrap-password-webhook` on nprd-apps; delete them — see [docs/OPS_NOTES.md](docs/OPS_NOTES.md#known-issues-2026-10-05)
 - GitLab mirror (`dk-raas/dkai/devops/rancher-deploy`) last synced 2026-04-26 — investigate mirror push workflow

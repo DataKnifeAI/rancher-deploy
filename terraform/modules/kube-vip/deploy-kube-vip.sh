@@ -144,16 +144,8 @@ spec:
       labels:
         name: kube-vip-ds
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/master
-                operator: Exists
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: Exists
+      # Run on all nodes so externalTrafficPolicy=Local VIPs work when
+      # endpoints are on workers (v1.3.x requires this; CP-only DS drops VIPs).
       containers:
       - name: kube-vip
         image: ghcr.io/kube-vip/kube-vip:${KUBE_VIP_VERSION}

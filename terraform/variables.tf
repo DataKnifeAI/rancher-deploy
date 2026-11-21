@@ -539,9 +539,9 @@ variable "install_kube_vip" {
 }
 
 variable "kube_vip_version" {
-  description = "Kube-VIP version (see https://github.com/kube-vip/kube-vip/releases). Keep v1.0.3 until the DaemonSet runs on all nodes: v1.3.x + externalTrafficPolicy=Local drops VIPs when endpoints are only on workers and the DS is control-plane-only."
+  description = "Kube-VIP version (see https://github.com/kube-vip/kube-vip/releases). DaemonSet must run on all nodes (no CP-only affinity) so v1.3.x works with externalTrafficPolicy=Local."
   type        = string
-  default     = "v1.0.3"
+  default     = "v1.3.2"
 }
 
 variable "kube_vip_ip_pools" {
