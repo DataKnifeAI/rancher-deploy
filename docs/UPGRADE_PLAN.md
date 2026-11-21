@@ -1,11 +1,46 @@
 # Upgrade plan
 
-Two parts:
+Three parts:
 
-1. **[Next wave (reviewed 2026-10-04)](#next-wave-reviewed-2026-10-04)**: what was live, what's behind, and a prioritized order. Items #1–#6 were applied on 2026-10-04 ([Executed 2026-10-04](#executed-2026-10-04-items-16)), along with the cert-manager work in [cert-manager v1.21.2 (done 2026-10-04)](#cert-manager-v1212-done-2026-10-04). An app wave followed on 2026-10-05 ([Executed 2026-10-05](#executed-2026-10-05-app-wave)): Postgres minors, high-command-ui, two MCP servers, Vector, and removal of ARC, the MongoDB and OpenSearch operators and leftovers (#12, #18, #20). Everything else is still plan only.
-2. **[History: 2026-07-31 → 2026-08-01 wave](#history-2026-07-31--2026-08-01-wave-rancher-213--215-rke2-134--136)**: the completed Rancher 2.13 → 2.15 / RKE2 1.34 → 1.36 runbook, kept as-is. Its gating, drain, and rollback procedures (§2, §5, §7) still apply to everything below.
+1. **[Next wave (reviewed 2026-11-20)](#next-wave-reviewed-2026-11-20)**: patch bump of repo defaults; **live window executed 2026-11-20/21** (A1–A5 + A3 done; A6 blocked; A7 still pending token).
+2. **[Oct wave (reviewed 2026-10-04)](#next-wave-reviewed-2026-10-04)**: what was live then; items #1–#6 done 2026-10-04; app wave 2026-10-05. Remaining P1/P2 from that table still apply where not superseded below.
+3. **[History: 2026-07-31 → 2026-08-01 wave](#history-2026-07-31--2026-08-01-wave-rancher-213--215-rke2-134--136)**: completed Rancher 2.13 → 2.15 / RKE2 1.34 → 1.36 runbook. Gating, drain, and rollback procedures still apply.
 
-Ground rules carried over: back up Terraform state (`terraform state pull` → `~/terraform-state-backups/rancher-deploy/`, mode 600) before every apply; use `-refresh=false` and targeted plans, and apply only when the full plan contains exactly the intended resources; poc-apps first, then nprd-apps, then prd-apps, with the manager last unless noted; use the break-glass `~/.kube/<cluster>-rke2.yaml` for drains.
+Ground rules: back up Terraform state (`terraform state pull` → `~/terraform-state-backups/rancher-deploy/`, mode 600) before every apply; use `-refresh=false` and targeted plans; poc → nprd → prd → manager; break-glass `~/.kube/<cluster>-rke2.yaml` for drains. **Do not** copy new repo defaults into live `terraform.tfvars` and apply untargeted.
+
+---
+
+## Next wave (reviewed 2026-11-20)
+
+Repo defaults / example pins were bumped for new installs. Live window ran **2026-11-20 → 2026-11-21** via Helm + `scripts/upgrade-rke2-nodes.sh` (break-glass kubeconfigs); no untargeted Terraform apply.
+
+| # | Pri | Component | Live → target | Status |
+|---|-----|-----------|---------------|--------|
+| A1 | P0 | **Rancher** | `v2.15.2` → **`v2.15.3`** | **done** (Helm) |
+| A2 | P0 | **cert-manager** | apps `v1.21.2`, manager `v1.21.1` → **`v1.21.3`** | **done** (all 4 clusters) |
+| A3 | P1 | **RKE2** | `v1.36.2+rke2r1` → **`v1.36.6+rke2r1`** | **done** (31/31 nodes; containerd `2.3.7-k3s1`) |
+| A4 | P1 | **Envoy Gateway** | `v1.9.2` → **`v1.9.4`** | **done** (poc → nprd → prd) |
+| A5 | P1 | **CloudNativePG** | `1.30.1` → **`1.30.2`** | **done**; clusters ready (Harbor/Authentik/Coder/HC/Pulseblade) |
+| A6 | P1 | **kube-vip** | `v1.0.3` → **`v1.3.2`** | **blocked** — rolled back to `v1.0.3`; needs worker affinity / all-node DS before retry |
+| A7 | P1 | **Token refresh** | expired API token | **pending** — admin local password rotated; recreate `config/.rancher-api-token` when available |
+
+### Executed 2026-11-20/21
+
+| Step | Result |
+|------|--------|
+| Backups | `~/terraform-state-backups/rancher-deploy/20261120-live-window/` |
+| CM → `v1.21.3` | manager + poc/nprd/prd |
+| Rancher → `v2.15.3` | `cattle-system` Helm chart `rancher-2.15.3` |
+| EG → `v1.9.4` | envoy-gateway deploy image `envoyproxy/gateway:v1.9.4` |
+| CNPG → `1.30.2` | operator image `…/cloudnative-pg:1.30.2` |
+| kube-vip `v1.3.2` canary | RBAC for endpointslices fixed in script; VIP loss under ETP=Local + CP-only DS → fleet left on **`v1.0.3`** |
+| RKE2 rolling | poc → nprd → prd → manager; drain + `upgrade-rke2-nodes.sh`; all Ready on `v1.36.6+rke2r1` |
+| Smoke | `https://hc.dataknife.ai/` → 200; manager UI reachable (HTTPS); Rancher pods 3/3 Ready after manager drain |
+| tfvars | Live `terraform/terraform.tfvars` pins aligned to targets above (kube-vip stays `v1.0.3`) |
+
+**Still deferred** from the Oct table (unchanged intent): ingress-nginx → Traefik (#8), Terraform providers (#9), monitoring stack (#11), Harbor/Coder patches (#13–14), TrueNAS CSI sidecars (#17), Grafana 13.x. Plus A6 retry and A7 token.
+
+**Recommended window order (historical):** A7 → A2 manager CM → A1 Rancher → A2 apps CM → A4 EG → A5 CNPG → A6 kube-vip (poc) → A3 RKE2 (poc first). Actual run skipped A7 (token) and rolled A6 back.
 
 ---
 
@@ -42,15 +77,15 @@ Priority: **P0** = security fix or EOL/unsupported on k8s 1.36, do next. **P1** 
 | 4 | P0 | **Node OS reboots** | 31/31 nodes reboot-required (**done 2026-10-04**: all on `6.8.0-146`, RKE2 certs renewed) | Kernel/security updates are installed but not running. Rolling drain → reboot → uncordon (poc → nprd → prd → manager). Can share the drain with #7 (RKE2 patch) but keep OS and RKE2 as separate steps per node | `scripts/patch-os-nodes.sh` (per-IP) / manual | M |
 | 5 | P0 | **Grafana** (nprd) | `12.3.1` → `12.4.12` (**done 2026-10-04**), then 13.x (`13.2.3`) | 12.3 is out of the security-patch window (fixes now ship for 12.4 / 13.0–13.2). The `grafana/grafana` chart is frozen at `10.5.15`; the chart moved to `grafana-community/grafana` (`13.2.7`). 13.x removes Angular plugins, so check dashboards | manual Helm + `gitops-tools` grafana overlay | M |
 | 6 | P0 | **Secret hygiene: democratic-csi leftovers** | n/a (**done 2026-10-04**, except the TrueNAS key cleanup: [see below](#executed-2026-10-04-items-16)) | `install_democratic_csi = false`, but `terraform.tfvars` still holds `democratic_csi_*` including a TrueNAS API key, and outputs still print the democratic config. Rotate or revoke that API key on TrueNAS, delete the vars/outputs, and delete the orphaned nprd PV | `terraform.tfvars` (local), `outputs.tf` | S |
-| 7 | P1 | **RKE2** | `v1.36.2+rke2r1` → **`v1.36.4+rke2r1`** | Highest 1.36 patch in Rancher 2.15's KDM (`v1.36.5` shipped 2026-09-30 but isn't in KDM yet, so take it once listed). etcd/grpc CVE bumps, containerd `2.3.4`, canal `3.32.2`, ingress-nginx `4.15.110` (prime build). **After #1.** Same drain + `scripts/upgrade-rke2-nodes.sh` per node. `v1.37.1` exists but needs Rancher 2.16 and #8. The RKE2 leaf certs no longer depend on this: the #4 reboots renewed them to 2027-10-05 | `rke2_version` tfvars + script | M |
+| 7 | P1 | **RKE2** | `v1.36.2+rke2r1` → **`v1.36.6+rke2r1`** (was 1.36.4; superseded by [2026-11-20 wave](#next-wave-reviewed-2026-11-20) A3) | Highest 1.36 patch in Rancher 2.15 KDM as of Nov 2026. **After Rancher patch.** Drain + `scripts/upgrade-rke2-nodes.sh`. `v1.37.x` needs Rancher 2.16 and #8 | `rke2_version` tfvars + script | M |
 | 8 | P1 | **ingress-nginx → Traefik** | rke2-ingress-nginx on all clusters | Upstream ingress-nginx was retired in March 2026. RKE2 1.36 defaults new clusters to Traefik and only patches "prime" nginx builds; **RKE2 1.37 removes the standalone ingress-nginx option**, so this blocks any 1.37 move. Affects every Ingress (Rancher, Harbor, Grafana, Authentik, Coder, MCP), the gitops-core `HelmChartConfig` default-cert setup (nginx-specific `--default-ssl-certificate`) and ingress annotations. `rke2-traefik-crd` also ships Gateway API CRDs, so pick a single owner for those CRDs (Envoy Gateway module vs RKE2) before enabling Traefik. The high-command Gateway VIP `192.168.14.184:443` answering with ingress-nginx's wildcard cert on the LAN was investigated on 2026-10-04: ingress-nginx's `hostPort: 443` also catches traffic to kube-vip VIPs bound on its node ([OPS_NOTES.md](OPS_NOTES.md#known-issues-2026-10-04)). Moving off ingress-nginx, or off its hostPort, removes it | RKE2 config templates (`ingress-controller`), `gitops-core` overlays, app Ingress manifests | L |
 | 9 | P1 | **Terraform providers / CLI** | rancher2 `3.4.0` → **`v15.x`** (`15.1.2`); proxmox `0.93.0` → `0.115.0`; kubernetes `2.38.0` → `3.3.0`; null `3.2.4` → `3.3.2`; local `2.6.1` → `2.9.1`; CLI `1.15.9` → `1.16.5` | rancher2 majors track the Rancher minor since v13 (v15 = Rancher 2.15); 3.x predates that. The proxmox provider jump is large: expect schema/plan diffs on all VMs. Fix the known refresh problems first (rancher-manager-1 refresh error, pve1/pve2 placement, Ubuntu image re-download), then upgrade one provider at a time and review `-refresh=false` plans. Commit `.terraform.lock.hcl`. Terraform's Rancher API token (`config/.rancher-api-token`) is expired and must be renewed before rancher2 resources can plan | `terraform/provider.tf`, lock file | M–L |
-| 10 | P1 | **kube-vip** | `v1.0.3` → `v1.2.4` | Two minors behind; every LoadBalancer VIP depends on it. poc first and watch for VIP flaps | `kube_vip_version` tfvars → `modules/kube-vip` | S–M |
+| 10 | P1 | **kube-vip** | `v1.0.3` → **`v1.3.2`** (was 1.2.4; superseded by [2026-11-20 wave](#next-wave-reviewed-2026-11-20) A6) | Multi-minor; every LoadBalancer VIP depends on it. poc first and watch for VIP flaps | `kube_vip_version` tfvars → `modules/kube-vip` | S–M |
 | 11 | P1 | **Monitoring stack** | kube-prometheus-stack `88.0.1` → `91.9.0`; Alloy image `v1.12.2` → `v1.20.1` (chart `1.13.0`); Loki `3.6.11` → `3.6.17` (or `3.7.8`, chart `7.3.0`) | kps is three majors behind: apply the prometheus-operator CRDs (`v0.94.x`) before the chart, one major at a time. The Alloy image is pinned well below its own chart's appVersion; drop the override. Loki patch first, 3.7 later | manual Helm + `gitops-tools` monitoring/grafana overlays | M |
 | 12 | P1 | **ARC** (GitHub runners) | controller `0.13.1` → **removed** (**done 2026-10-05**) | No runner scale sets existed on any cluster, so ARC was removed instead of upgraded: controller, CRDs (including the legacy `actions.summerwind.dev` ones on nprd/prd) and namespace on poc/nprd/prd, the Terraform resources and helper scripts ([#46](https://github.com/DataKnifeAI/rancher-deploy/pull/46)), and the unwired gitops-tools `github-runner` overlay ([gitops-tools#59](https://github.com/DataKnifeAI/gitops-tools/pull/59)). To bring it back, install the current `gha-runner-scale-set-controller` plus a scale set ([GITHUB_ARC_SETUP.md](GITHUB_ARC_SETUP.md)) | — | — |
 | 13 | P1 | **Harbor** (nprd) | `2.15.1` → `2.15.2` (chart `1.19.2`) | Patch release. The registry serves every cluster, so take a manual Barman backup of `harbor-postgresql` first | manual Helm + `gitops-tools` harbor overlay | S |
 | 14 | P1 | **Coder** (prd) | `2.35.3` → `2.35.8` now; `2.36.6` (stable) next | Patch within line first. The `gitops-dev` branch `chore/coder-2.32.0` is older than live; close it | manual Helm + `gitops-dev` overlay | S |
-| 15 | P2 | **cert-manager (manager)** | `v1.21.1` → `v1.21.2` | Apps clusters are done. Rancher 2.15 docs set no cert-manager cap (install with `crds.enabled=true`). Manager has no Gateway API CRDs, so **don't** set `config.gatewayAPI.enabled` there. Helm with `crds.enabled=true crds.keep=true`, before #1 in the same window. 1.21 stays supported until 1.23 (~early 2027) | manual Helm (`rancher_cluster/deploy-rancher.sh` only runs on install) | S |
+| 15 | P2 | **cert-manager (manager)** | `v1.21.1` → **`v1.21.3`** (was 1.21.2; see [2026-11-20](#next-wave-reviewed-2026-11-20) A2) | Manager has no Gateway API CRDs, so **don't** set `config.gatewayAPI.enabled`. Helm with `crds.enabled=true crds.keep=true` | manual Helm | S |
 | 16 | P2 | **GitLab runner** (nprd) | chart `0.91.0` (19.2) → `0.93.0` (19.4) | Keep the runner within the GitLab server's supported skew | manual Helm + `gitops-tools` gitlab-runner overlay | S |
 | 17 | P2 | **TrueNAS CSI sidecars** | provisioner `5.0.1` → `6.3.0`, attacher `4.7.0` → `4.13.0`, resizer `1.12.0` → `2.3.0`, snapshotter `8.1.0` → `8.6.0`, registrar `2.12.0` → `2.18.0` | The driver (`v0.22`, fork of upstream `v1.3.0`, which is still upstream latest) is current; the sidecars are about two years old. Bump on poc and test PVC create/expand/snapshot | Terraform TrueNAS CSI resources (`truenas_csi_*`) | M |
 | 18 | P2 | **Remove idle operators** | MongoDB community operator `0.13.0`; OpenSearch operator `2.8.0` (**done 2026-10-05**, removed with ARC in [#46](https://github.com/DataKnifeAI/rancher-deploy/pull/46)) | Neither manages anything: no `MongoDBCommunity` or `OpenSearchCluster` objects on any cluster. The MongoDB community operator repo is archived (successor `mongodb/mongodb-kubernetes` `1.13.0`). OpenSearch operator 3.0 is a breaking major, and ours runs a hand-patched kube-rbac-proxy image. Uninstall instead of upgrading | `terraform/main.tf` (`deploy_mongodb_community_operator_*`, OpenSearch resources) | S |

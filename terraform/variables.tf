@@ -92,7 +92,7 @@ variable "vm_id_start_poc_apps" {
 variable "cert_manager_version" {
   description = "cert-manager Helm chart version"
   type        = string
-  default     = "v1.21.2"
+  default     = "v1.21.3"
 }
 
 variable "ubuntu_cloud_image_url" {
@@ -104,13 +104,13 @@ variable "ubuntu_cloud_image_url" {
 variable "rancher_version" {
   description = "Rancher Helm chart / image version (stable). New installs use this pin. Live upgrades from older minors must step latest-patch-of-current-minor → next minor (e.g. v2.14.3 → v2.14.4 → v2.15.0). Rancher 2.15+ required for Kubernetes/RKE2 1.36."
   type        = string
-  default     = "v2.15.2"
+  default     = "v2.15.3"
 }
 
 variable "rke2_version" {
   description = "RKE2 version pin for new node bootstrap (INSTALL_RKE2_VERSION). Default tracks latest stable 1.36.x supported by Rancher 2.15+. Changing this alone does not upgrade existing nodes; see enable_rke2_upgrade."
   type        = string
-  default     = "v1.36.2+rke2r1"
+  default     = "v1.36.6+rke2r1"
 }
 
 variable "enable_unattended_upgrades" {
@@ -386,13 +386,13 @@ variable "gateway_api_version" {
 variable "envoy_gateway_version" {
   description = "Envoy Gateway release (install.yaml). Upgrade one minor version at a time."
   type        = string
-  default     = "v1.9.2"
+  default     = "v1.9.4"
 }
 
 variable "cloudnativepg_operator_version" {
   description = "CloudNativePG Operator version (installed via manifest)"
   type        = string
-  default     = "1.30.1"
+  default     = "1.30.2"
 }
 
 # ============================================================================
@@ -539,7 +539,7 @@ variable "install_kube_vip" {
 }
 
 variable "kube_vip_version" {
-  description = "Kube-VIP version (latest: v1.0.3, see https://github.com/kube-vip/kube-vip/releases)"
+  description = "Kube-VIP version (see https://github.com/kube-vip/kube-vip/releases). Keep v1.0.3 until the DaemonSet runs on all nodes: v1.3.x + externalTrafficPolicy=Local drops VIPs when endpoints are only on workers and the DS is control-plane-only."
   type        = string
   default     = "v1.0.3"
 }

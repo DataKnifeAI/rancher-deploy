@@ -4,7 +4,7 @@ Short operational truths that do not belong in the README.
 
 ## Cluster access (SSO)
 
-- Rancher `v2.15.2` at `https://rancher.dataknife.net`; auth providers **local** + **Keycloak (SAML)** pointed at Authentik (`https://auth.dataknife.net`, on prd-apps). Full guide: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
+- Rancher `v2.15.2` (live; repo default now `v2.15.3`) at `https://rancher.dataknife.net`; auth providers **local** + **Keycloak (SAML)** pointed at Authentik (`https://auth.dataknife.net`, on prd-apps). Full guide: [CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md).
 - kubectl: `./scripts/setup-rancher-kubeconfig.sh --install-cli --merge --auth-provider keyCloakProvider --break-glass`, then `kubectl --context <local|nprd-apps|prd-apps|poc-apps>`. Kubeconfigs embed no tokens; `rancher token` caches one (≤ 90 days) in `~/.rancher/cli2.json`.
 - SAML site access is **`required`** by design: only principals in `allowedPrincipalIds` may log in via SSO (currently `keycloak_user://4` = akadmin). Allow people via an Authentik group, `keycloak_group://<exact group name>`; single users are `keycloak_user://<Authentik numeric pk>`, not the username. Local logins are unaffected. See [CLUSTER_ACCESS_AND_SSO.md § Site access](CLUSTER_ACCESS_AND_SSO.md#site-access-required).
 - Break-glass: `<cluster>-local` contexts (Rancher local user), UI **Log in with Local User**, RKE2 admin kubeconfigs `~/.kube/<cluster>-rke2.yaml` (independent of Rancher/Authentik; client certs expire 2027-10-05 after the 2026-10-04 renewal — re-fetch after every RKE2 cert renewal per [RKE2_CERT_ROTATION.md](RKE2_CERT_ROTATION.md)), Authentik recovery key.
@@ -25,12 +25,12 @@ Short operational truths that do not belong in the README.
 
 ## Version pins (RKE2 / Rancher / OS)
 
-Live clusters match these defaults (verified 2026-10-04: Rancher `v2.15.2`, all four clusters RKE2 `v1.36.2+rke2r1`, cert-manager `v1.21.2` on the app clusters and `v1.21.1` on the manager, Ubuntu kernel `6.8.0-146` on all 31 nodes).
+Live clusters (verified 2026-10-04): Rancher `v2.15.2`, all four clusters RKE2 `v1.36.2+rke2r1`, cert-manager `v1.21.2` on apps / `v1.21.1` on manager, Ubuntu kernel `6.8.0-146` on all 31 nodes. Repo defaults below are the **next** patch targets (2026-11-20); keep live `terraform.tfvars` on current pins until that window.
 
-| Pin | Variable | Default (as of 2026-10) | Notes |
+| Pin | Variable | Default (as of 2026-11) | Notes |
 |-----|----------|-------------------------|--------|
-| RKE2 | `rke2_version` | `v1.36.2+rke2r1` | New nodes only unless `enable_rke2_upgrade=true`. Needs Rancher 2.15+ (2.14.x max certified RKE2 is 1.35) |
-| Rancher | `rancher_version` | `v2.15.2` | Stable chart with K8s/RKE2 1.36 support; **minor upgrades must step** latest patch of current minor first (e.g. `v2.14.3` → `v2.14.4` → `v2.15.0`) |
+| RKE2 | `rke2_version` | `v1.36.6+rke2r1` | New nodes only unless `enable_rke2_upgrade=true`. Needs Rancher 2.15+; in KDM for 2.15 after Oct 2026 metadata sync |
+| Rancher | `rancher_version` | `v2.15.3` | Patch over live `v2.15.2` (Fleet/Meta-Proxy CVEs). **Minor** upgrades must still step latest patch of current minor first |
 | Unattended upgrades | `enable_unattended_upgrades` | `true` | Security pocket only; `Automatic-Reboot false`. New nodes via `cloud-init-rke2.sh`; existing via `scripts/enable-unattended-upgrades.sh` |
 | OS patch | `enable_os_patch` | `false` | SSH `apt update/upgrade` via `scripts/patch-os-nodes.sh`; optional `os_patch_reboot` |
 
@@ -86,7 +86,7 @@ Example layout (mgmt `vmbr0`/`bond0`, storage jumbo `vmbr1`/`bond1`, aux `vmbr2`
 - **Game servers are pinned to single nodes:** palworld by a hostname nodeSelector (`prd-apps-worker-6`), windrose by `node-type: large` (only `prd-apps-large-worker-1`). Draining those nodes means downtime until the node is back (about 4–5 min for a reboot).
 - **Grafana chart is frozen.** `grafana/grafana` stops at `10.5.15`; nprd runs `12.4.12` through an `image.tag` override. Move to `grafana-community/grafana` before Grafana 13.
 - **system-upgrade-controller** is `v0.20.1` on every cluster after the Rancher `v2.15.2` upgrade (the release notes list `v0.20.2`). Check whether Rancher rolls it, or update the managed app.
-- **Terraform's Rancher API token is expired** (`config/.rancher-api-token` = `rancher_api_token` in tfvars, HTTP 401), and the registration modules read a hard-coded `/home/lee/git/rancher-deploy/config/.rancher-api-token`. Refresh before any `register_downstream_cluster` apply — [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md).
+- **Terraform's Rancher API token is expired** (`config/.rancher-api-token` = `rancher_api_token` in tfvars, HTTP 401). Registration modules now use `${path.root}/../config/.rancher-api-token` (portable). Refresh before any `register_downstream_cluster` apply — [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md).
 - **Break-glass kubeconfigs — resolved 2026-10-04.** Break-glass now lives in `~/.kube/<cluster>-rke2.yaml` (RKE2 admin, straight to `https://<cluster>.dataknife.net:6443`; `manager.dataknife.net` for rancher-manager). The old `~/.kube/<cluster>.yaml` files on the main workstation are Rancher-proxied token kubeconfigs (`rancher-manager.yaml`'s token is expired); don't use them for break-glass. Terraform's `get_kubeconfig` will overwrite them with RKE2 admin kubeconfigs on the next full apply. See [CLUSTER_ACCESS_AND_SSO.md § Fallback](CLUSTER_ACCESS_AND_SSO.md#fallback-and-break-glass).
 
 ## Known issues (2026-10-05)

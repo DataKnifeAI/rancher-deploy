@@ -100,12 +100,16 @@ metadata:
   name: kube-vip
 rules:
 - apiGroups: [""]
-  resources: ["services", "services/status", "nodes"]
+  resources: ["services", "services/status", "endpoints", "nodes"]
   verbs: ["get","list","watch","update","patch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get","list","watch"]
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
-  verbs: ["list", "get", "create", "update"]
+  verbs: ["list", "get", "create", "update", "watch"]
 ---
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:

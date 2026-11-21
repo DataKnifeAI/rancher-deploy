@@ -24,7 +24,7 @@ variable "install_kube_vip" {
 }
 
 variable "kube_vip_version" {
-  description = "Kube-VIP version (latest: v1.0.3, see https://github.com/kube-vip/kube-vip/releases)"
+  description = "Kube-VIP version (see https://github.com/kube-vip/kube-vip/releases). Prefer v1.0.3 until DS affinity covers workers (v1.3.x + ETP=Local)."
   type        = string
   default     = "v1.0.3"
 }

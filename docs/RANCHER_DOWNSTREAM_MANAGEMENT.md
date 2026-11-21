@@ -8,7 +8,7 @@ This guide explains how to automatically register downstream (NPRD Apps) cluster
 > **Current state (2026-10-04)**
 > - Rancher `v2.15.0`; downstream clusters `nprd-apps` (`c-wnfsj`), `prd-apps` (`c-ps6zm`), `poc-apps` (`c-k7zls`), all RKE2 `v1.36.2+rke2r1`. Same flow applies to all three (examples below say nprd-apps).
 > - Code path: `null_resource.create_<cluster>_cluster` (POST `/v3/clusters`) → cluster ID saved to `config/.<cluster>-cluster-id` → `module.rancher_downstream_registration_<cluster>` (manifest-based). The "API-based / cloud-init system-agent" sketches further down are historical.
-> - Token: `config/.rancher-api-token` (90-day max TTL), but the registration modules use the **hard-coded** path `/home/lee/git/rancher-deploy/config/.rancher-api-token`. The current token is **expired** — refresh it first; see [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md#current-facts-verified-2026-10-04).
+> - Token: `config/.rancher-api-token` (90-day max TTL). Registration modules resolve that path via `abspath` from the Terraform root. The current token is **expired** — refresh it first; see [RANCHER_API_TOKEN_CREATION.md](RANCHER_API_TOKEN_CREATION.md#current-facts-verified-2026-10-04).
 > - `~/.kube/<cluster>.yaml` below are the RKE2 admin kubeconfigs Terraform writes; for interactive access use `kubectl --context <cluster>` ([CLUSTER_ACCESS_AND_SSO.md](CLUSTER_ACCESS_AND_SSO.md)).
 
 ## Overview
