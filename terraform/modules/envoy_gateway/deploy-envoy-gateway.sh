@@ -144,6 +144,31 @@ if [ "$NEW_CHANNEL" != "standard" ]; then
   echo "ERROR: expected Gateway API channel=standard, got ${NEW_CHANNEL:-empty}" >&2
   exit 1
 fi
+# Game operators (palworld/dragonwilds/terraria/satisfactory) still speak
+# TCPRoute/UDPRoute/TLSRoute v1alpha2. Standard channel stores v1 and leaves
+# v1alpha2 unserved — re-enable served so those clients can reconcile until
+# operators move to gateway-api v1 clients.
+echo "  Keeping TCPRoute/UDPRoute/TLSRoute v1alpha2 served for legacy operator clients..."
+for crd in tcproutes.gateway.networking.k8s.io udproutes.gateway.networking.k8s.io tlsroutes.gateway.networking.k8s.io; do
+  if ! kubectl get crd "$crd" &>/dev/null; then
+    continue
+  fi
+  kubectl get crd "$crd" -o json | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+changed = False
+for v in d.get("spec", {}).get("versions", []):
+  if v.get("name") == "v1alpha2" and not v.get("served", False):
+    v["served"] = True
+    changed = True
+if changed:
+  json.dump(d, sys.stdout)
+' > "$WORKDIR/${crd}.patched.json" || true
+  if [ -s "$WORKDIR/${crd}.patched.json" ]; then
+    kubectl replace -f "$WORKDIR/${crd}.patched.json" >/dev/null
+    echo "  ✓ ${crd}: v1alpha2 served=true"
+  fi
+done
 echo ""
 
 # Step 3: Envoy Gateway controller, RBAC, webhook and certgen job
