@@ -2,7 +2,7 @@
 
 Three parts:
 
-1. **[Next wave (reviewed 2026-11-20)](#next-wave-reviewed-2026-11-20)**: patch bump of repo defaults; **live window executed 2026-11-20/21** (A1–A5 + A3 done; A6 blocked; A7 still pending token).
+1. **[Next wave (reviewed 2026-11-20)](#next-wave-reviewed-2026-11-20)**: patch bump of repo defaults; **live window executed 2026-11-20/21**; follow-up **2026-11-21** finished A6/A7 + Harbor/runner.
 2. **[Oct wave (reviewed 2026-10-04)](#next-wave-reviewed-2026-10-04)**: what was live then; items #1–#6 done 2026-10-04; app wave 2026-10-05. Remaining P1/P2 from that table still apply where not superseded below.
 3. **[History: 2026-07-31 → 2026-08-01 wave](#history-2026-07-31--2026-08-01-wave-rancher-213--215-rke2-134--136)**: completed Rancher 2.13 → 2.15 / RKE2 1.34 → 1.36 runbook. Gating, drain, and rollback procedures still apply.
 
@@ -21,8 +21,8 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | A3 | P1 | **RKE2** | `v1.36.2+rke2r1` → **`v1.36.6+rke2r1`** | **done** (31/31 nodes; containerd `2.3.7-k3s1`) |
 | A4 | P1 | **Envoy Gateway** | `v1.9.2` → **`v1.9.4`** | **done** (poc → nprd → prd) |
 | A5 | P1 | **CloudNativePG** | `1.30.1` → **`1.30.2`** | **done**; clusters ready (Harbor/Authentik/Coder/HC/Pulseblade) |
-| A6 | P1 | **kube-vip** | `v1.0.3` → **`v1.3.2`** | **blocked** — rolled back to `v1.0.3`; needs worker affinity / all-node DS before retry |
-| A7 | P1 | **Token refresh** | expired API token | **pending** — admin local password rotated; recreate `config/.rancher-api-token` when available |
+| A6 | P1 | **kube-vip** | `v1.0.3` → **`v1.3.2`** | **done 2026-11-21** — removed CP-only DS affinity; all-node DS on poc/nprd/prd; ETP=Local VIPs held |
+| A7 | P1 | **Token refresh** | expired API token | **done** — minted via break-glass kubectl + `POST /v3/tokens`; `config/.rancher-api-token` |
 
 ### Executed 2026-11-20/21
 
@@ -33,14 +33,17 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | Rancher → `v2.15.3` | `cattle-system` Helm chart `rancher-2.15.3` |
 | EG → `v1.9.4` | envoy-gateway deploy image `envoyproxy/gateway:v1.9.4` |
 | CNPG → `1.30.2` | operator image `…/cloudnative-pg:1.30.2` |
-| kube-vip `v1.3.2` canary | RBAC for endpointslices fixed in script; VIP loss under ETP=Local + CP-only DS → fleet left on **`v1.0.3`** |
+| kube-vip `v1.3.2` canary | First attempt (CP-only DS) dropped ETP=Local VIPs → rolled back to `v1.0.3`. **Retry 2026-11-21:** all-node DS + `v1.3.2` on poc→nprd→prd; high-command / livekit-rtc VIPs held |
 | RKE2 rolling | poc → nprd → prd → manager; drain + `upgrade-rke2-nodes.sh`; all Ready on `v1.36.6+rke2r1` |
 | Smoke | `https://hc.dataknife.ai/` → 200; manager UI reachable (HTTPS); Rancher pods 3/3 Ready after manager drain |
-| tfvars | Live `terraform/terraform.tfvars` pins aligned to targets above (kube-vip stays `v1.0.3`) |
+| tfvars | Live pins aligned; kube-vip now **`v1.3.2`** |
+| Token (A7) | Refreshed 2026-11-20 via manager Token CR + Rancher API |
+| Harbor (follow-up) | nprd `2.15.1` → **`2.15.4`** (chart `1.19.4`); Barman backup first; Recreate strategy for RWO PVCs ([gitops-tools#60](https://github.com/DataKnifeAI/gitops-tools/pull/60)) |
+| GitLab runner (follow-up) | nprd chart `0.91.0` → **`0.93.3`** / `alpine-v19.4.4` ([gitops-tools#60](https://github.com/DataKnifeAI/gitops-tools/pull/60)) |
 
-**Still deferred** from the Oct table (unchanged intent): ingress-nginx → Traefik (#8), Terraform providers (#9), monitoring stack (#11), Harbor/Coder patches (#13–14), TrueNAS CSI sidecars (#17), Grafana 13.x. Plus A6 retry and A7 token.
+**Still deferred** from the Oct table: ingress-nginx → Traefik / Gateway API cutover for Ingress workloads (#8) — **after** this patch wave; Terraform providers (#9); monitoring stack (#11); TrueNAS CSI sidecars (#17); Grafana 13.x. Coder already on `2.39.4` (ahead of Oct target).
 
-**Recommended window order (historical):** A7 → A2 manager CM → A1 Rancher → A2 apps CM → A4 EG → A5 CNPG → A6 kube-vip (poc) → A3 RKE2 (poc first). Actual run skipped A7 (token) and rolled A6 back.
+**Recommended window order (historical):** A7 → A2 manager CM → A1 Rancher → A2 apps CM → A4 EG → A5 CNPG → A6 kube-vip (poc) → A3 RKE2 (poc first).
 
 ---
 
