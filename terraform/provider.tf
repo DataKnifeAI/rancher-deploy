@@ -3,8 +3,8 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      # Phase 3 of #9: floor at 0.115. Stay <0.118 for now (SDN/file validation breaks).
-      version = "~> 0.115.0"
+      # Phase 4 of #9: current line. No SDN/ceph resources in this root.
+      version = "~> 0.123.0"
     }
     rancher2 = {
       source  = "rancher/rancher2"
@@ -16,7 +16,7 @@ terraform {
       version = "~> 3.0"
     }
     # Phase 1: null/local. Phase 2: kubernetes ~> 3.0 + rancher2 ~> 15.0.
-    # Phase 3: proxmox ~> 0.115.0 (further minors after plan review).
+    # Phase 3–4: proxmox ~> 0.123.0 (cloud-image overwrite=false; -refresh=false for manager smbios).
     null = {
       source  = "hashicorp/null"
       version = ">= 3.2.4, < 4.0"
