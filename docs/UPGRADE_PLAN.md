@@ -49,7 +49,7 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | Operator cleanup (#19) | CR-driven `serverManager.image` align (palworld/dragonwilds); game `spec.update` already up-to-date |
 | Route CRD v1alpha2 | **unserved** after all game operators on v1; `deploy-envoy-gateway.sh` no longer re-enables alpha2 |
 
-**Still deferred** from the Oct table: Terraform providers (#9) majors (rancher2 → 15.x, proxmox → 0.115+, kubernetes → 3.x, CLI); full Gateway API migration of remaining Ingress apps. Coder already on `2.39.4`. **#8 / #17** done 2026-11-21. **#5 / #11** cancelled (no Grafana/monitoring). **#19** + game-operator gateway-api v1 (incl. windrose) done 2026-11-21.
+**Still deferred** from the Oct table: Terraform providers (#9): kubernetes ~> 3.0 + rancher2 ~> 15.0 pins (phase 2, lockfile); still open proxmox → 0.115+ and CLI bump; full Gateway API migration of remaining Ingress apps. Coder already on `2.39.4`. **#8 / #17** done 2026-11-21. **#5 / #11** cancelled (no Grafana/monitoring). **#19** + game-operator gateway-api v1 (incl. windrose) done 2026-11-21.
 
 **Recommended window order (historical):** A7 → A2 manager CM → A1 Rancher → A2 apps CM → A4 EG → A5 CNPG → A6 kube-vip (poc) → A3 RKE2 (poc first).
 

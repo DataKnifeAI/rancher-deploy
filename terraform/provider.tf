@@ -8,14 +8,15 @@ terraform {
     }
     rancher2 = {
       source  = "rancher/rancher2"
-      version = "~> 3.0"
+      # v15 tracks Rancher 2.15 API; no rancher2_* resources in this root today.
+      version = "~> 15.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "~> 2.38"
+      version = "~> 3.0"
     }
-    # Phase 1 of #9: bump null/local within major. rancher2→15.x and proxmox→0.115
-    # and kubernetes→3.x need separate windows (refresh fixes + plan review).
+    # Phase 1: null/local. Phase 2: kubernetes ~> 3.0 + rancher2 ~> 15.0.
+    # Still separate: proxmox → 0.115+ (large schema/plan diffs; refresh fixes first).
     null = {
       source  = "hashicorp/null"
       version = ">= 3.2.4, < 4.0"
