@@ -244,7 +244,7 @@ ${image_pull_secrets}
             periodSeconds: 10
             failureThreshold: 5
         - name: csi-provisioner
-          image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
+          image: registry.k8s.io/sig-storage/csi-provisioner:v6.4.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -259,7 +259,7 @@ ${image_pull_secrets}
             - name: socket-dir
               mountPath: /csi
         - name: csi-attacher
-          image: registry.k8s.io/sig-storage/csi-attacher:v4.7.0
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.13.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -271,7 +271,7 @@ ${image_pull_secrets}
             - name: socket-dir
               mountPath: /csi
         - name: csi-snapshotter
-          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0
+          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.7.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -283,7 +283,7 @@ ${image_pull_secrets}
             - name: socket-dir
               mountPath: /csi
         - name: csi-resizer
-          image: registry.k8s.io/sig-storage/csi-resizer:v1.12.0
+          image: registry.k8s.io/sig-storage/csi-resizer:v2.3.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -417,7 +417,7 @@ ${image_pull_secrets}
             periodSeconds: 10
             failureThreshold: 5
         - name: csi-node-driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.18.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
