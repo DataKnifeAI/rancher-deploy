@@ -23,7 +23,7 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | A5 | P1 | **CloudNativePG** | `1.30.1` → **`1.30.2`** | **done**; clusters ready (Harbor/Authentik/Coder/HC/Pulseblade) |
 | A6 | P1 | **kube-vip** | `v1.0.3` → **`v1.3.2`** | **done 2026-11-21** — removed CP-only DS affinity; all-node DS on poc/nprd/prd; ETP=Local VIPs held |
 | A7 | P1 | **Token refresh** | expired API token | **done** — minted via break-glass kubectl + `POST /v3/tokens`; `config/.rancher-api-token` |
-| A8 | P1 | **ingress-nginx → Traefik** | dual → Traefik-only | **done 2026-11-21** — all 4 clusters; apps use stripped Traefik CRD chart (EG keeps Gateway API); class `rke2-ingress-nginx-migration` |
+| A8 | P1 | **ingress-nginx → Traefik** | dual → Traefik-only | **done 2026-11-21** — all 4 clusters; class `rke2-ingress-nginx-migration`. Follow-up same day: Gateway API **standard** v1.6.1 on apps + stock `rke2-traefik-crd`; EG layered without experimental Gateway CRDs |
 
 ### Executed 2026-11-20/21
 
@@ -41,7 +41,8 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | Token (A7) | Refreshed 2026-11-20 via manager Token CR + Rancher API |
 | Harbor (follow-up) | nprd `2.15.1` → **`2.15.4`** (chart `1.19.4`); Barman backup first; Recreate strategy for RWO PVCs ([gitops-tools#60](https://github.com/DataKnifeAI/gitops-tools/pull/60)) |
 | GitLab runner (follow-up) | nprd chart `0.91.0` → **`0.93.3`** / `alpine-v19.4.4` ([gitops-tools#60](https://github.com/DataKnifeAI/gitops-tools/pull/60)) |
-| Traefik cutover (#8 / A8) | poc→nprd→prd→manager Traefik-only on 80/443; nginx DS removed; IngressClass `rke2-ingress-nginx-migration` + Traefik kubernetesIngressNGINX; apps CRDs = `scripts/ingress-nginx-to-traefik/`; Fleet: [gitops-mcp#21](https://github.com/DataKnifeAI/gitops-mcp/pull/21), [gitops-tools#61](https://github.com/DataKnifeAI/gitops-tools/pull/61); Stoat CR `spec.ingress.className` patched live |
+| Traefik cutover (#8 / A8) | poc→nprd→prd→manager Traefik-only on 80/443; nginx DS removed; IngressClass `rke2-ingress-nginx-migration` + Traefik kubernetesIngressNGINX; Fleet: [gitops-mcp#21](https://github.com/DataKnifeAI/gitops-mcp/pull/21), [gitops-tools#61](https://github.com/DataKnifeAI/gitops-tools/pull/61); Stoat CR `spec.ingress.className` patched live |
+| Gateway API standard | Apps poc/nprd/prd switched experimental→**standard** v1.6.1 (EG `gateway-crds-helm`); stock `rke2-traefik-crd` restored; `deploy-envoy-gateway.sh` installs standard Gateway API + EG CRDs only. Gateways Programmed; `hc.dataknife.ai` 200 |
 
 **Still deferred** from the Oct table: Terraform providers (#9); monitoring stack (#11); TrueNAS CSI sidecars (#17); Grafana 13.x; full Gateway API migration of remaining Ingress apps. Coder already on `2.39.4` (ahead of Oct target). **#8 Traefik cutover done 2026-11-21** (see Executed table).
 
@@ -61,7 +62,7 @@ Taken before the 2026-10-04 execution. What changed is in [Executed 2026-10-04](
 | RKE2 (all 4 clusters, 31 nodes) | `v1.36.2+rke2r1`; containerd `2.3.2-k3s2`; rke2-ingress-nginx chart `4.15.101` (controller `1.15.1`); canal `v3.32.0` |
 | Node OS | Ubuntu 24.04.4, kernels mixed `6.8.0-136` / `6.8.0-139`; **all 31 nodes have `/var/run/reboot-required`**; unattended-upgrades enabled and active on all; ~41 non-security packages pending per node |
 | cert-manager | apps clusters **`v1.21.2`** (Terraform); manager `v1.21.1` (manual Helm) |
-| Gateway | Envoy Gateway `v1.6.1` (proxy `distroless-v1.36.3`); Gateway API CRDs `v1.4.1` experimental (poc/nprd/prd) |
+| Gateway | Envoy Gateway `v1.9.4` (proxy distroless); Gateway API CRDs **standard** `v1.6.1` (poc/nprd/prd); manager stock Traefik CRD `v1.6.3` standard |
 | Data | CloudNativePG operator `1.28.0`; plugin-barman-cloud `v0.15.1` (chart `0.8.1`, nprd/prd) |
 | Storage | TrueNAS CSI `v0.22` (fork of upstream `v1.3.0`); sidecars provisioner `5.0.1`, attacher `4.7.0`, resizer `1.12.0`, snapshotter `8.1.0`, registrar `2.12.0`. democratic-csi removed (one orphaned `Released` PV on nprd: `pvc-25d4289c…`, old Loki ingester) |
 | LB | kube-vip `v1.0.3` (MetalLB retired) |

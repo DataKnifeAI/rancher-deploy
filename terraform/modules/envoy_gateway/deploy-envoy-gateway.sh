@@ -19,7 +19,7 @@ echo "Kubeconfig: $KUBECONFIG"
 echo "Cluster: $CLUSTER_NAME"
 echo "Envoy Gateway Version: $ENVOY_GATEWAY_VERSION"
 echo "Namespace: $NAMESPACE"
-echo "Expected Gateway API bundle: $GATEWAY_API_VERSION (shipped in Envoy Gateway install.yaml)"
+echo "Expected Gateway API bundle: $GATEWAY_API_VERSION (standard channel via gateway-crds-helm)"
 echo ""
 
 # Verify cluster is accessible
@@ -73,9 +73,11 @@ echo "✓ Cluster is stable, proceeding with installation"
 echo ""
 
 # Step 1: Download the release manifest and split CRDs from the rest.
-# install.yaml bundles the Gateway API (experimental channel) and Envoy Gateway CRDs.
-# Existing CRDs are only ever updated in place: deleting a CRD deletes every
-# Gateway/Route/Policy object of that kind cluster-wide.
+# install.yaml bundles Gateway API (experimental by default) + Envoy Gateway CRDs.
+# We install Gateway API from the *standard* channel via gateway-crds-helm so it
+# matches RKE2 stock rke2-traefik-crd / manager, then layer EG CRDs + controller
+# on top. Existing CRDs are only ever updated in place: deleting a CRD deletes
+# every Gateway/Route/Policy object of that kind cluster-wide.
 echo "[1/3] Downloading Envoy Gateway $ENVOY_GATEWAY_VERSION manifest..."
 MANIFEST_URL="https://github.com/envoyproxy/gateway/releases/download/${ENVOY_GATEWAY_VERSION}/install.yaml"
 WORKDIR=$(mktemp -d)
@@ -88,24 +90,59 @@ awk -v crds="$WORKDIR/crds.yaml" -v rest="$WORKDIR/rest.yaml" '
   { doc = doc $0 "\n" }
   END { flush() }
 ' "$WORKDIR/install.yaml"
-echo "  ✓ $(grep -c '^kind: CustomResourceDefinition$' "$WORKDIR/crds.yaml") CRDs, $(grep -c '^kind:' "$WORKDIR/rest.yaml") other resources"
+# Keep only Envoy Gateway CRDs from install.yaml (Gateway API comes from standard channel).
+awk -v out="$WORKDIR/eg-only-crds.yaml" '
+  function flush() {
+    if (doc == "") return
+    if (is_crd && doc ~ /gateway\.envoyproxy\.io/) print "---\n" doc > out
+    doc = ""; is_crd = 0
+  }
+  /^---/ { flush(); next }
+  /^kind: CustomResourceDefinition$/ { is_crd = 1 }
+  { doc = doc $0 "\n" }
+  END { flush() }
+' "$WORKDIR/crds.yaml"
+echo "  ✓ $(grep -c '^kind: CustomResourceDefinition$' "$WORKDIR/eg-only-crds.yaml") EG CRDs, $(grep -c '^kind:' "$WORKDIR/rest.yaml") other resources"
 echo ""
 
-# Step 2: CRDs first. Envoy Gateway >= v1.9 requires the matching Gateway API CRDs
-# (TCPRoute/UDPRoute v1) before the controller is upgraded, otherwise those routes are skipped.
-echo "[2/3] Applying CRDs (server-side)..."
+# Step 2: Gateway API standard channel + EG CRDs first.
+# Envoy Gateway >= v1.9 needs Gateway API v1.6 (TCPRoute/UDPRoute v1) before the
+# controller is upgraded, otherwise those routes are skipped.
+echo "[2/3] Applying Gateway API standard + Envoy Gateway CRDs (server-side)..."
 if kubectl get crd gateways.gateway.networking.k8s.io &>/dev/null; then
   CURRENT_BUNDLE=$(kubectl get crd gateways.gateway.networking.k8s.io \
     -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')
-  echo "  Existing Gateway API CRDs: bundle ${CURRENT_BUNDLE:-unknown}"
+  CURRENT_CHANNEL=$(kubectl get crd gateways.gateway.networking.k8s.io \
+    -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/channel}')
+  echo "  Existing Gateway API CRDs: bundle ${CURRENT_BUNDLE:-unknown} channel ${CURRENT_CHANNEL:-unknown}"
 fi
-kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/crds.yaml"
-kubectl wait --for=condition=Established --timeout=120s -f "$WORKDIR/crds.yaml"
+if ! command -v helm >/dev/null 2>&1; then
+  echo "ERROR: helm is required to render gateway-crds-helm (standard channel)" >&2
+  exit 1
+fi
+helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
+  --version "${ENVOY_GATEWAY_VERSION}" \
+  --set crds.gatewayAPI.enabled=true \
+  --set crds.gatewayAPI.channel=standard \
+  --set crds.envoyGateway.enabled=false \
+  > "$WORKDIR/gateway-api-standard.yaml"
+kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/gateway-api-standard.yaml"
+kubectl apply --server-side --force-conflicts --field-manager=envoy-gateway-installer -f "$WORKDIR/eg-only-crds.yaml"
+# Established only exists on CRDs (skip ValidatingAdmissionPolicy objects).
+kubectl get -f "$WORKDIR/gateway-api-standard.yaml" -o name 2>/dev/null | grep '^customresourcedefinition.apiextensions.k8s.io/' | \
+  xargs -r kubectl wait --for=condition=Established --timeout=120s
+kubectl wait --for=condition=Established --timeout=120s -f "$WORKDIR/eg-only-crds.yaml"
 NEW_BUNDLE=$(kubectl get crd gateways.gateway.networking.k8s.io \
   -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}')
-echo "  ✓ CRDs established (Gateway API bundle $NEW_BUNDLE)"
+NEW_CHANNEL=$(kubectl get crd gateways.gateway.networking.k8s.io \
+  -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/channel}')
+echo "  ✓ CRDs established (Gateway API bundle $NEW_BUNDLE channel $NEW_CHANNEL)"
 if [ -n "$GATEWAY_API_VERSION" ] && [ "$NEW_BUNDLE" != "$GATEWAY_API_VERSION" ]; then
-  echo "  ⚠ gateway_api_version is $GATEWAY_API_VERSION but Envoy Gateway $ENVOY_GATEWAY_VERSION ships $NEW_BUNDLE"
+  echo "  ⚠ gateway_api_version is $GATEWAY_API_VERSION but rendered standard bundle is $NEW_BUNDLE"
+fi
+if [ "$NEW_CHANNEL" != "standard" ]; then
+  echo "ERROR: expected Gateway API channel=standard, got ${NEW_CHANNEL:-empty}" >&2
+  exit 1
 fi
 echo ""
 
@@ -173,7 +210,7 @@ echo "=========================================="
 echo "Cluster: $CLUSTER_NAME"
 echo "Namespace: $NAMESPACE"
 echo "Envoy Gateway Version: $ENVOY_GATEWAY_VERSION"
-echo "Note: Envoy Gateway includes Gateway API CRDs in its installation manifest"
+echo "Note: Gateway API CRDs installed from standard channel; EG CRDs + controller layered on top"
 echo ""
 echo "Next steps:"
 echo "  1. Verify installation:"
