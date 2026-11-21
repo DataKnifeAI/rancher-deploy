@@ -50,11 +50,11 @@ Enable `providers.kubernetesGateway` in `rke2-traefik-config-phase3.yaml`. Chart
 with wildcard `wildcard-dataknife-net-tls`. App HTTPRoutes `parentRefs` that Gateway
 (`sectionName: websecure`). DNS CNAMEs to `*-apps-wk` stay unchanged.
 
-Stoat remains on operator-managed Ingress until the operator emits HTTPRoutes.
+Stoat operator emits HTTPRoutes when `spec.ingress.className` is a GatewayClass (`traefik`).
 
 ## Post-cutover gitops
 
-Keep Ingress `ingressClassName: rke2-ingress-nginx-migration` (not `nginx`) in Fleet sources:
+Apps use HTTPRoute → `traefik-gateway` (legacy Ingress class retired) (not `nginx`) in Fleet sources:
 
 - [gitops-mcp#21](https://github.com/DataKnifeAI/gitops-mcp/pull/21) — MCP Ingresses
 - [gitops-tools#61](https://github.com/DataKnifeAI/gitops-tools/pull/61) — Authentik
