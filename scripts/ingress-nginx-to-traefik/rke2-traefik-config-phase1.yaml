@@ -1,0 +1,27 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-traefik
+  namespace: kube-system
+  labels:
+    purpose: ingress-nginx-migration
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        hostPort: 8000
+      websecure:
+        hostPort: 8443
+    providers:
+      kubernetesGateway:
+        enabled: false
+      kubernetesIngressNGINX:
+        enabled: true
+        ingressClass: "rke2-ingress-nginx-migration"
+        controllerClass: "rke2.cattle.io/ingress-nginx-migration"
+    service:
+      enabled: false
+    tlsStore:
+      default:
+        defaultCertificate:
+          secretName: wildcard-dataknife-net-tls
