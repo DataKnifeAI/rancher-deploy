@@ -43,6 +43,15 @@ values and is not overwritten by the packaged chart.
 Ingresses stay on class `rke2-ingress-nginx-migration` so nginx annotations keep
 working via Traefik's Ingress NGINX provider.
 
+## Ingress → HTTPRoute (2026-11-21)
+
+Enable `providers.kubernetesGateway` in `rke2-traefik-config-phase3.yaml`. Chart deploys
+`GatewayClass/traefik` + `Gateway/kube-system/traefik-gateway` (ports 8000/8443 = host 80/443)
+with wildcard `wildcard-dataknife-net-tls`. App HTTPRoutes `parentRefs` that Gateway
+(`sectionName: websecure`). DNS CNAMEs to `*-apps-wk` stay unchanged.
+
+Stoat remains on operator-managed Ingress until the operator emits HTTPRoutes.
+
 ## Post-cutover gitops
 
 Keep Ingress `ingressClassName: rke2-ingress-nginx-migration` (not `nginx`) in Fleet sources:

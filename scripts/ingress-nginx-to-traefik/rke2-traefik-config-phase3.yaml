@@ -8,12 +8,43 @@ metadata:
 spec:
   valuesContent: |-
     providers:
+      # Gateway API for HTTPRoute migration (keeps hostPorts 80/443 + worker DNS CNAMEs).
       kubernetesGateway:
-        enabled: false
+        enabled: true
+      # Keep NGINX-compat Ingress class until all Ingress objects are cut over.
       kubernetesIngressNGINX:
         enabled: true
         ingressClass: "rke2-ingress-nginx-migration"
         controllerClass: "rke2.cattle.io/ingress-nginx-migration"
+    gatewayClass:
+      enabled: true
+      name: traefik
+    gateway:
+      enabled: true
+      name: traefik-gateway
+      # Listeners use Traefik container ports (hostPort 80→8000, 443→8443).
+      listeners:
+        web:
+          port: 8000
+          protocol: HTTP
+          namespacePolicy:
+            from: All
+        websecure:
+          port: 8443
+          protocol: HTTPS
+          namespacePolicy:
+            from: All
+          mode: Terminate
+          certificateRefs:
+            - name: wildcard-dataknife-net-tls
+    ports:
+      web:
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true
     service:
       enabled: true
     tlsStore:
