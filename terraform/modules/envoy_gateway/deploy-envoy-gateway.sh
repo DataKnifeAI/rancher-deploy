@@ -144,11 +144,10 @@ if [ "$NEW_CHANNEL" != "standard" ]; then
   echo "ERROR: expected Gateway API channel=standard, got ${NEW_CHANNEL:-empty}" >&2
   exit 1
 fi
-# Game operators (palworld/dragonwilds/terraria/satisfactory) still speak
-# TCPRoute/UDPRoute/TLSRoute v1alpha2. Standard channel stores v1 and leaves
-# v1alpha2 unserved — re-enable served so those clients can reconcile until
-# operators move to gateway-api v1 clients.
-echo "  Keeping TCPRoute/UDPRoute/TLSRoute v1alpha2 served for legacy operator clients..."
+# Game operators are on gateway-api v1 route clients (2026-11-21, windrose last).
+# Standard CRDs store v1; leave v1alpha2 unserved (and force unserved if a prior
+# install re-enabled it).
+echo "  Ensuring TCPRoute/UDPRoute/TLSRoute v1alpha2 is unserved..."
 for crd in tcproutes.gateway.networking.k8s.io udproutes.gateway.networking.k8s.io tlsroutes.gateway.networking.k8s.io; do
   if ! kubectl get crd "$crd" &>/dev/null; then
     continue
@@ -158,15 +157,17 @@ import json, sys
 d = json.load(sys.stdin)
 changed = False
 for v in d.get("spec", {}).get("versions", []):
-  if v.get("name") == "v1alpha2" and not v.get("served", False):
-    v["served"] = True
+  if v.get("name") == "v1alpha2" and v.get("served", False):
+    v["served"] = False
     changed = True
 if changed:
   json.dump(d, sys.stdout)
 ' > "$WORKDIR/${crd}.patched.json" || true
   if [ -s "$WORKDIR/${crd}.patched.json" ]; then
     kubectl replace -f "$WORKDIR/${crd}.patched.json" >/dev/null
-    echo "  ✓ ${crd}: v1alpha2 served=true"
+    echo "  ✓ ${crd}: v1alpha2 served=false"
+  else
+    echo "  ✓ ${crd}: v1alpha2 already unserved"
   fi
 done
 echo ""
