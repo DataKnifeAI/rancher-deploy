@@ -3,8 +3,8 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      # Keep 0.93.x until #9 proxmox window (0.115+); ~> 0.90 would float to 0.123+.
-      version = "~> 0.93.0"
+      # Phase 3 of #9: floor at 0.115. Stay <0.118 for now (SDN/file validation breaks).
+      version = "~> 0.115.0"
     }
     rancher2 = {
       source  = "rancher/rancher2"
@@ -16,7 +16,7 @@ terraform {
       version = "~> 3.0"
     }
     # Phase 1: null/local. Phase 2: kubernetes ~> 3.0 + rancher2 ~> 15.0.
-    # Still separate: proxmox → 0.115+ (large schema/plan diffs; refresh fixes first).
+    # Phase 3: proxmox ~> 0.115.0 (further minors after plan review).
     null = {
       source  = "hashicorp/null"
       version = ">= 3.2.4, < 4.0"
