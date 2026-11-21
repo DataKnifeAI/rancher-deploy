@@ -9,20 +9,15 @@ Apps clusters (poc/nprd/prd) run **Envoy Gateway** on Gateway API **standard** C
 
 Desired layout:
 
-1. **Gateway API standard** CRDs (once per cluster) — from EG `gateway-crds-helm`
-   (`crds.gatewayAPI.channel=standard`) and/or RKE2 stock `rke2-traefik-crd`.
-2. **Envoy Gateway** CRDs + controller layered on top (`deploy-envoy-gateway.sh`
+1. **Gateway API standard** CRDs — EG `gateway-crds-helm`
+   (`crds.gatewayAPI.channel=standard`) and/or stock `rke2-traefik-crd`.
+2. **Envoy Gateway** CRDs + controller on top (`deploy-envoy-gateway.sh`
    installs EG CRDs only from `install.yaml`, not experimental Gateway API).
-3. **Stock** `rke2-traefik-crd` for Traefik/hub CRDs (do **not** use the old
-   stripped `rke2-traefik-crd-no-gateway.yaml` AddOn anymore).
+3. **Stock** `rke2-traefik-crd` for Traefik/hub CRDs.
 
 `terraform/modules/envoy_gateway/deploy-envoy-gateway.sh` is the durable EG path.
 Do not re-apply EG’s default `install.yaml` CRD bundle unchecked — it is
 experimental and would fight standard.
-
-Historical note: during the first Traefik cutover, apps temporarily used a
-stripped Traefik CRD chart (no Gateway API) while EG still owned **experimental**
-CRDs. That is obsolete after the standard-channel migration (2026-11-21).
 
 ## Files
 
@@ -30,13 +25,12 @@ CRDs. That is obsolete after the standard-channel migration (2026-11-21).
 |------|-----|
 | `rke2-traefik-config-phase1.yaml` | Dual: Traefik hostPorts 8000/8443 (`HelmChartConfig`) |
 | `rke2-traefik-config-phase3.yaml` | Traefik-only on 80/443 + default wildcard TLS |
-| `rke2-traefik-crd-no-gateway.yaml` | **Obsolete** — kept only as archive; do not install |
-| `install-crd-chart-apps.sh` | **Obsolete** with standard-channel ownership |
 
-`HelmChartConfig` for `rke2-traefik` is durable as a user manifest (e.g.
-`rke2-traefik-config.yaml`); it merges values and is not overwritten by the packaged chart.
+`HelmChartConfig` for `rke2-traefik` is durable as a user manifest; it merges
+values and is not overwritten by the packaged chart.
 
-Ingresses stay on class `rke2-ingress-nginx-migration` so nginx annotations keep working via Traefik's Ingress NGINX provider.
+Ingresses stay on class `rke2-ingress-nginx-migration` so nginx annotations keep
+working via Traefik's Ingress NGINX provider.
 
 ## Post-cutover gitops
 
