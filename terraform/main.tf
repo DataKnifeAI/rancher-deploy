@@ -1320,11 +1320,13 @@ resource "null_resource" "label_nprd_apps_truenas_topology" {
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
-      KUBECONFIG="${pathexpand("~/.kube/nprd-apps.yaml")}"
+      KUBECONFIG="${pathexpand("~/.kube/nprd-apps-rke2.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling nprd-apps nodes with topology.truenas.io/pool=$${POOL}..."
       READY=0
-      for i in $$(seq 1 60); do
+      i=0
+      while [ "$$i" -lt 60 ]; do
+        i=$$((i + 1))
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
           READY=1
           break
@@ -1352,11 +1354,13 @@ resource "null_resource" "label_prd_apps_truenas_topology" {
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
-      KUBECONFIG="${pathexpand("~/.kube/prd-apps.yaml")}"
+      KUBECONFIG="${pathexpand("~/.kube/prd-apps-rke2.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling prd-apps nodes with topology.truenas.io/pool=$${POOL}..."
       READY=0
-      for i in $$(seq 1 60); do
+      i=0
+      while [ "$$i" -lt 60 ]; do
+        i=$$((i + 1))
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
           READY=1
           break
@@ -1384,11 +1388,13 @@ resource "null_resource" "label_poc_apps_truenas_topology" {
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
-      KUBECONFIG="${pathexpand("~/.kube/poc-apps.yaml")}"
+      KUBECONFIG="${pathexpand("~/.kube/poc-apps-rke2.yaml")}"
       POOL="${local.truenas_csi_pool}"
       echo "Labeling poc-apps nodes with topology.truenas.io/pool=$${POOL}..."
       READY=0
-      for i in $$(seq 1 60); do
+      i=0
+      while [ "$$i" -lt 60 ]; do
+        i=$$((i + 1))
         if kubectl --kubeconfig "$${KUBECONFIG}" get nodes &>/dev/null; then
           READY=1
           break

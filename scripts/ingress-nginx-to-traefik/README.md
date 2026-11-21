@@ -9,11 +9,22 @@ Apps clusters (poc/nprd/prd) run **Envoy Gateway** on Gateway API **standard** C
 
 Desired layout:
 
-1. **Gateway API standard** CRDs — EG `gateway-crds-helm`
-   (`crds.gatewayAPI.channel=standard`) and/or stock `rke2-traefik-crd`.
+1. **Gateway API standard** CRDs — owned by stock **`rke2-traefik-crd`**
+   (bundle v1.6.x; includes `safe-upgrades` ValidatingAdmissionPolicy).
 2. **Envoy Gateway** CRDs + controller on top (`deploy-envoy-gateway.sh`
    installs EG CRDs only from `install.yaml`, not experimental Gateway API).
-3. **Stock** `rke2-traefik-crd` for Traefik/hub CRDs.
+3. **Stock** `rke2-traefik-crd` also owns Traefik/hub CRDs.
+
+If Gateway CRDs were first installed by EG `gateway-crds-helm` without Helm
+labels, `helm-install-rke2-traefik-crd` CrashLoops until those CRDs (and the
+`safe-upgrades` VAP/VAPB) are adopted:
+
+```bash
+# standard gateway.networking.k8s.io CRDs + safe-upgrades VAP/VAPB
+kubectl label … app.kubernetes.io/managed-by=Helm --overwrite
+kubectl annotate … meta.helm.sh/release-name=rke2-traefik-crd \
+  meta.helm.sh/release-namespace=kube-system --overwrite
+```
 
 `terraform/modules/envoy_gateway/deploy-envoy-gateway.sh` is the durable EG path.
 Do not re-apply EG’s default `install.yaml` CRD bundle unchecked — it is
