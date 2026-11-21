@@ -1,12 +1,22 @@
+# Durable apps-cluster Traefik CRD chart (no Gateway API CRDs).
+#
+# Do NOT overwrite RKE2's packaged manifests/rke2-traefik-crd.yaml — RKE2
+# rewrites that file on every rke2-server start. Install as a *user* AddOn:
+#
+#   /var/lib/rancher/rke2/server/manifests/rke2-traefik-crd.yaml.skip
+#   /var/lib/rancher/rke2/server/manifests/dataknife-rke2-traefik-crd.yaml  (this file)
+#
+# Sync that pair on every control-plane node. See README.md / install-crd-chart-apps.sh.
+# rancher-manager has no Envoy Gateway — leave the stock rke2-traefik-crd chart alone.
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
-  name: rke2-traefik-crd
+  name: dataknife-rke2-traefik-crd
   namespace: kube-system
   annotations:
-    rke2.cattle.io/inject-cluster-config: 'true'
+    rke2.cattle.io/inject-cluster-config: "true"
     dataknife.ai/traefik-crd: no-gateway-api
-    dataknife.ai/note: Gateway API CRDs owned by Envoy Gateway. Stock gateway-standard-install.yaml stripped; hub+traefik.io CRDs kept.
+    dataknife.ai/note: "Gateway API CRDs owned by Envoy Gateway. Stock gateway-standard-install.yaml stripped; hub+traefik.io CRDs kept. User AddOn — not the packaged rke2-traefik-crd manifest."
 spec:
   bootstrap: false
   failurePolicy: retry
