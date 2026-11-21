@@ -45,9 +45,10 @@ Repo defaults / example pins were bumped for new installs. Live window ran **202
 | Gateway API standard | Apps poc/nprd/prd switched experimental→**standard** v1.6.1 (EG `gateway-crds-helm`); stock `rke2-traefik-crd` restored; `deploy-envoy-gateway.sh` installs standard Gateway API + EG CRDs only. Gateways Programmed; `hc.dataknife.ai` 200 |
 | TrueNAS CSI sidecars (#17) | poc→nprd→prd sidecars to provisioner `6.4.0` / attacher `4.13.0` / resizer `2.3.0` / snapshotter `8.7.0` / registrar `2.18.0`; poc PVC create+expand OK |
 | Observability cancelled | Grafana / kube-prometheus / Alloy / Loki not deployed; #5 and #11 cancelled; empty `cattle-monitoring-system` deleted |
+| Operator gateway-api v1 | palworld/dragonwilds/terraria/satisfactory operators on gateway-api v1.6.1 clients; deployed to prd (`:gateway-api-v1` digests). Palworld TLS secret ref fixed to `game-servers/wildcard-dataknife-net-tls` (no cert-manager ns on apps) |
 | Operator cleanup (#19) | CR-driven `serverManager.image` align (palworld/dragonwilds); game `spec.update` already up-to-date; re-enabled TCPRoute/UDPRoute/TLSRoute **v1alpha2 served** so palworld-operator can reconcile after standard CRDs |
 
-**Still deferred** from the Oct table: Terraform providers (#9); full Gateway API migration of remaining Ingress apps; bump game operators to Gateway API **v1** clients (today TCPRoute/UDPRoute/TLSRoute **v1alpha2** must stay `served=true` alongside standard v1). Coder already on `2.39.4`. **#8 / #17** done 2026-11-21. **#5 / #11** cancelled (no Grafana/monitoring). **#19** cleanup 2026-11-21 via operator CRs (`spec.serverManager.image` / `spec.update`).
+**Still deferred** from the Oct table: Terraform providers (#9); full Gateway API migration of remaining Ingress apps; game operators migrated to Gateway API **v1** route clients (2026-11-21); keep TCPRoute/UDPRoute/TLSRoute **v1alpha2 served** until windrose (if any) is confirmed. Coder already on `2.39.4`. **#8 / #17** done 2026-11-21. **#5 / #11** cancelled (no Grafana/monitoring). **#19** cleanup 2026-11-21 via operator CRs (`spec.serverManager.image` / `spec.update`).
 
 **Recommended window order (historical):** A7 → A2 manager CM → A1 Rancher → A2 apps CM → A4 EG → A5 CNPG → A6 kube-vip (poc) → A3 RKE2 (poc first).
 

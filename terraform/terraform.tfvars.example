@@ -379,7 +379,7 @@ install_palworld_operator_nprd = false
 install_palworld_operator_prd  = true
 install_palworld_operator_poc  = false
 
-palworld_operator_image = "harbor.dataknife.net/library/palworld-operator@sha256:8036766feeb4f30c28228ebfa50be96b259b4c3ee50536cd5aec0b5eaed7a639"
+palworld_operator_image = "harbor.dataknife.net/library/palworld-operator:8d0caf2ea20fd3b8e39cfa8dab45316f454d5ce593ae65c985ea13a21471ba06"
 palworld_operator_image_pull_secret      = "harbor-registry-secret"
 palworld_operator_image_pull_secret_file = "config/harbor-registry-secret.yaml"
 
