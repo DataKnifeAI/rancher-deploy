@@ -1,0 +1,21 @@
+---
+description: rancher-deploy project-specific agent guidance
+alwaysApply: true
+---
+
+# Rancher Deploy
+
+Terraform IaC for Rancher + RKE2 clusters on Proxmox (manager + apps environments).
+
+Cursor uses `.cursor/rules/` (this file + org common). Copilot instructions under `.github/` remain for other tools.
+
+## Key paths
+
+- `terraform/environments/manager/` and `terraform/environments/nprd-apps/` — separate applies/state
+- Module scripts under `terraform/modules/`
+
+## Conventions
+
+- Always `cd` into the environment dir before `terraform apply`; never apply from repo root
+- Copy `.tfvars.example` → `.tfvars` before init; never commit secrets or live tokens
+- Prefer pinned RKE2 / provider versions already used in-tree over floating `latest`
