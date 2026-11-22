@@ -15,7 +15,7 @@ resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
   datastore_id        = "images-import"
   node_name           = each.value
   url                 = var.ubuntu_cloud_image_url
-  file_name           = "ubuntu-noble-cloudimg-amd64.qcow2"
+  file_name           = "ubuntu-resolute-cloudimg-amd64.qcow2"
   # overwrite=true re-checks Content-Length every refresh (bpg/proxmox ≥0.92/0.95)
   # and re-downloads when the upstream size changes — noisy for stable cloud images.
   overwrite           = false

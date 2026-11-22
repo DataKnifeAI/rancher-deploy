@@ -25,7 +25,7 @@ Short operational truths that do not belong in the README.
 
 ## Version pins (RKE2 / Rancher / OS)
 
-Live clusters (verified 2026-10-04): Rancher `v2.15.2`, all four clusters RKE2 `v1.36.2+rke2r1`, cert-manager `v1.21.2` on apps / `v1.21.1` on manager, Ubuntu kernel `6.8.0-146` on all 31 nodes. Repo defaults below are the **next** patch targets (2026-11-20); keep live `terraform.tfvars` on current pins until that window.
+Live clusters (verified 2026-11-22): Rancher manager + poc/nprd/prd apps on **Ubuntu 26.04.1 LTS** with RKE2 `v1.36.6+rke2r1` (node-replace wave complete). Earlier baseline (2026-10-04) was Ubuntu 24.04 / RKE2 `v1.36.2+rke2r1` / Rancher `v2.15.2`. Repo defaults below match the live RKE2 pin; Rancher UI may still be on `v2.15.2` until a separate chart bump.
 
 | Pin | Variable | Default (as of 2026-11) | Notes |
 |-----|----------|-------------------------|--------|
