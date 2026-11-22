@@ -1,8 +1,8 @@
 # Ubuntu 26.04 node-by-node replacement
 
 **Status:** complete for app clusters + **rancher-manager** (2026-11-22).  
-**Live OS (migrating):** Ubuntu 24.04.5 → **26.04.1 LTS** (`ubuntu-resolute-cloudimg-amd64.qcow2`).  
-**RKE2:** stay on **v1.36.6+rke2r1** for this wave; do **not** stack Rancher 2.16 / RKE2 1.37.
+**Live OS:** **Ubuntu 26.04.1 LTS** everywhere (`ubuntu-resolute-cloudimg-amd64.qcow2`; was 24.04.5).  
+**RKE2:** pin **v1.36.6+rke2r1**; do **not** stack Rancher 2.16 / RKE2 1.37 on this wave.
 
 ## Why replace (not in-place upgrade)
 
@@ -64,12 +64,15 @@ Same as worker, plus:
 | Same hostname → `Node password rejected` | Delete node + `*.node-password.rke2` secret before/while rejoining |
 | QEMU guest agent timeout (~15m) on first create | Proxmox reset after ~5m without ping; agent then publishes NICs |
 | Replacing TF “primary” with empty `SERVER_IP` | Would **init a new cluster**. Drain/delete node, `-replace` **VM only**, then bootstrap as **secondary** joining another live CP (`SERVER_IP=<sibling>`). Graft `null_resource` triggers to match module (empty `rke2_server_ip`) so TF does not re-run init |
+| Resolute cloud-image root ~2.4G until `growpart` | Proxmox disk is **`virtio0`** (not `scsi0`). Resize to 80G in PVE, reboot, `growpart` + `resize2fs` before RKE2 install |
+| Long Cursor shell chains + overlapping agents | Run **one node per `nohup`** with logs in `/tmp/mgr-replace-*.log`; poll `kubectl` between steps. TF `for_each` keys are `manager-2`/`manager-3`, not `rancher-manager-2` |
 
 ## Image / Terraform pins
 
 - `ubuntu_cloud_image_url` → `https://cloud-images.ubuntu.com/releases/resolute/release/ubuntu-26.04-server-cloudimg-amd64.img`
 - `file_name` → `ubuntu-resolute-cloudimg-amd64.qcow2`
-- Update `docs/OPS_NOTES.md` OS pin when the wave finishes.
+- `docs/OPS_NOTES.md` Version pins section updated 2026-11-22 (live OS + RKE2 pin).
+- Bootstrap provisioner already uses `sudo env …` (not `sudo -E`) in `terraform/modules/proxmox_vm/main.tf` for Ubuntu 26.04+.
 
 ## Abort / rollback
 
